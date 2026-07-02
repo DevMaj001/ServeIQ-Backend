@@ -22,6 +22,14 @@ export class TabService {
   ) {}
 
   async openTab(createDto: any) {
+    // Prevent double opening — check if table already has an open tab
+    const existingOpenTab = await this.tabRepository.findOne({
+      where: { table_id: createDto.table_id, status: 'open' },
+    });
+    if (existingOpenTab) {
+      throw new BadRequestException('This table already has an open tab');
+    }
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -135,15 +143,27 @@ export class TabService {
       throw new ForbiddenException('You cannot close another waiter\'s tab');
     }
 
-    tab.status = 'paid';
-    tab.closed_at = new Date();
-    
-    // Also release table
-    await this.tableRepository.update(tab.table_id, {
-      status: TableStatus.AVAILABLE,
-    });
-    
-    return this.tabRepository.save(tab);
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      await queryRunner.manager.update(Tab, id, {
+        status: 'paid',
+        closed_at: new Date(),
+      });
+      await queryRunner.manager.update(Table, tab.table_id, {
+        status: TableStatus.AVAILABLE,
+      });
+
+      await queryRunner.commitTransaction();
+      return this.findOne(id, branchId);
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async transferTab(id: string, branchId: string, targetTableId: string) {
