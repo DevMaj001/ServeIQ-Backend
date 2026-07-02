@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Tab } from './entities/tab.entity';
@@ -51,14 +51,38 @@ export class TabService {
     }
   }
 
-  async findOne(id: string, branchId: string) {
+  async findOne(id: string, branchId: string, currentUserId?: string, currentUserRole?: string) {
     const tab = await this.tabRepository.findOne({
       where: { id, branch_id: branchId },
     });
     if (!tab) {
       throw new NotFoundException('Tab not found');
     }
-    return tab;
+
+    // Block other waiters from accessing an occupied tab
+    if (
+      tab.status === 'open' &&
+      tab.waiter_id &&
+      currentUserId &&
+      tab.waiter_id !== currentUserId &&
+      currentUserRole !== 'owner' &&
+      currentUserRole !== 'manager'
+    ) {
+      throw new ForbiddenException('This table is being served by another waiter');
+    }
+
+    const table = await this.tableRepository.findOne({ where: { id: tab.table_id } });
+    const waiter = await this.userRepository.findOne({ where: { id: tab.waiter_id } });
+    const orders = await this.orderRepository.find({ where: { tab_id: tab.id } });
+    const totalKobo = orders.reduce((sum, order) => sum + order.subtotal_kobo, 0);
+
+    return {
+      ...tab,
+      table,
+      waiter,
+      orders,
+      total_kobo: totalKobo,
+    };
   }
 
   async findAllByBranch(branchId: string, status?: string, pagination?: { page: number; per_page: number }) {
@@ -96,8 +120,21 @@ export class TabService {
     return { data: tabsWithDetails, total };
   }
 
-  async closeTab(id: string, branchId: string) {
+  async closeTab(id: string, branchId: string, currentUserId?: string, currentUserRole?: string) {
     const tab = await this.findOne(id, branchId);
+
+    // Block other waiters from closing an occupied tab
+    if (
+      tab.status === 'open' &&
+      tab.waiter_id &&
+      currentUserId &&
+      tab.waiter_id !== currentUserId &&
+      currentUserRole !== 'owner' &&
+      currentUserRole !== 'manager'
+    ) {
+      throw new ForbiddenException('You cannot close another waiter\'s tab');
+    }
+
     tab.status = 'paid';
     tab.closed_at = new Date();
     

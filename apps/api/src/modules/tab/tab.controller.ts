@@ -53,7 +53,7 @@ export class TabController {
   @ApiResponse({ status: 404, description: 'Tab not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async findOne(@Param('id') id: string, @Request() req: any) {
-    return this.tabService.findOne(id, req.user.branchId);
+    return this.tabService.findOne(id, req.user.branchId, req.user.userId, req.user.role);
   }
 
   @Post(':id/close')
@@ -63,7 +63,7 @@ export class TabController {
   @ApiResponse({ status: 404, description: 'Tab not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async closeTab(@Param('id') id: string, @Request() req: any) {
-    return this.tabService.closeTab(id, req.user.branchId);
+    return this.tabService.closeTab(id, req.user.branchId, req.user.userId, req.user.role);
   }
 
   @Patch(':id')
