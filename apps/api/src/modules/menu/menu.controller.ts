@@ -9,6 +9,16 @@ import { UpdateMenuItemDto } from './dto/update-menu-item.dto';
 import { MenuItem } from './entities/menu-item.entity';
 import { getPaginationParams, paginate } from '../../common/pagination';
 
+const MAX_CSV_SIZE = 2 * 1024 * 1024; // 2MB
+
+const csvFileFilter = (req: any, file: Express.Multer.File, cb: (error: Error | null, acceptFile: boolean) => void) => {
+  if (file.mimetype !== 'text/csv' && !file.originalname.endsWith('.csv')) {
+    cb(new BadRequestException('Only CSV files are allowed'), false);
+    return;
+  }
+  cb(null, true);
+};
+
 @ApiTags('Menu')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
@@ -78,7 +88,19 @@ export class MenuController {
   }
 
   @Post('import')
-  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 2 * 1024 * 1024, files: 1 },
+      fileFilter: (req: any, file: Express.Multer.File, cb: (error: Error | null, acceptFile: boolean) => void) => {
+        if (file.mimetype !== 'text/csv' && !file.originalname.endsWith('.csv')) {
+          cb(new BadRequestException('Only CSV files are allowed'), false);
+          return;
+        }
+        cb(null, true);
+      },
+    }),
+  )
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Bulk import menu items from CSV (columns: name, category, price, unit, sku)' })
   @ApiResponse({ status: 201, description: 'Items imported.' })
