@@ -10,11 +10,12 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { User } from '../user/entities/user.entity';
 import { Business } from '../business/entities/business.entity';
 import { Branch } from '../branch/entities/branch.entity';
+import { AuditLog } from '../../entities/audit-log.entity';
 import { AuditService } from '../../common/services/audit.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Business, Branch]),
+    TypeOrmModule.forFeature([User, Business, Branch, AuditLog]),
     ConfigModule,
     PassportModule,
     JwtModule.registerAsync({
