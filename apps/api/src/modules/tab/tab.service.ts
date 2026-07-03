@@ -21,12 +21,19 @@ export class TabService {
     private dataSource: DataSource,
   ) {}
 
-  async openTab(createDto: any) {
-    // Prevent double opening — check if table already has an open tab
+  async openTab(createDto: any, currentUserId?: string, currentUserRole?: string) {
+    // Check if table already has an open tab
     const existingOpenTab = await this.tabRepository.findOne({
       where: { table_id: createDto.table_id, status: 'open' },
     });
     if (existingOpenTab) {
+      if (existingOpenTab.waiter_id && existingOpenTab.waiter_id !== currentUserId) {
+        throw new ForbiddenException('This table is being served by another waiter');
+      }
+      if (existingOpenTab.waiter_id === currentUserId) {
+        return this.findOne(existingOpenTab.id, createDto.branch_id, currentUserId, currentUserRole);
+      }
+      // waiter_id is null/unset — legacy tab, block creation
       throw new BadRequestException('This table already has an open tab');
     }
 
@@ -201,10 +208,21 @@ export class TabService {
     }
   }
 
-  async voidTab(id: string, branchId: string, reason: string) {
+  async voidTab(id: string, branchId: string, currentUserId?: string, currentUserRole?: string, reason?: string) {
     const tab = await this.findOne(id, branchId);
     if (tab.status !== 'open') {
       throw new BadRequestException('Only open tabs can be voided');
+    }
+
+    if (
+      tab.status === 'open' &&
+      tab.waiter_id &&
+      currentUserId &&
+      tab.waiter_id !== currentUserId &&
+      currentUserRole !== 'owner' &&
+      currentUserRole !== 'manager'
+    ) {
+      throw new ForbiddenException('You cannot void another waiter\'s tab');
     }
 
     const queryRunner = this.dataSource.createQueryRunner();

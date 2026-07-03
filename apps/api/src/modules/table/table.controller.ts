@@ -88,6 +88,16 @@ export class TableController {
     return this.tableService.updateStatus(id, req.user.branchId, statusDto.status);
   }
 
+  @Post(':id/release')
+  @ApiOperation({ summary: 'Force-release a table and void its open tab (owner/manager only)' })
+  @ApiParam({ name: 'id', description: 'Table UUID' })
+  @ApiResponse({ status: 200, description: 'Table released.' })
+  @ApiResponse({ status: 403, description: 'Only owners and managers can release a table.' })
+  @ApiResponse({ status: 404, description: 'Table not found.' })
+  async releaseTable(@Param('id') id: string, @Request() req: any) {
+    return this.tableService.release(id, req.user.branchId, req.user.userId, req.user.role);
+  }
+
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a table' })
   @ApiParam({ name: 'id', description: 'Table UUID' })

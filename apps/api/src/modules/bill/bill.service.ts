@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException, BadRequestException, forwardRef } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, BadRequestException, ForbiddenException, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Bill } from './entities/bill.entity';
@@ -42,7 +42,20 @@ export class BillService {
     private cloudinaryService: CloudinaryService,
   ) {}
 
-  async generateBill(tabId: string, userId: string, generateBillDto?: GenerateBillDto) {
+  async generateBill(tabId: string, userId: string, userRole: string, generateBillDto?: GenerateBillDto) {
+    const tab = await this.tabRepository.findOne({ where: { id: tabId } });
+    if (!tab) throw new NotFoundException('Tab not found');
+
+    if (
+      tab.waiter_id &&
+      userId &&
+      tab.waiter_id !== userId &&
+      userRole !== 'owner' &&
+      userRole !== 'manager'
+    ) {
+      throw new ForbiddenException('This tab belongs to another waiter');
+    }
+
     const orders = await this.orderRepository.find({ where: { tab_id: tabId } });
     const subtotal = orders.reduce((sum, order) => sum + order.subtotal_kobo, 0);
     
@@ -86,7 +99,20 @@ export class BillService {
     return this.billRepository.save(bill);
   }
 
-  async processPayment(tabId: string, paymentDto: ProcessPaymentDto) {
+  async processPayment(tabId: string, userId: string, userRole: string, paymentDto: ProcessPaymentDto) {
+    const tab = await this.tabRepository.findOne({ where: { id: tabId } });
+    if (!tab) throw new NotFoundException('Tab not found');
+
+    if (
+      tab.waiter_id &&
+      userId &&
+      tab.waiter_id !== userId &&
+      userRole !== 'owner' &&
+      userRole !== 'manager'
+    ) {
+      throw new ForbiddenException('This tab belongs to another waiter');
+    }
+
     const bill = await this.billRepository.findOne({ where: { tab_id: tabId } });
     if (!bill) throw new NotFoundException('Bill not found');
 
@@ -102,8 +128,7 @@ export class BillService {
 
     await this.billRepository.save(bill);
 
-    // Fetch tab to get table_id, then mark tab paid and reset table to available
-    const tab = await this.tabRepository.findOne({ where: { id: tabId } });
+    // Mark tab paid and reset table to available
     if (tab) {
       await this.tabRepository.update(tabId, { status: 'paid', closed_at: new Date() });
       await this.tableRepository.update(tab.table_id, { status: TableStatus.AVAILABLE });
@@ -111,7 +136,6 @@ export class BillService {
 
     // Auto-deduct inventory stock
     try {
-      const tab = await this.tabRepository.findOne({ where: { id: tabId } });
       if (tab) {
         const orders = await this.orderRepository.find({ where: { tab_id: tabId } });
         await this.inventoryService.deductStockByTab(

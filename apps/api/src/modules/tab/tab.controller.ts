@@ -43,7 +43,7 @@ export class TabController {
       ...createDto,
       branch_id: req.user.branchId,
       waiter_id: req.user.userId,
-    });
+    }, req.user.userId, req.user.role);
   }
 
   @Get(':id')
@@ -101,7 +101,7 @@ export class TabController {
     @Request() req: any,
     @Body() voidDto: VoidTabDto,
   ) {
-    return this.tabService.voidTab(id, req.user.branchId, voidDto.reason);
+    return this.tabService.voidTab(id, req.user.branchId, req.user.userId, req.user.role, voidDto.reason);
   }
 
   @Delete(':id')

@@ -26,7 +26,7 @@ export class BillController {
     @Request() req: any,
     @Body() generateBillDto?: GenerateBillDto,
   ) {
-    return this.billService.generateBill(tabId, req.user.userId, generateBillDto);
+    return this.billService.generateBill(tabId, req.user.userId, req.user.role, generateBillDto);
   }
 
   @Post('tab/:tabId/apply-discount')
@@ -43,8 +43,12 @@ export class BillController {
   @ApiResponse({ status: 200, description: 'Payment processed, tab closed.' })
   @ApiResponse({ status: 404, description: 'Tab not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async payBill(@Param('tabId') tabId: string, @Body() paymentDto: ProcessPaymentDto) {
-    return this.billService.processPayment(tabId, paymentDto);
+  async payBill(
+    @Param('tabId') tabId: string,
+    @Request() req: any,
+    @Body() paymentDto: ProcessPaymentDto,
+  ) {
+    return this.billService.processPayment(tabId, req.user.userId, req.user.role, paymentDto);
   }
 
   @Get('tab/:tabId/receipt')

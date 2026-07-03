@@ -1,13 +1,16 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Table, TableStatus } from './entities/table.entity';
+import { Tab } from '../tab/entities/tab.entity';
 
 @Injectable()
 export class TableService {
   constructor(
     @InjectRepository(Table)
     private tableRepository: Repository<Table>,
+    @InjectRepository(Tab)
+    private tabRepository: Repository<Tab>,
   ) {}
 
   async create(createDto: any) {
@@ -57,5 +60,28 @@ export class TableService {
   async remove(id: string, branchId: string) {
     const table = await this.findOne(id, branchId);
     return this.tableRepository.remove(table);
+  }
+
+  async release(id: string, branchId: string, currentUserId: string, currentUserRole: string) {
+    if (currentUserRole !== 'owner' && currentUserRole !== 'manager') {
+      throw new ForbiddenException('Only owners and managers can release a table');
+    }
+
+    const table = await this.findOne(id, branchId);
+
+    const openTab = await this.tabRepository.findOne({
+      where: { table_id: id, status: 'open' },
+    });
+
+    if (openTab) {
+      await this.tabRepository.update(openTab.id, {
+        status: 'voided',
+        closed_at: new Date(),
+        notes: `RELEASED by ${currentUserRole} (${currentUserId})`,
+      });
+    }
+
+    table.status = TableStatus.AVAILABLE;
+    return this.tableRepository.save(table);
   }
 }
