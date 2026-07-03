@@ -8,10 +8,11 @@ import { Tab } from '../tab/entities/tab.entity';
 import { Bill } from '../bill/entities/bill.entity';
 import { Order } from '../order/entities/order.entity';
 import { User } from '../user/entities/user.entity';
+import { AuditService } from '../../common/services/audit.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Branch, Table, Tab, Bill, Order, User])],
-  providers: [BranchService],
+  providers: [BranchService, AuditService],
   controllers: [BranchController],
   exports: [BranchService],
 })

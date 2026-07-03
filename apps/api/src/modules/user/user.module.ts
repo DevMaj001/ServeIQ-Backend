@@ -4,10 +4,11 @@ import { UserService } from './user.service';
 import { UserController } from './user.controller';
 import { User } from './entities/user.entity';
 import { Branch } from '../branch/entities/branch.entity';
+import { AuditService } from '../../common/services/audit.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([User, Branch])],
-  providers: [UserService],
+  providers: [UserService, AuditService],
   controllers: [UserController],
   exports: [UserService],
 })
