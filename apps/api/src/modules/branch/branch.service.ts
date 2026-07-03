@@ -7,6 +7,7 @@ import { Tab } from '../tab/entities/tab.entity';
 import { Bill } from '../bill/entities/bill.entity';
 import { Order } from '../order/entities/order.entity';
 import { User } from '../user/entities/user.entity';
+import { AuditService } from '../../common/services/audit.service';
 
 @Injectable()
 export class BranchService {
@@ -23,6 +24,7 @@ export class BranchService {
     private orderRepository: Repository<Order>,
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    private auditService: AuditService,
   ) {}
 
   async create(createDto: any) {
@@ -54,6 +56,16 @@ export class BranchService {
 
   async remove(id: string, businessId: string) {
     const branch = await this.findOne(id, businessId);
+    
+    await this.auditService.log({
+      branchId: branch.id,
+      userId: undefined,
+      action: 'BRANCH_DELETED',
+      entityType: 'Branch',
+      entityId: branch.id,
+      payload: { name: branch.name, businessId: branch.business_id },
+    });
+
     return this.branchRepository.remove(branch);
   }
 

@@ -6,6 +6,7 @@ import { User } from './entities/user.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { UserRole } from '../../common/shared';
 import { CreateWaiterDto } from './dto/create-waiter.dto';
+import { AuditService } from '../../common/services/audit.service';
 
 @Injectable()
 export class UserService {
@@ -14,6 +15,7 @@ export class UserService {
     private userRepository: Repository<User>,
     @InjectRepository(Branch)
     private branchRepository: Repository<Branch>,
+    private auditService: AuditService,
   ) {}
 
   async create(createDto: any) {
@@ -88,6 +90,15 @@ export class UserService {
 
       const savedUser = await this.userRepository.save(user);
 
+      await this.auditService.log({
+        branchId: dto.branchId,
+        userId: savedUser.id,
+        action: 'WAITER_CREATED',
+        entityType: 'User',
+        entityId: savedUser.id,
+        payload: { fullName: savedUser.full_name, email: savedUser.email, role: savedUser.role },
+      });
+
       return {
         waiter: {
           id: savedUser.id,
@@ -142,6 +153,15 @@ export class UserService {
     waiter.pin_hash = await bcrypt.hash(pin, salt);
     await this.userRepository.save(waiter);
 
+    await this.auditService.log({
+      branchId: waiter.branch_id,
+      userId: waiter.id,
+      action: 'WAITER_PIN_RESET',
+      entityType: 'User',
+      entityId: waiter.id,
+      payload: { fullName: waiter.full_name },
+    });
+
     return { pin };
   }
 
@@ -171,14 +191,35 @@ export class UserService {
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
 
-    if (dto.full_name) user.full_name = dto.full_name;
-    if (dto.phone) user.phone = dto.phone;
+    const changes: any = {};
+    if (dto.full_name) {
+      changes.full_name = { old: user.full_name, new: dto.full_name };
+      user.full_name = dto.full_name;
+    }
+    if (dto.phone) {
+      changes.phone = { old: user.phone, new: dto.phone };
+      user.phone = dto.phone;
+    }
     if (dto.password) {
       const salt = await bcrypt.genSalt();
       user.password_hash = await bcrypt.hash(dto.password, salt);
+      changes.password_changed = true;
     }
 
-    return this.userRepository.save(user);
+    await this.userRepository.save(user);
+
+    if (Object.keys(changes).length > 0) {
+      await this.auditService.log({
+        branchId: user.branch_id,
+        userId: user.id,
+        action: 'PROFILE_UPDATED',
+        entityType: 'User',
+        entityId: user.id,
+        payload: changes,
+      });
+    }
+
+    return user;
   }
 
   async deactivateUser(id: string, businessId: string) {
@@ -187,7 +228,18 @@ export class UserService {
     });
     if (!user) throw new NotFoundException('User not found or does not belong to your business');
     user.is_active = false;
-    return this.userRepository.save(user);
+    await this.userRepository.save(user);
+
+    await this.auditService.log({
+      branchId: user.branch_id,
+      userId: user.id,
+      action: 'USER_DEACTIVATED',
+      entityType: 'User',
+      entityId: user.id,
+      payload: { fullName: user.full_name, email: user.email, role: user.role },
+    });
+
+    return user;
   }
 
   async removeWaiter(id: string, businessId: string) {
@@ -195,6 +247,16 @@ export class UserService {
       where: { id, business_id: businessId, role: UserRole.WAITER },
     });
     if (!waiter) throw new NotFoundException('Waiter not found or does not belong to your business');
+
+    await this.auditService.log({
+      branchId: waiter.branch_id,
+      userId: waiter.id,
+      action: 'WAITER_DELETED',
+      entityType: 'User',
+      entityId: waiter.id,
+      payload: { fullName: waiter.full_name, email: waiter.email },
+    });
+
     return this.userRepository.remove(waiter);
   }
 }

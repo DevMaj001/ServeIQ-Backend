@@ -12,6 +12,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { WaiterLoginDto } from './dto/waiter-login.dto';
 import { UserRole } from '../../common/shared';
+import { AuditService } from '../../common/services/audit.service';
 
 @Injectable()
 export class AuthService {
@@ -19,6 +20,7 @@ export class AuthService {
     private jwtService: JwtService,
     @Inject(DataSource)
     private dataSource: DataSource,
+    private auditService: AuditService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -68,6 +70,15 @@ export class AuthService {
 
       await queryRunner.commitTransaction();
 
+      await this.auditService.log({
+        branchId: savedBranch.id,
+        userId: savedUser.id,
+        action: 'REGISTER',
+        entityType: 'Business',
+        entityId: savedBusiness.id,
+        payload: { businessName: savedBusiness.name, email: savedUser.email },
+      });
+
       return this.generateTokens(savedUser);
     } catch (err) {
       await queryRunner.rollbackTransaction();
@@ -86,6 +97,14 @@ export class AuthService {
     });
 
     if (user && (await bcrypt.compare(dto.password, user.password_hash))) {
+      await this.auditService.log({
+        branchId: user.branch_id,
+        userId: user.id,
+        action: 'LOGIN',
+        entityType: 'User',
+        entityId: user.id,
+        payload: { email: user.email, role: user.role },
+      });
       return this.generateTokens(user);
     }
     throw new UnauthorizedException('Invalid credentials');
@@ -243,6 +262,15 @@ export class AuthService {
 
     stored.is_used = true;
     await repo.save(stored);
+
+    await this.auditService.log({
+      branchId: user.branch_id,
+      userId: user.id,
+      action: 'PASSWORD_RESET',
+      entityType: 'User',
+      entityId: user.id,
+      payload: { email: user.email },
+    });
 
     return { message: 'Password reset successfully' };
   }
