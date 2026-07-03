@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { Business } from './modules/business/entities/business.entity';
@@ -74,6 +75,7 @@ import { CloudinaryModule } from './cloudinary/cloudinary.module';
       retryDelay: 3000,
       autoLoadEntities: true,
     }),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 30 }]),
     TypeOrmModule.forFeature([AuditLog]),
     AuthModule,
     BusinessModule,
