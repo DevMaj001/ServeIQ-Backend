@@ -52,7 +52,7 @@ export class User {
   @Column({ nullable: true })
   pin_hash: string;
 
-  @Column({ type: 'enum', enum: UserRole, default: UserRole.WAITER })
+  @Column({ type: 'varchar', length: 20, default: UserRole.WAITER })
   role: UserRole;
 
   @Column({ default: true })
