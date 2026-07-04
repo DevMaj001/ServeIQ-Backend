@@ -7,22 +7,21 @@ export class SeedSuperAdmin1784000000002 implements MigrationInterface {
         const existing = await queryRunner.query(
             `SELECT id FROM "users" WHERE email = 'majestydennis6@gmail.com'`
         );
-        if (existing.length > 0) return;
+        if (existing && existing.length > 0) return;
 
+        let businessId: string;
         const slugExists = await queryRunner.query(
             `SELECT id FROM "businesses" WHERE slug = 'serveiq-admin'`
         );
-        let businessId: string;
-
-        if (slugExists.length > 0) {
+        if (slugExists && slugExists.length > 0) {
             businessId = slugExists[0].id;
         } else {
-            const businessResult = await queryRunner.query(`
+            const bizResult = await queryRunner.query(`
                 INSERT INTO "businesses" ("name", "slug", "type", "owner_id", "email", "is_active")
                 VALUES ('ServeIQ Admin', 'serveiq-admin', 'restaurant', '00000000-0000-0000-0000-000000000000', 'admin@serveiq.io', true)
                 RETURNING id
             `);
-            businessId = businessResult[0].id;
+            businessId = bizResult[0]?.id;
         }
 
         const branchResult = await queryRunner.query(`
@@ -30,14 +29,14 @@ export class SeedSuperAdmin1784000000002 implements MigrationInterface {
             VALUES ('${businessId}', 'Admin Branch', true)
             RETURNING id
         `);
-        const branchId = branchResult[0].id;
+        const branchId = branchResult[0]?.id;
 
         const userResult = await queryRunner.query(`
             INSERT INTO "users" ("business_id", "branch_id", "full_name", "email", "password_hash", "role", "is_active")
-            VALUES ('${businessId}', '${branchId}', 'Super Admin', 'majestydennis6@gmail.com', '$2b$10$D7E1ff2EOUu4mOuhRWHJ9e4/sS9Vj3dRyYm.nBjhCa2hZoj/lTBEG', 'superadmin', true)
+            VALUES ('${businessId}', '${branchId}', 'Super Admin', 'majestydennis6@gmail.com', '$2b$10$lWdKbNtEx5ggLkl2iIjAZ.8A0RZAPvGvCO9zFzyJH4jJOae1ZlWZ6', 'superadmin', true)
             RETURNING id
         `);
-        const userId = userResult[0].id;
+        const userId = userResult[0]?.id;
 
         await queryRunner.query(`
             UPDATE "businesses" SET owner_id = '${userId}' WHERE id = '${businessId}'
@@ -46,7 +45,7 @@ export class SeedSuperAdmin1784000000002 implements MigrationInterface {
         const subExists = await queryRunner.query(`
             SELECT id FROM "subscriptions" WHERE branch_id = '${branchId}'
         `);
-        if (subExists.length === 0) {
+        if (!subExists || subExists.length === 0) {
             await queryRunner.query(`
                 INSERT INTO "subscriptions" ("branch_id", "status", "trial_ends_at")
                 VALUES ('${branchId}', 'trialing', NOW() + INTERVAL '9999 days')
@@ -56,16 +55,16 @@ export class SeedSuperAdmin1784000000002 implements MigrationInterface {
 
     public async down(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(
-            `DELETE FROM "subscriptions" WHERE branch_id IN (SELECT id FROM "branches" WHERE business_id IN (SELECT id FROM "businesses" WHERE slug = 'serveiq-admin'))`
+            `DELETE FROM "subscriptions" USING "branches" WHERE "subscriptions"."branch_id" = "branches"."id" AND "branches"."business_id" IN (SELECT "id" FROM "businesses" WHERE "slug" = 'serveiq-admin')`
         );
         await queryRunner.query(
-            `DELETE FROM "users" WHERE email = 'majestydennis6@gmail.com'`
+            `DELETE FROM "users" WHERE "email" = 'majestydennis6@gmail.com'`
         );
         await queryRunner.query(
-            `DELETE FROM "branches" WHERE business_id IN (SELECT id FROM "businesses" WHERE slug = 'serveiq-admin')`
+            `DELETE FROM "branches" WHERE "business_id" IN (SELECT "id" FROM "businesses" WHERE "slug" = 'serveiq-admin')`
         );
         await queryRunner.query(
-            `DELETE FROM "businesses" WHERE slug = 'serveiq-admin'`
+            `DELETE FROM "businesses" WHERE "slug" = 'serveiq-admin'`
         );
     }
 }
