@@ -6,10 +6,12 @@ import {
   UpdateDateColumn,
   DeleteDateColumn,
   ManyToOne,
+  OneToOne,
   JoinColumn,
   Index,
 } from 'typeorm';
 import { Business } from '../../business/entities/business.entity';
+import { Subscription } from '../../subscription/entities/subscription.entity';
 
 @Entity('branches')
 export class Branch {
@@ -23,6 +25,9 @@ export class Branch {
   @ManyToOne(() => Business, (business) => business.branches)
   @JoinColumn({ name: 'business_id' })
   business: Business;
+
+  @OneToOne(() => Subscription, (subscription) => subscription.branch)
+  subscription: Subscription;
 
   @Column()
   name: string;

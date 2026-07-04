@@ -6,6 +6,7 @@ import { DataSource, MoreThan } from 'typeorm';
 import { User } from '../user/entities/user.entity';
 import { Business } from '../business/entities/business.entity';
 import { Branch } from '../branch/entities/branch.entity';
+import { SubscriptionService } from '../subscription/subscription.service';
 import { RefreshToken } from '../../entities/refresh-token.entity';
 import { VerificationToken } from '../../entities/verification-token.entity';
 import { RegisterDto } from './dto/register.dto';
@@ -21,6 +22,7 @@ export class AuthService {
     @Inject(DataSource)
     private dataSource: DataSource,
     private auditService: AuditService,
+    private subscriptionService: SubscriptionService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -48,6 +50,9 @@ export class AuthService {
         is_active: true,
       });
       const savedBranch = await queryRunner.manager.save(branch);
+
+      // 2b. Create Trial Subscription
+      await this.subscriptionService.createTrialSubscription(savedBranch.id, queryRunner.manager);
 
       // 3. Create Owner User
       const salt = await bcrypt.genSalt();

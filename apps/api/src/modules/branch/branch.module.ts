@@ -10,9 +10,10 @@ import { Order } from '../order/entities/order.entity';
 import { User } from '../user/entities/user.entity';
 import { AuditLog } from '../../entities/audit-log.entity';
 import { AuditService } from '../../common/services/audit.service';
+import { SubscriptionModule } from '../subscription/subscription.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Branch, Table, Tab, Bill, Order, User, AuditLog])],
+  imports: [TypeOrmModule.forFeature([Branch, Table, Tab, Bill, Order, User, AuditLog]), SubscriptionModule],
   providers: [BranchService, AuditService],
   controllers: [BranchController],
   exports: [BranchService],

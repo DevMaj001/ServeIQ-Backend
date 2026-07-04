@@ -10,12 +10,13 @@ import { User } from '../modules/user/entities/user.entity';
 import { Table as RestaurantTable, TableStatus } from '../modules/table/entities/table.entity';
 import { MenuItem } from '../modules/menu/entities/menu-item.entity';
 import { Tab } from '../modules/tab/entities/tab.entity';
+import { Subscription, SubscriptionStatus } from '../modules/subscription/entities/subscription.entity';
 import { UserRole } from '../common/shared';
 
 const AppDataSource = new DataSource({
   type: 'postgres',
   url: process.env.DATABASE_URL,
-  entities: [Business, Branch, User, RestaurantTable, MenuItem, Tab],
+  entities: [Business, Branch, User, RestaurantTable, MenuItem, Tab, Subscription],
   synchronize: false,
   logging: true,
   ssl: { rejectUnauthorized: false },
@@ -31,6 +32,7 @@ async function seed() {
   const tableRepo = AppDataSource.getRepository(RestaurantTable);
   const menuRepo = AppDataSource.getRepository(MenuItem);
   const tabRepo = AppDataSource.getRepository(Tab);
+  const subscriptionRepo = AppDataSource.getRepository(Subscription);
 
   const salt = await bcrypt.genSalt();
   const passwordHash = await bcrypt.hash('password123', salt);
@@ -63,6 +65,15 @@ async function seed() {
   });
   const savedBranch = await branchRepo.save(branch);
   console.log('Created branch:', savedBranch.id);
+
+  // Create Trial Subscription
+  const subscription = subscriptionRepo.create({
+    branch_id: savedBranch.id,
+    status: SubscriptionStatus.TRIALING,
+    trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+  });
+  await subscriptionRepo.save(subscription);
+  console.log('Created trial subscription for branch:', savedBranch.id);
 
   // Create Owner User
   const owner = userRepo.create({

@@ -7,6 +7,7 @@ import { Tab } from '../tab/entities/tab.entity';
 import { Bill } from '../bill/entities/bill.entity';
 import { Order } from '../order/entities/order.entity';
 import { User } from '../user/entities/user.entity';
+import { SubscriptionService } from '../subscription/subscription.service';
 import { AuditService } from '../../common/services/audit.service';
 
 @Injectable()
@@ -24,12 +25,16 @@ export class BranchService {
     private orderRepository: Repository<Order>,
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    private subscriptionService: SubscriptionService,
     private auditService: AuditService,
   ) {}
 
   async create(createDto: any) {
-    const branch = this.branchRepository.create(createDto);
-    return this.branchRepository.save(branch);
+    const branch = new Branch();
+    Object.assign(branch, createDto);
+    const saved = await this.branchRepository.save(branch);
+    await this.subscriptionService.createTrialSubscription(saved.id);
+    return saved;
   }
 
   async findAllByBusiness(businessId: string) {
