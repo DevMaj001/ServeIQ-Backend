@@ -20,9 +20,9 @@ export class CreatePlansAndSubscriptions1784000000000 implements MigrationInterf
         await queryRunner.query(`ALTER TABLE "subscriptions" ADD CONSTRAINT "FK_subscriptions_plan_id" FOREIGN KEY ("plan_id") REFERENCES "plans"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
 
         await queryRunner.query(`INSERT INTO "plans" ("name", "price", "currency", "billing_interval", "features", "is_active", "paystack_plan_code") VALUES
-          ('Basic', 0, 'NGN', 'monthly', '{"max_tables": 5, "max_waiters": 3, "reporting_enabled": false}', true, 'PLN_basic_replace_me'),
-          ('Pro', 2500000, 'NGN', 'monthly', '{"max_tables": 20, "max_waiters": 15, "reporting_enabled": true}', true, 'PLN_pro_replace_me'),
-          ('Enterprise', 7500000, 'NGN', 'monthly', '{"max_tables": 100, "max_waiters": 50, "reporting_enabled": true}', true, 'PLN_enterprise_replace_me')
+          ('Basic', 0, 'NGN', 'monthly', '{"max_tables": 5, "max_waiters": 3, "reporting_enabled": false}', true, NULL),
+          ('Pro', 2500000, 'NGN', 'monthly', '{"max_tables": 20, "max_waiters": 15, "reporting_enabled": true}', true, 'PLN_qtves056ssz1vii'),
+          ('Enterprise', 7500000, 'NGN', 'monthly', '{"max_tables": 100, "max_waiters": 50, "reporting_enabled": true}', true, 'PLN_urcrd2ef9ud68pg')
         `);
     }
 
