@@ -9,35 +9,49 @@ export class SeedSuperAdmin1784000000002 implements MigrationInterface {
         );
         if (existing.length > 0) return;
 
-        const businessResult = await queryRunner.query(`
-            INSERT INTO "businesses" ("name", "slug", "type", "owner_id", "email", "is_active")
-            VALUES ('ServeIQ Admin', 'serveiq-admin', 'restaurant', '00000000-0000-0000-0000-000000000000', 'admin@serveiq.io', true)
-            RETURNING id
-        `);
-        const businessId = businessResult[0].id;
+        const slugExists = await queryRunner.query(
+            `SELECT id FROM "businesses" WHERE slug = 'serveiq-admin'`
+        );
+        let businessId: string;
+
+        if (slugExists.length > 0) {
+            businessId = slugExists[0].id;
+        } else {
+            const businessResult = await queryRunner.query(`
+                INSERT INTO "businesses" ("name", "slug", "type", "owner_id", "email", "is_active")
+                VALUES ('ServeIQ Admin', 'serveiq-admin', 'restaurant', '00000000-0000-0000-0000-000000000000', 'admin@serveiq.io', true)
+                RETURNING id
+            `);
+            businessId = businessResult[0].id;
+        }
 
         const branchResult = await queryRunner.query(`
             INSERT INTO "branches" ("business_id", "name", "is_active")
-            VALUES ($1, 'Admin Branch', true)
+            VALUES ('${businessId}', 'Admin Branch', true)
             RETURNING id
-        `, [businessId]);
+        `);
         const branchId = branchResult[0].id;
 
         const userResult = await queryRunner.query(`
             INSERT INTO "users" ("business_id", "branch_id", "full_name", "email", "password_hash", "role", "is_active")
-            VALUES ($1, $2, 'Super Admin', 'majestydennis6@gmail.com', '$2b$10$D7E1ff2EOUu4mOuhRWHJ9e4/sS9Vj3dRyYm.nBjhCa2hZoj/lTBEG', 'superadmin', true)
+            VALUES ('${businessId}', '${branchId}', 'Super Admin', 'majestydennis6@gmail.com', '$2b$10$D7E1ff2EOUu4mOuhRWHJ9e4/sS9Vj3dRyYm.nBjhCa2hZoj/lTBEG', 'superadmin', true)
             RETURNING id
-        `, [businessId, branchId]);
+        `);
         const userId = userResult[0].id;
 
         await queryRunner.query(`
-            UPDATE "businesses" SET owner_id = $1 WHERE id = $2
-        `, [userId, businessId]);
+            UPDATE "businesses" SET owner_id = '${userId}' WHERE id = '${businessId}'
+        `);
 
-        await queryRunner.query(`
-            INSERT INTO "subscriptions" ("branch_id", "status", "trial_ends_at")
-            VALUES ($1, 'trialing', NOW() + INTERVAL '9999 days')
-        `, [branchId]);
+        const subExists = await queryRunner.query(`
+            SELECT id FROM "subscriptions" WHERE branch_id = '${branchId}'
+        `);
+        if (subExists.length === 0) {
+            await queryRunner.query(`
+                INSERT INTO "subscriptions" ("branch_id", "status", "trial_ends_at")
+                VALUES ('${branchId}', 'trialing', NOW() + INTERVAL '9999 days')
+            `);
+        }
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
