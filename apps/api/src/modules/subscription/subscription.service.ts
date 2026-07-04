@@ -216,6 +216,23 @@ export class SubscriptionService {
     return subscription;
   }
 
+  async extendGracePeriod(dto: { branch_id: string; days: number }) {
+    const subscription = await this.subscriptionRepo.findOne({
+      where: { branch_id: dto.branch_id },
+    });
+    if (!subscription) {
+      throw new NotFoundException('No subscription found for this branch');
+    }
+
+    subscription.grace_period_ends_at = new Date(Date.now() + dto.days * 24 * 60 * 60 * 1000);
+    if (subscription.status === SubscriptionStatus.EXPIRED) {
+      subscription.status = SubscriptionStatus.PAST_DUE;
+    }
+
+    await this.subscriptionRepo.save(subscription);
+    return subscription;
+  }
+
   async adminGrant(dto: { branch_id: string; plan_id: string; current_period_end?: string }) {
     const plan = await this.planRepo.findOne({ where: { id: dto.plan_id, is_active: true } });
     if (!plan) {

@@ -3,6 +3,7 @@ import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagg
 import { SubscriptionService } from './subscription.service';
 import { InitializeSubscriptionDto } from './dto/initialize-subscription.dto';
 import { AdminGrantDto } from './dto/admin-grant.dto';
+import { AdminExtendGraceDto } from './dto/admin-extend-grace.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -51,5 +52,16 @@ export class SubscriptionController {
   @ApiResponse({ status: 200, description: 'Subscription granted or extended' })
   async adminGrant(@Request() req: any, @Body() dto: AdminGrantDto) {
     return this.subscriptionService.adminGrant(dto);
+  }
+
+  @Post('admin/extend-grace')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPERADMIN)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Extend grace period for a branch subscription (superadmin only)' })
+  @ApiResponse({ status: 200, description: 'Grace period extended' })
+  @ApiResponse({ status: 404, description: 'Subscription not found' })
+  async extendGrace(@Request() req: any, @Body() dto: AdminExtendGraceDto) {
+    return this.subscriptionService.extendGracePeriod(dto);
   }
 }
