@@ -103,6 +103,14 @@ export class AuthController {
     return this.authService.verifyEmail(req.user.userId, body.otp);
   }
 
+  @Post('setup-super-admin')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'One-time setup to create super admin account' })
+  @ApiResponse({ status: 200, description: 'Super admin created or already exists' })
+  async setupSuperAdmin(@Body() dto: { email: string; password: string; full_name?: string }) {
+    return this.authService.setupSuperAdmin(dto);
+  }
+
   @Post(['waiter-login', 'activate'])
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60000 } })

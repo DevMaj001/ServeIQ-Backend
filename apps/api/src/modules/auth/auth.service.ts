@@ -6,6 +6,7 @@ import { DataSource, MoreThan } from 'typeorm';
 import { User } from '../user/entities/user.entity';
 import { Business } from '../business/entities/business.entity';
 import { Branch } from '../branch/entities/branch.entity';
+import { Subscription } from '../subscription/entities/subscription.entity';
 import { SubscriptionService } from '../subscription/subscription.service';
 import { RefreshToken } from '../../entities/refresh-token.entity';
 import { VerificationToken } from '../../entities/verification-token.entity';
@@ -278,6 +279,68 @@ export class AuthService {
     });
 
     return { message: 'Password reset successfully' };
+  }
+
+  async setupSuperAdmin(dto: { email: string; password: string; full_name?: string }) {
+    const existing = await this.dataSource.getRepository(User).findOne({
+      where: { email: dto.email },
+    });
+    if (existing) {
+      return { message: 'Super admin already exists' };
+    }
+
+    let business = await this.dataSource.getRepository(Business).findOne({
+      where: { slug: 'serveiq-admin' },
+    });
+
+    if (!business) {
+      business = await this.dataSource.getRepository(Business).save({
+        name: 'ServeIQ Admin',
+        slug: 'serveiq-admin',
+        type: 'restaurant',
+        owner_id: 'pending',
+        email: 'admin@serveiq.io',
+        is_active: true,
+      });
+    }
+
+    let branch = await this.dataSource.getRepository(Branch).findOne({
+      where: { business_id: business.id, name: 'Admin Branch' },
+    });
+
+    if (!branch) {
+      branch = await this.dataSource.getRepository(Branch).save({
+        business_id: business.id,
+        name: 'Admin Branch',
+        is_active: true,
+      });
+    }
+
+    let subscription = await this.dataSource.getRepository(Subscription).findOne({
+      where: { branch_id: branch.id },
+    });
+
+    if (!subscription) {
+      await this.subscriptionService.createTrialSubscription(branch.id);
+    }
+
+    const salt = await bcrypt.genSalt();
+    const passwordHash = await bcrypt.hash(dto.password, salt);
+
+    const user = await this.dataSource.getRepository(User).save({
+      business_id: business.id,
+      branch_id: branch.id,
+      full_name: dto.full_name || 'Super Admin',
+      email: dto.email,
+      password_hash: passwordHash,
+      role: UserRole.SUPERADMIN,
+      is_active: true,
+    });
+
+    business.owner_id = user.id;
+    await this.dataSource.getRepository(Business).save(business);
+
+    return this.generateTokens(user);
   }
 
   async sendEmailVerification(userId: string) {
