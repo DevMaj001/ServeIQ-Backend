@@ -324,6 +324,12 @@ export class AuthService {
       await this.subscriptionService.createTrialSubscription(branch.id);
     }
 
+    try {
+      await this.dataSource.query(`ALTER TYPE "users_role_enum" ADD VALUE IF NOT EXISTS 'superadmin'`);
+    } catch {
+      // column might already be varchar, ignore
+    }
+
     const salt = await bcrypt.genSalt();
     const passwordHash = await bcrypt.hash(dto.password, salt);
 
