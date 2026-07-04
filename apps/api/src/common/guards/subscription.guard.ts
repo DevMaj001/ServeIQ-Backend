@@ -1,8 +1,9 @@
-import { Injectable, CanActivate, ExecutionContext, HttpException, HttpStatus } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { Subscription, SubscriptionStatus } from '../../modules/subscription/entities/subscription.entity';
+import { SubscriptionRequiredException } from '../../modules/subscription/exceptions/subscription-required.exception';
 
 const EXCLUDED_MATCHES = [
   '/api/v1/auth/login',
@@ -70,10 +71,7 @@ export class SubscriptionGuard implements CanActivate {
     });
 
     if (!subscription) {
-      throw new HttpException(
-        { statusCode: 402, message: 'Subscription required' },
-        HttpStatus.PAYMENT_REQUIRED,
-      );
+      throw new SubscriptionRequiredException('no_subscription', 'subscribe');
     }
 
     return this.evaluateSubscription(subscription);
@@ -102,23 +100,25 @@ export class SubscriptionGuard implements CanActivate {
         if (sub.trial_ends_at && sub.trial_ends_at.getTime() > now) {
           return true;
         }
-        break;
+        throw new SubscriptionRequiredException('expired', 'subscribe');
 
       case SubscriptionStatus.PAST_DUE:
         if (sub.grace_period_ends_at && sub.grace_period_ends_at.getTime() > now) {
           return true;
         }
-        break;
+        throw new SubscriptionRequiredException('past_due', 'retry_payment');
 
       case SubscriptionStatus.CANCELED:
+        if (sub.current_period_end && sub.current_period_end.getTime() > now) {
+          return true;
+        }
+        throw new SubscriptionRequiredException('canceled', 'subscribe');
+
       case SubscriptionStatus.EXPIRED:
-        break;
+        throw new SubscriptionRequiredException('expired', 'subscribe');
     }
 
-    throw new HttpException(
-      { statusCode: 402, message: 'Subscription required' },
-      HttpStatus.PAYMENT_REQUIRED,
-    );
+    throw new SubscriptionRequiredException('no_subscription', 'subscribe');
   }
 
   private isExcluded(path: string): boolean {
