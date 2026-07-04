@@ -49,10 +49,10 @@ export class Subscription {
   @Column({ type: 'timestamptz', nullable: true })
   canceled_at: Date | null;
 
-  @Column({ length: 100, nullable: true })
+  @Column({ type: 'varchar', length: 100, nullable: true })
   paystack_subscription_code: string | null;
 
-  @Column({ length: 100, nullable: true })
+  @Column({ type: 'varchar', length: 100, nullable: true })
   paystack_customer_code: string | null;
 
   @CreateDateColumn()
