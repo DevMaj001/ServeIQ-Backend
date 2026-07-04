@@ -34,19 +34,19 @@ export class Subscription {
   @Column({ type: 'enum', enum: SubscriptionStatus, default: SubscriptionStatus.TRIALING })
   status: SubscriptionStatus;
 
-  @Column({ nullable: true })
+  @Column({ type: 'timestamptz', nullable: true })
   trial_ends_at: Date | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'timestamptz', nullable: true })
   current_period_start: Date | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'timestamptz', nullable: true })
   current_period_end: Date | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'timestamptz', nullable: true })
   grace_period_ends_at: Date | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'timestamptz', nullable: true })
   canceled_at: Date | null;
 
   @Column({ length: 100, nullable: true })
