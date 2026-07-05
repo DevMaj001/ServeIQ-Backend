@@ -143,6 +143,32 @@ export class AuthService {
     throw new UnauthorizedException('Invalid PIN');
   }
 
+  async activate(dto: { email: string; password: string }) {
+    const user = await this.dataSource.getRepository(User).findOne({
+      where: { email: dto.email },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (!user.password_hash) {
+      throw new BadRequestException('Account has no password set. Contact your admin.');
+    }
+
+    const valid = await bcrypt.compare(dto.password, user.password_hash);
+    if (!valid) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (!user.is_active) {
+      user.is_active = true;
+      await this.dataSource.getRepository(User).save(user);
+    }
+
+    return this.generateTokens(user);
+  }
+
   private async generateRefreshToken(userId: string): Promise<string | null> {
     try {
       const repo = this.dataSource.getRepository(RefreshToken);

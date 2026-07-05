@@ -27,6 +27,7 @@ import { Shift } from './modules/shift/entities/shift.entity';
 import { PosTerminal } from './modules/pos/entities/pos-terminal.entity';
 import { Plan } from './modules/subscription/entities/plan.entity';
 import { Subscription } from './modules/subscription/entities/subscription.entity';
+import { Notification } from './modules/notification/entities/notification.entity';
 
 import { AuthModule } from './modules/auth/auth.module';
 import { BusinessModule } from './modules/business/business.module';
@@ -42,6 +43,7 @@ import { AiModule } from './modules/ai/ai.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
+import { NotificationModule } from './modules/notification/notification.module';
 
 @Module({
   imports: [
@@ -72,6 +74,7 @@ import { CloudinaryModule } from './cloudinary/cloudinary.module';
         PosTerminal,
         Plan,
         Subscription,
+        Notification,
       ],
       migrationsRun: true,
       synchronize: process.env.NODE_ENV === 'development',
@@ -101,6 +104,7 @@ import { CloudinaryModule } from './cloudinary/cloudinary.module';
     AiModule,
     UploadModule,
     SubscriptionModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [AppService, AuditService],

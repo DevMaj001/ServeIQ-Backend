@@ -4,6 +4,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { WaiterLoginDto } from './dto/waiter-login.dto';
+import { ActivateDto } from './dto/activate.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { LogoutDto } from './dto/logout.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
@@ -111,11 +112,11 @@ export class AuthController {
     return this.authService.setupSuperAdmin(dto);
   }
 
-  @Post(['waiter-login', 'activate'])
+  @Post('waiter-login')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({
-    summary: 'Waiter PIN login / Device activation',
+    summary: 'Waiter PIN login',
     description:
       'Authenticates a waiter using their 4-digit PIN and branch ID. Returns a JWT scoped to the WAITER role.',
   })
@@ -130,10 +131,23 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Invalid PIN.' })
   async waiterLogin(@Body() payload: any) {
     const dto = new WaiterLoginDto();
-    // Handle alternative field names from the Waiter app
     dto.pin = payload.pin || payload.passCode || payload.code || '';
     dto.branchId = payload.branchId || payload.branch_id || '';
-    
     return this.authService.waiterLogin(dto);
+  }
+
+  @Post('activate')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @ApiOperation({
+    summary: 'Activate waiter account with email and password',
+    description:
+      'First-time activation for a waiter. Validates email and password, activates the account, and returns a JWT.',
+  })
+  @ApiResponse({ status: 200, description: 'Account activated — JWT returned.' })
+  @ApiResponse({ status: 400, description: 'Validation error.' })
+  @ApiResponse({ status: 401, description: 'Invalid credentials.' })
+  async activate(@Body() dto: ActivateDto) {
+    return this.authService.activate(dto);
   }
 }
