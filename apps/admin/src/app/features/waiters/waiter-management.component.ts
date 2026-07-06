@@ -131,7 +131,7 @@ export class WaiterManagementComponent implements OnInit {
   saveWaiter() {
     const request = this.isEditing 
       ? this.http.patch(`/api/v1/user/${this.currentWaiter.id}`, this.currentWaiter)
-      : this.http.post('/api/v1/user/invite-waiter', this.currentWaiter);
+      : this.http.post('/api/v1/user/waiters', this.currentWaiter);
 
     request.subscribe(() => {
       this.loadWaiters();
