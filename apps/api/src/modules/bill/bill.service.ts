@@ -12,7 +12,7 @@ import { Business } from '../business/entities/business.entity';
 import { GenerateBillDto } from './dto/generate-bill.dto';
 import { ProcessPaymentDto } from './dto/process-payment.dto';
 import { ApplyDiscountDto } from './dto/apply-discount.dto';
-import { InventoryService } from '../inventory/inventory.service';
+import { IngredientService } from '../ingredient/ingredient.service';
 import { ReceiptService } from './receipt.service';
 import { CloudinaryService } from '../../cloudinary/cloudinary.service';
 
@@ -37,7 +37,7 @@ export class BillService {
     private businessRepository: Repository<Business>,
     @Inject(DataSource)
     private dataSource: DataSource,
-    private inventoryService: InventoryService,
+    private ingredientService: IngredientService,
     private receiptService: ReceiptService,
     private cloudinaryService: CloudinaryService,
   ) {}
@@ -116,36 +116,38 @@ export class BillService {
     const bill = await this.billRepository.findOne({ where: { tab_id: tabId } });
     if (!bill) throw new NotFoundException('Bill not found');
 
-    bill.payment_method = paymentDto.method;
-    bill.payment_amount_kobo = paymentDto.amount;
-    if (paymentDto.reference) {
-      bill.payment_reference = paymentDto.reference;
-    }
-    if (paymentDto.terminal_id) {
-      bill.terminal_id = paymentDto.terminal_id;
-    }
-    bill.paid_at = new Date();
+    // Stock deduction, bill finalization, and tab/table state changes are wrapped
+    // in a single atomic transaction. If any step fails — deadlock, lock timeout,
+    // conversion error — everything rolls back, preventing the "deducted but unpaid"
+    // or "paid but not deducted" inconsistency.
+    //
+    // In this business's pay-at-order-time workflow, payment = fulfillment, so
+    // processing deduction here is correct. In a traditional restaurant (pay-at-end)
+    // the deduction would move to a kitchen status transition instead.
+    await this.dataSource.transaction(async (manager) => {
+      const orders = await manager.getRepository(Order).find({ where: { tab_id: tabId } });
 
-    await this.billRepository.save(bill);
+      await this.ingredientService.deductByTab(
+        { id: tabId, branch_id: tab.branch_id },
+        orders.map(o => ({ menu_item_id: o.menu_item_id, quantity: o.quantity })),
+        manager,
+      );
 
-    // Mark tab paid and reset table to available
-    if (tab) {
-      await this.tabRepository.update(tabId, { status: 'paid', closed_at: new Date() });
-      await this.tableRepository.update(tab.table_id, { status: TableStatus.AVAILABLE });
-    }
-
-    // Auto-deduct inventory stock
-    try {
-      if (tab) {
-        const orders = await this.orderRepository.find({ where: { tab_id: tabId } });
-        await this.inventoryService.deductStockByTab(
-          { id: tabId, branch_id: tab.branch_id },
-          orders.map(o => ({ menu_item_id: o.menu_item_id, quantity: o.quantity })),
-        );
+      bill.payment_method = paymentDto.method;
+      bill.payment_amount_kobo = paymentDto.amount;
+      if (paymentDto.reference) {
+        bill.payment_reference = paymentDto.reference;
       }
-    } catch (err) {
-      console.error('Inventory deduction failed (non-blocking):', err.message);
-    }
+      if (paymentDto.terminal_id) {
+        bill.terminal_id = paymentDto.terminal_id;
+      }
+      bill.paid_at = new Date();
+
+      await manager.getRepository(Bill).save(bill);
+
+      await manager.getRepository(Tab).update(tabId, { status: 'paid', closed_at: new Date() });
+      await manager.getRepository(Table).update(tab.table_id, { status: TableStatus.AVAILABLE });
+    });
 
     // Generate PDF receipt and upload to Cloudinary
     try {

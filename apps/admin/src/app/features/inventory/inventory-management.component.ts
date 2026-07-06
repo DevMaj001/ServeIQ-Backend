@@ -1,12 +1,13 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterModule } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 
 @Component({
   selector: 'app-inventory-management',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterModule],
   template: `
     <div class="inventory-container">
       <header class="header">
@@ -52,6 +53,7 @@ import { HttpClient } from '@angular/common/http';
                   <button (click)="openAddStock(item)">Add Stock</button>
                   <button (click)="editItem(item)">Edit</button>
                   <button class="delete" (click)="deleteItem(item.id)">Delete</button>
+                  <button (click)="loadMovements(item)">Movements</button>
                 </td>
               </tr>
             </tbody>
@@ -101,6 +103,47 @@ import { HttpClient } from '@angular/common/http';
             </tbody>
           </table>
         </div>
+      </div>
+
+      <!-- MOVEMENT HISTORY -->
+      <div *ngIf="movementsItem" class="movements-section">
+        <div class="movements-header">
+          <button class="back-btn" (click)="movementsItem = null; movements = []">&larr; Back</button>
+          <h2>Movements &mdash; {{ movementsItem.menu_item?.name || movementsItem.name }}</h2>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Quantity Change</th>
+                <th>Quantity After</th>
+                <th>Reference</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let m of movements">
+                <td>{{ m.created_at | date:'medium' }}</td>
+                <td><span class="mov-type" [class]="movementTypeClass(m.type)">{{ movementTypeLabel(m.type) }}</span></td>
+                <td [class.neg]="m.quantity_change < 0" [class.pos]="m.quantity_change > 0">
+                  {{ m.quantity_change > 0 ? '+' : '' }}{{ m.quantity_change }}
+                </td>
+                <td>{{ m.quantity_after }}</td>
+                <td>
+                  <a *ngIf="m.type === 'order_consumption' && m.reference_id" [routerLink]="['/tables']" [queryParams]="{ tab: m.reference_id }" class="ref-link">
+                    Tab {{ m.reference_id | slice:0:8 }}...
+                  </a>
+                  <span *ngIf="m.type !== 'order_consumption' && m.reference_id" class="ref-id">{{ m.reference_id | slice:0:8 }}...</span>
+                  <span *ngIf="!m.reference_id">&mdash;</span>
+                </td>
+                <td>{{ m.notes || '\u2014' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="empty" *ngIf="movements.length === 0">No movements recorded for this ingredient.</p>
       </div>
 
       <!-- Add/Edit Modal -->
@@ -174,6 +217,20 @@ import { HttpClient } from '@angular/common/http';
     .neg { color: #ef4444; }
     .pos { color: #10b981; }
     .delete { color: #ef4444; }
+    .movements-section { margin-top: 2rem; }
+    .movements-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
+    .movements-header h2 { margin: 0; }
+    .back-btn { padding: 0.4rem 0.8rem; border: 1px solid #ddd; border-radius: 6px; background: white; cursor: pointer; font-size: 0.875rem; }
+    .back-btn:hover { background: #f9fafb; }
+    .mov-type { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
+    .mov-type.type-manual_adjustment { background: #eff6ff; color: #3b82f6; }
+    .mov-type.type-order_consumption { background: #fef2f2; color: #ef4444; }
+    .mov-type.type-waste { background: #fff7ed; color: #f97316; }
+    .mov-type.type-transfer { background: #f5f3ff; color: #8b5cf6; }
+    .mov-type.type-purchase { background: #ecfdf5; color: #10b981; }
+    .ref-link { color: #3b82f6; text-decoration: none; font-size: 0.875rem; }
+    .ref-link:hover { text-decoration: underline; }
+    .ref-id { color: #9ca3af; font-size: 0.875rem; }
     .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; }
     .modal-content { background: white; padding: 2rem; border-radius: 16px; width: 450px; max-height: 90vh; overflow-y: auto; }
     .form-group { margin-bottom: 1.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
@@ -197,6 +254,9 @@ export class InventoryManagementComponent implements OnInit {
   stockItem: any = null;
   stockQty = 0;
   stockNote = '';
+
+  movements: any[] = [];
+  movementsItem: any = null;
 
   constructor(private http: HttpClient) {}
 
@@ -273,5 +333,27 @@ export class InventoryManagementComponent implements OnInit {
 
   closeModal() {
     this.showModal = false;
+  }
+
+  loadMovements(item: any) {
+    this.movementsItem = item;
+    this.http.get<any[]>(`/api/v1/inventory/${item.id}/movements`).subscribe(data => {
+      this.movements = data;
+    });
+  }
+
+  movementTypeLabel(type: string): string {
+    const labels: Record<string, string> = {
+      manual_adjustment: 'Manual Adjustment',
+      order_consumption: 'Order Consumption',
+      waste: 'Waste',
+      transfer: 'Transfer',
+      purchase: 'Purchase',
+    };
+    return labels[type] || type;
+  }
+
+  movementTypeClass(type: string): string {
+    return 'type-' + type;
   }
 }
