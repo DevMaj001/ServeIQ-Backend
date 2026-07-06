@@ -217,4 +217,59 @@ export class DashboardService {
 
     return result;
   }
+
+  async getTableVelocity(branchId: string) {
+    const rows = await this.tabRepository.query(`
+      SELECT
+        t.table_id,
+        tbl.table_number,
+        AVG(EXTRACT(EPOCH FROM (t.closed_at - t.opened_at)) / 60)::int AS avg_duration_minutes,
+        COUNT(t.id) AS total_covers
+      FROM tabs t
+      LEFT JOIN tables tbl ON tbl.id::varchar = t.table_id::varchar
+      WHERE t.branch_id = $1
+        AND t.status = 'paid'
+        AND t.opened_at IS NOT NULL
+        AND t.closed_at IS NOT NULL
+      GROUP BY t.table_id, tbl.table_number
+      ORDER BY avg_duration_minutes ASC
+    `, [branchId]);
+
+    return rows;
+  }
+
+  async getPeakEfficiency(branchId: string, dateFrom?: string, dateTo?: string) {
+    const from = dateFrom ? new Date(dateFrom) : new Date(new Date().setHours(0, 0, 0, 0));
+    const to = dateTo ? new Date(dateTo) : new Date(new Date().setHours(23, 59, 59, 999));
+    if (!dateFrom) from.setHours(0, 0, 0, 0);
+
+    const rows = await this.tabRepository.query(`
+      SELECT
+        EXTRACT(HOUR FROM t.closed_at)::int AS hour,
+        COUNT(t.id) AS total_covers,
+        AVG(EXTRACT(EPOCH FROM (t.closed_at - t.opened_at)) / 60)::int AS avg_duration_minutes
+      FROM tabs t
+      WHERE t.branch_id = $1
+        AND t.status = 'paid'
+        AND t.closed_at >= $2
+        AND t.closed_at <= $3
+        AND t.opened_at IS NOT NULL
+        AND t.closed_at IS NOT NULL
+      GROUP BY EXTRACT(HOUR FROM t.closed_at)
+      ORDER BY hour ASC
+    `, [branchId, from, to]);
+
+    const hourly: Record<number, { hour: number; total_covers: number; avg_duration_minutes: number }> = {};
+    for (let h = 0; h < 24; h++) {
+      hourly[h] = { hour: h, total_covers: 0, avg_duration_minutes: 0 };
+    }
+    for (const row of rows) {
+      const h = Number(row.hour);
+      if (hourly[h]) {
+        hourly[h].total_covers = Number(row.total_covers);
+        hourly[h].avg_duration_minutes = Number(row.avg_duration_minutes);
+      }
+    }
+    return Object.values(hourly);
+  }
 }

@@ -62,4 +62,24 @@ export class DashboardController {
   ) {
     return this.dashboardService.getTopItems(req.user.branchId, dateFrom, dateTo);
   }
+
+  @Get('reports/table-velocity')
+  @ApiOperation({ summary: 'Average time between open and close per table (table velocity)' })
+  @ApiResponse({ status: 200, description: 'Table velocity list sorted by shortest avg duration.' })
+  async getTableVelocity(@Request() req: any) {
+    return this.dashboardService.getTableVelocity(req.user.branchId);
+  }
+
+  @Get('reports/peak-efficiency')
+  @ApiOperation({ summary: 'Covers and avg duration grouped by hour of day' })
+  @ApiQuery({ name: 'dateFrom', required: false, example: '2026-06-01' })
+  @ApiQuery({ name: 'dateTo', required: false, example: '2026-06-28' })
+  @ApiResponse({ status: 200, description: 'Hourly efficiency breakdown (0-23).' })
+  async getPeakEfficiency(
+    @Request() req: any,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+  ) {
+    return this.dashboardService.getPeakEfficiency(req.user.branchId, dateFrom, dateTo);
+  }
 }
