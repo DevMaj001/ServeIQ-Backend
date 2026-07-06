@@ -24,6 +24,15 @@ export class SubscriptionController {
     return this.subscriptionService.initialize(req.user.branchId, dto.plan_id);
   }
 
+  @Get('plans')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'List all available subscription plans' })
+  @ApiResponse({ status: 200, description: 'List of plans' })
+  async getPlans() {
+    return this.subscriptionService.getPlans();
+  }
+
   @Get('current')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')

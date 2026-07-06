@@ -172,6 +172,10 @@ export class SubscriptionService {
     await this.subscriptionRepo.save(subscription);
   }
 
+  async getPlans() {
+    return this.planRepo.find({ where: { is_active: true }, order: { price: 'ASC' } });
+  }
+
   async getCurrent(branchId: string) {
     const subscription = await this.subscriptionRepo.findOne({
       where: { branch_id: branchId },
