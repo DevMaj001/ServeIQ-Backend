@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource, In } from 'typeorm';
 import { Order } from './entities/order.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 
@@ -11,27 +11,41 @@ export class OrderService {
     private orderRepository: Repository<Order>,
     @InjectRepository(MenuItem)
     private menuRepository: Repository<MenuItem>,
+    @Inject(DataSource)
+    private dataSource: DataSource,
   ) {}
 
   async addOrderItems(tabId: string, items: any[], userId: string) {
-    const orders = [];
-    for (const item of items) {
-      const menuItem = await this.menuRepository.findOne({ where: { id: item.menu_item_id } });
-      if (!menuItem) throw new NotFoundException(`Menu item ${item.menu_item_id} not found`);
+    const ids = items.map(i => i.menu_item_id);
+    const menuItems = await this.menuRepository.find({ where: { id: In(ids) } });
+    const menuMap = new Map(menuItems.map(m => [m.id, m]));
 
-      const order = this.orderRepository.create({
-        tab_id: tabId,
-        menu_item_id: item.menu_item_id,
-        quantity: item.quantity,
-        unit_price_kobo: menuItem.price_kobo,
-        subtotal_kobo: item.quantity * menuItem.price_kobo,
-        round_number: item.round_number || 1,
-        created_by: userId,
-        notes: item.notes,
-      });
-      orders.push(await this.orderRepository.save(order));
+    for (const item of items) {
+      const menuItem = menuMap.get(item.menu_item_id);
+      if (!menuItem) throw new NotFoundException(`Menu item ${item.menu_item_id} not found`);
+      if (menuItem.track_stock && Number(menuItem.quantity_in_stock) < item.quantity) {
+        throw new BadRequestException(`Insufficient stock for "${menuItem.name}": ${Number(menuItem.quantity_in_stock)} available, ${item.quantity} requested`);
+      }
     }
-    return orders;
+
+    return this.dataSource.transaction(async (manager) => {
+      const orders = [];
+      for (const item of items) {
+        const menuItem = menuMap.get(item.menu_item_id);
+        const order = manager.getRepository(Order).create({
+          tab_id: tabId,
+          menu_item_id: item.menu_item_id,
+          quantity: item.quantity,
+          unit_price_kobo: menuItem.price_kobo,
+          subtotal_kobo: item.quantity * menuItem.price_kobo,
+          round_number: item.round_number || 1,
+          created_by: userId,
+          notes: item.notes,
+        });
+        orders.push(await manager.getRepository(Order).save(order));
+      }
+      return orders;
+    });
   }
 
   async findByTab(tabId: string) {

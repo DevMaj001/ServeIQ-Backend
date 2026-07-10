@@ -25,8 +25,14 @@ export class Bill {
   @Column({ type: 'integer', default: 0 })
   discount_kobo: number;
 
+  @Column({ type: 'integer', default: 0 })
+  tax_kobo: number;
+
   @Column({ type: 'integer' })
   total_kobo: number;
+
+  @Column({ type: 'varchar', nullable: true, unique: true })
+  idempotency_key: string;
 
   @Column({ type: 'integer', nullable: true })
   payment_amount_kobo: number;

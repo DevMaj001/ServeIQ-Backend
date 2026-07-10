@@ -58,25 +58,31 @@ export class BillService {
 
     const orders = await this.orderRepository.find({ where: { tab_id: tabId } });
     const subtotal = orders.reduce((sum, order) => sum + order.subtotal_kobo, 0);
-    
-    // Use provided service charge percent or default to 10%
+
     const serviceChargePercent = generateBillDto?.service_charge_percent ?? 10;
     const serviceCharge = Math.round(subtotal * (serviceChargePercent / 100));
     const discount = generateBillDto?.discount_kobo ?? 0;
-    const total = subtotal + serviceCharge - discount;
+
+    const tabBranch = await this.branchRepository.findOne({ where: { id: tab.branch_id } });
+    const business = tabBranch ? await this.businessRepository.findOne({ where: { id: tabBranch.business_id } }) : null;
+    const effectiveTaxRate = generateBillDto?.tax_rate_percent ?? Number(business?.tax_rate ?? 7.5);
+    const tax = Math.round(subtotal * (effectiveTaxRate / 100));
+
+    let total = subtotal + serviceCharge + tax - discount;
+    if (total < 0) total = 0;
 
     const bill = this.billRepository.create({
       tab_id: tabId,
       subtotal_kobo: subtotal,
       service_charge_kobo: serviceCharge,
+      tax_kobo: tax,
       discount_kobo: discount,
       total_kobo: total,
       issued_by: userId,
     });
 
     const savedBill = await this.billRepository.save(bill);
-    
-    // Update Tab Status
+
     await this.tabRepository.update(tabId, { status: 'billed', billed_at: new Date() });
 
     return savedBill;
@@ -93,7 +99,7 @@ export class BillService {
       bill.discount_kobo = Math.round(bill.subtotal_kobo * (dto.discount_percent / 100));
     }
 
-    bill.total_kobo = bill.subtotal_kobo + bill.service_charge_kobo - bill.discount_kobo;
+    bill.total_kobo = bill.subtotal_kobo + bill.service_charge_kobo + bill.tax_kobo - bill.discount_kobo;
     if (bill.total_kobo < 0) bill.total_kobo = 0;
 
     return this.billRepository.save(bill);
@@ -115,6 +121,15 @@ export class BillService {
 
     const bill = await this.billRepository.findOne({ where: { tab_id: tabId } });
     if (!bill) throw new NotFoundException('Bill not found');
+
+    if (paymentDto.idempotency_key) {
+      const existing = await this.billRepository.findOne({
+        where: { idempotency_key: paymentDto.idempotency_key },
+      });
+      if (existing?.paid_at) {
+        return existing;
+      }
+    }
 
     // Stock deduction, bill finalization, and tab/table state changes are wrapped
     // in a single atomic transaction. If any step fails — deadlock, lock timeout,
@@ -140,6 +155,9 @@ export class BillService {
       }
       if (paymentDto.terminal_id) {
         bill.terminal_id = paymentDto.terminal_id;
+      }
+      if (paymentDto.idempotency_key) {
+        bill.idempotency_key = paymentDto.idempotency_key;
       }
       bill.paid_at = new Date();
 
