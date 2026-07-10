@@ -43,6 +43,7 @@ import { UploadModule } from './modules/upload/upload.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { NotificationModule } from './modules/notification/notification.module';
+import { AdminModule } from './modules/admin/admin.module';
 
 @Module({
   imports: [
@@ -103,6 +104,7 @@ import { NotificationModule } from './modules/notification/notification.module';
     UploadModule,
     SubscriptionModule,
     NotificationModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [AppService, AuditService],
