@@ -22,7 +22,7 @@ const csvFileFilter = (req: any, file: Express.Multer.File, cb: (error: Error | 
 @ApiTags('Menu')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
-@Controller('menu')
+@Controller(['menu-items', 'menu'])
 export class MenuController {
   constructor(private readonly menuService: MenuService) {}
 
