@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, In } from 'typeorm';
 import { Order } from './entities/order.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
+import { Tab } from '../tab/entities/tab.entity';
+import { IngredientService } from '../ingredient/ingredient.service';
 
 @Injectable()
 export class OrderService {
@@ -11,8 +13,11 @@ export class OrderService {
     private orderRepository: Repository<Order>,
     @InjectRepository(MenuItem)
     private menuRepository: Repository<MenuItem>,
+    @InjectRepository(Tab)
+    private tabRepository: Repository<Tab>,
     @Inject(DataSource)
     private dataSource: DataSource,
+    private ingredientService: IngredientService,
   ) {}
 
   async addOrderItems(tabId: string, items: any[], userId: string) {
@@ -30,6 +35,11 @@ export class OrderService {
 
     return this.dataSource.transaction(async (manager) => {
       const orders = [];
+      const tab = await this.tabRepository.findOne({ where: { id: tabId } });
+      if (!tab) {
+        throw new NotFoundException('Tab not found');
+      }
+
       for (const item of items) {
         const menuItem = menuMap.get(item.menu_item_id);
         if (!menuItem) {
@@ -48,6 +58,13 @@ export class OrderService {
         });
         orders.push(await manager.getRepository(Order).save(order));
       }
+
+      await this.ingredientService.deductByTab(
+        { id: tabId, branch_id: tab.branch_id },
+        items.map(item => ({ menu_item_id: item.menu_item_id, quantity: item.quantity })),
+        manager,
+      );
+
       return orders;
     });
   }
