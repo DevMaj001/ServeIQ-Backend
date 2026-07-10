@@ -27,6 +27,9 @@ import { PosTerminal } from './modules/pos/entities/pos-terminal.entity';
 import { Plan } from './modules/subscription/entities/plan.entity';
 import { Subscription } from './modules/subscription/entities/subscription.entity';
 import { Notification } from './modules/notification/entities/notification.entity';
+import { Printer } from './modules/printer/printer.entity';
+import { PrintJob } from './modules/printer/print-job.entity';
+import { SyncQueue } from './modules/sync/sync.entity';
 
 import { AuthModule } from './modules/auth/auth.module';
 import { BusinessModule } from './modules/business/business.module';
@@ -44,6 +47,8 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { PrinterModule } from './modules/printer/printer.module';
+import { SyncModule } from './modules/sync/sync.module';
 
 @Module({
   imports: [
@@ -74,6 +79,9 @@ import { AdminModule } from './modules/admin/admin.module';
         Plan,
         Subscription,
         Notification,
+        Printer,
+        PrintJob,
+        SyncQueue,
       ],
       migrationsRun: true,
       synchronize: process.env.NODE_ENV === 'development',
@@ -105,6 +113,8 @@ import { AdminModule } from './modules/admin/admin.module';
     SubscriptionModule,
     NotificationModule,
     AdminModule,
+    PrinterModule,
+    SyncModule,
   ],
   controllers: [AppController],
   providers: [AppService, AuditService],
