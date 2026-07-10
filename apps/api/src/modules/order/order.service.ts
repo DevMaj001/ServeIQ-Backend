@@ -32,6 +32,10 @@ export class OrderService {
       const orders = [];
       for (const item of items) {
         const menuItem = menuMap.get(item.menu_item_id);
+        if (!menuItem) {
+          throw new NotFoundException(`Menu item ${item.menu_item_id} not found`);
+        }
+
         const order = manager.getRepository(Order).create({
           tab_id: tabId,
           menu_item_id: item.menu_item_id,
