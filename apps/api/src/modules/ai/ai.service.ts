@@ -1,28 +1,43 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import OpenAI from 'openai';
 
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
-  private openai: OpenAI | null = null;
+  private openai: any = null;
+  private initPromise: Promise<void> | null = null;
 
-  constructor(private configService: ConfigService) {
+  constructor(private configService: ConfigService) {}
+
+  private async getClient(): Promise<any> {
+    if (!this.openai) {
+      if (!this.initPromise) {
+        this.initPromise = this.initialize();
+      }
+      await this.initPromise;
+    }
+    return this.openai;
+  }
+
+  private async initialize(): Promise<void> {
     const apiKey = this.configService.get<string>('NEMOTRON_API_KEY');
     const baseURL = this.configService.get<string>('NEMOTRON_BASE_URL');
 
     if (apiKey) {
-      this.openai = new OpenAI({
-        apiKey,
-        baseURL,
-      });
+      try {
+        const { default: OpenAI } = await import('openai');
+        this.openai = new OpenAI({ apiKey, baseURL });
+      } catch (err) {
+        this.logger.error('Failed to initialize OpenAI client', err);
+      }
     } else {
       this.logger.warn('NEMOTRON_API_KEY not set, AI features disabled');
     }
   }
 
   async generateLogic(prompt: string): Promise<string> {
-    if (!this.openai) {
+    const client = await this.getClient();
+    if (!client) {
       throw new Error('AI service unavailable: NEMOTRON_API_KEY not configured');
     }
 
@@ -37,7 +52,7 @@ Always provide:
 4. Code examples if relevant
 Keep responses structured and professional.`;
 
-    const response = await this.openai.chat.completions.create({
+    const response = await client.chat.completions.create({
       model: this.configService.get<string>('NEMOTRON_MODEL', 'meta/llama-3.1-70b-instruct'),
       messages: [
         { role: 'system', content: systemPrompt },
@@ -51,7 +66,8 @@ Keep responses structured and professional.`;
   }
 
   async analyzeApiProsCons(): Promise<string> {
-    if (!this.openai) {
+    const client = await this.getClient();
+    if (!client) {
       throw new Error('AI service unavailable: NEMOTRON_API_KEY not configured');
     }
 
@@ -77,7 +93,7 @@ Be thorough but concise.`;
 Endpoints are RESTful, use NestJS, TypeORM, and PostgreSQL.
 It serves two apps: Admin (web) and Waiter (mobile/tablet).`;
 
-    const response = await this.openai.chat.completions.create({
+    const response = await client.chat.completions.create({
       model: this.configService.get<string>('NEMOTRON_MODEL', 'meta/llama-3.1-70b-instruct'),
       messages: [
         { role: 'system', content: systemPrompt },
