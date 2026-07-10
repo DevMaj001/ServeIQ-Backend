@@ -73,6 +73,13 @@ export class IngredientController {
     return this.ingredientService.remove(id, req.user.branchId);
   }
 
+  @Get('menu-items/:id/movements')
+  @ApiOperation({ summary: 'Get stock movement history for a menu item' })
+  @ApiParam({ name: 'id' })
+  async getMenuItemMovements(@Param('id') id: string, @Request() req: any) {
+    return this.ingredientService.getMovements(id, req.user.branchId);
+  }
+
   @Post('menu-items/:id/restock')
   @ApiOperation({ summary: 'Restock a menu item' })
   @ApiParam({ name: 'id' })
