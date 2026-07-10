@@ -48,6 +48,7 @@
     "decimal.js": "^10.6.0",
     "helmet": "^8.2.0",
     "ioredis": "^5.11.1",
+    "node-thermal-printer": "^4.6.0",
     "openai": "^4.72.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
