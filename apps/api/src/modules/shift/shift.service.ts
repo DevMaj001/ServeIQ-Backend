@@ -17,7 +17,13 @@ export class ShiftService {
   ) {}
 
   async findAll(branchId: string) {
-    return this.shiftRepository.find({ where: { branch_id: branchId }, order: { opened_at: 'DESC' } });
+    const shifts = await this.shiftRepository.find({ where: { branch_id: branchId }, order: { opened_at: 'DESC' } });
+    return shifts.map(s => ({
+      ...s,
+      variance_explanation: s.variance_kobo !== null
+        ? this.buildVarianceExplanation(s.starting_cash_kobo, s.expected_cash_kobo ?? 0, s.actual_cash_kobo ?? 0, s.variance_kobo)
+        : null,
+    }));
   }
 
   async findOne(id: string, branchId: string) {
@@ -70,7 +76,14 @@ export class ShiftService {
     shift.expected_cash_kobo = shift.starting_cash_kobo + cashSales;
     shift.variance_kobo = dto.actual_cash_kobo - shift.expected_cash_kobo;
 
-    return this.shiftRepository.save(shift);
+    const saved = await this.shiftRepository.save(shift);
+    const varianceExplanation = this.buildVarianceExplanation(
+      shift.starting_cash_kobo,
+      shift.expected_cash_kobo,
+      dto.actual_cash_kobo,
+      shift.variance_kobo,
+    );
+    return { ...saved, variance_explanation: varianceExplanation };
   }
 
   async getShiftSummary(branchId: string, dateFrom?: string, dateTo?: string) {
@@ -90,5 +103,27 @@ export class ShiftService {
       total_cash_sales: shifts.filter(s => s.expected_cash_kobo).reduce((sum, s) => sum + (s.expected_cash_kobo - s.starting_cash_kobo), 0),
       total_variance: shifts.reduce((sum, s) => sum + (s.variance_kobo || 0), 0),
     };
+  }
+
+  private buildVarianceExplanation(startingKobo: number, expectedKobo: number, actualKobo: number, varianceKobo: number): string {
+    const starting = this.koboToNairaString(startingKobo);
+    const expected = this.koboToNairaString(expectedKobo);
+    const actual = this.koboToNairaString(actualKobo);
+
+    if (varianceKobo === 0) {
+      return `Started with ${starting}. Expected ${expected}. Actual matched exactly.`;
+    }
+    if (varianceKobo > 0) {
+      const overAmount = this.koboToNairaString(varianceKobo);
+      return `Started with ${starting}. Expected ${expected}. Actual ${actual} — ${overAmount} over.`;
+    }
+    const shortAmount = this.koboToNairaString(Math.abs(varianceKobo));
+    return `Started with ${starting}. Expected ${expected}. Actual ${actual} — ${shortAmount} short.`;
+  }
+
+  private koboToNairaString(kobo: number): string {
+    const naira = kobo / 100;
+    const formatted = naira.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return `₦${formatted}`;
   }
 }

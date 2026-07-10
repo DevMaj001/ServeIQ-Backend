@@ -11,7 +11,7 @@ export class StockMovement {
 
   @Index()
   @Column({ type: 'uuid' })
-  ingredient_id: string;
+  menu_item_id: string;
 
   @Column({ type: 'varchar', length: 25, default: 'manual_adjustment' })
   type: string;
@@ -23,10 +23,10 @@ export class StockMovement {
   quantity_after: number;
 
   @Column({ type: 'uuid', nullable: true })
-  order_id: string;
-
-  @Column({ type: 'uuid', nullable: true })
   reference_id: string;
+
+  @Column({ type: 'integer', nullable: true })
+  cost_at_purchase_kobo: number;
 
   @Column({ type: 'text', nullable: true })
   notes: string;

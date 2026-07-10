@@ -24,6 +24,7 @@ export class MenuService {
       where,
       skip,
       take,
+      relations: { supplier: true },
     });
     return { data, total };
   }
@@ -31,6 +32,7 @@ export class MenuService {
   async findOne(id: string, branchId: string) {
     const item = await this.menuRepository.findOne({
       where: { id, branch_id: branchId },
+      relations: { supplier: true },
     });
     if (!item) {
       throw new NotFoundException('Menu item not found');

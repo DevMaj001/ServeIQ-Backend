@@ -17,8 +17,6 @@ import { VerificationToken } from './entities/verification-token.entity';
 import { AuditLog } from './entities/audit-log.entity';
 import { AuditService } from './common/services/audit.service';
 import { IngredientModule } from './modules/ingredient/ingredient.module';
-import { Ingredient } from './modules/ingredient/entities/ingredient.entity';
-import { RecipeItem } from './modules/ingredient/entities/recipe-item.entity';
 import { StockMovement } from './modules/ingredient/entities/stock-movement.entity';
 import { SupplierModule } from './modules/supplier/supplier.module';
 import { Supplier } from './modules/supplier/entities/supplier.entity';
@@ -68,8 +66,6 @@ import { NotificationModule } from './modules/notification/notification.module';
         RefreshToken,
         VerificationToken,
         AuditLog,
-        Ingredient,
-        RecipeItem,
         StockMovement,
         Supplier,
         Shift,
