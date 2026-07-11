@@ -70,6 +70,16 @@ export class IngredientService {
     return this.menuItemRepo.save(item);
   }
 
+  async findUntracked(branchId: string) {
+    return this.menuItemRepo.find({
+      where: [
+        { branch_id: branchId, track_stock: false },
+        { branch_id: branchId, track_stock: null as any },
+      ],
+      order: { name: 'ASC' },
+    });
+  }
+
   async remove(id: string, branchId: string) {
     const item = await this.menuItemRepo.findOne({ where: { id, branch_id: branchId } });
     if (!item) throw new NotFoundException('Inventory item not found');
