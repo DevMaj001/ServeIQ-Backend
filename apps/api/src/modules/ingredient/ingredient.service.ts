@@ -275,6 +275,11 @@ export class IngredientService {
         if (!item || !item.track_stock) continue;
 
         const oldQty = Number(item.quantity_in_stock);
+        if (oldQty - deduction.qty < 0) {
+          throw new BadRequestException(
+            `Insufficient stock for "${item.name}": ${oldQty} available, ${deduction.qty} requested`,
+          );
+        }
         item.quantity_in_stock = oldQty - deduction.qty;
         await menuItemRepo.save(item);
 
