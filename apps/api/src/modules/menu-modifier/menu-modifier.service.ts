@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { ModifierGroup } from './modifier-group.entity';
 import { ModifierOption } from './modifier-option.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
@@ -87,7 +87,7 @@ export class MenuModifierService {
     });
     if (!menuItem) throw new NotFoundException('Menu item not found');
 
-    const groups = await this.groupRepo.findBy({ id: groupIds as any });
+    const groups = await this.groupRepo.find({ where: { id: In(groupIds) } });
     menuItem.modifierGroups = groups;
     return this.menuItemRepo.save(menuItem);
   }
@@ -103,7 +103,7 @@ export class MenuModifierService {
     if (groupIds.length === 0) return [];
 
     const options = await this.optionRepo.find({
-      where: groupIds.map(id => ({ modifier_group_id: id })),
+      where: { modifier_group_id: In(groupIds) },
       order: { sort_order: 'ASC', name: 'ASC' },
     });
 

@@ -67,7 +67,7 @@ export class PrinterService {
   async queuePrintJob(branchId: string, jobType: string, payload: any, printerId?: string) {
     return this.printJobRepo.save(this.printJobRepo.create({
       branch_id: branchId,
-      printer_id: printerId || null,
+      printer_id: printerId,
       job_type: jobType,
       payload,
     }));
@@ -90,12 +90,12 @@ export class PrinterService {
     if (!printer) throw new BadRequestException('No printer configured');
 
     try {
-      const { ThermalPrinter } = await import('node-thermal-printer');
+      const { ThermalPrinter, PrinterTypes, CharacterSet } = await import('node-thermal-printer');
       const escpos = new ThermalPrinter({
-        type: 'epson',
+        type: PrinterTypes.EPSON,
         interface: `tcp://${printer.ip_address}:${printer.port}`,
         width: printer.character_per_line || 80,
-        characterSet: 'PC850_MULTILINGUAL',
+        characterSet: CharacterSet.PC850_MULTILINGUAL,
       });
 
       const isConnected = await escpos.isPrinterConnected();
@@ -109,7 +109,7 @@ export class PrinterService {
         await this.printKitchenTicket(escpos, job.payload);
       }
 
-      await escpos.cutter();
+      await escpos.cut();
       await escpos.execute();
 
       job.status = 'printed';
@@ -184,7 +184,7 @@ export class PrinterService {
     if (!this.kdsSubjects.has(branchId)) {
       this.kdsSubjects.set(branchId, new Subject<any>());
     }
-    return this.kdsSubjects.get(branchId).asObservable();
+    return this.kdsSubjects.get(branchId)!.asObservable();
   }
 
   async sendToKds(branchId: string, tabId: string) {

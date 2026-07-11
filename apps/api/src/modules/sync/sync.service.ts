@@ -39,7 +39,7 @@ export class SyncService {
       operation,
       entity_id: payload.id,
       payload,
-      client_idempotency_key: clientKey || null,
+      client_idempotency_key: clientKey,
     }));
   }
 

@@ -46,7 +46,7 @@ export class OrderService {
           throw new NotFoundException(`Menu item ${item.menu_item_id} not found`);
         }
 
-        const modifierTotal = (item.modifiers || []).reduce((sum, m) => sum + (m.price_kobo * m.qty), 0);
+        const modifierTotal = (item.modifiers || []).reduce((sum: number, m: any) => sum + (m.price_kobo * m.qty), 0);
         const order = manager.getRepository(Order).create({
           tab_id: tabId,
           menu_item_id: item.menu_item_id,
