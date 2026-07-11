@@ -8,9 +8,10 @@ import { User } from '../user/entities/user.entity';
 import { Order } from '../order/entities/order.entity';
 import { StockMovement } from '../ingredient/entities/stock-movement.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
+import { Shift } from '../shift/entities/shift.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Tab, Table, User, Order, StockMovement, MenuItem])],
+  imports: [TypeOrmModule.forFeature([Tab, Table, User, Order, StockMovement, MenuItem, Shift])],
   providers: [TabService],
   controllers: [TabController],
   exports: [TabService],

@@ -7,6 +7,7 @@ import { User } from '../user/entities/user.entity';
 import { Order } from '../order/entities/order.entity';
 import { StockMovement } from '../ingredient/entities/stock-movement.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
+import { Shift } from '../shift/entities/shift.entity';
 import { StockMovementType } from '../../common/shared';
 
 @Injectable()
@@ -24,11 +25,21 @@ export class TabService {
     private movementRepo: Repository<StockMovement>,
     @InjectRepository(MenuItem)
     private menuItemRepo: Repository<MenuItem>,
+    @InjectRepository(Shift)
+    private shiftRepo: Repository<Shift>,
     @Inject(DataSource)
     private dataSource: DataSource,
   ) {}
 
   async openTab(createDto: any, currentUserId?: string, currentUserRole?: string) {
+    // Require an open shift before opening a tab
+    const openShift = await this.shiftRepo.findOne({
+      where: { branch_id: createDto.branch_id, closed_at: null },
+    });
+    if (!openShift) {
+      throw new BadRequestException('No open shift for this branch. Please open a shift first.');
+    }
+
     // Check if table already has an open tab
     const existingOpenTab = await this.tabRepository.findOne({
       where: { table_id: createDto.table_id, status: 'open' },
