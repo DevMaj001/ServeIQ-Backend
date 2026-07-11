@@ -192,7 +192,7 @@ export class BillService {
     if (!tab) throw new NotFoundException('Tab not found');
 
     const bill = await this.billRepository.findOne({ where: { tab_id: tabId } });
-    if (!bill) throw new NotFoundException('Bill not found');
+    if (!bill) return null;
 
     const orders = await this.orderRepository.find({ where: { tab_id: tabId } });
 
@@ -342,6 +342,7 @@ export class BillService {
 
   async getReceiptPdf(tabId: string): Promise<Buffer> {
     const data = await this.buildReceiptData(tabId);
+    if (!data) throw new NotFoundException('Bill not found');
     return this.receiptService.generatePdf(data);
   }
 }
