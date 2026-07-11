@@ -49,6 +49,7 @@ import { NotificationModule } from './modules/notification/notification.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { PrinterModule } from './modules/printer/printer.module';
 import { SyncModule } from './modules/sync/sync.module';
+import { MenuModifierModule } from './modules/menu-modifier/menu-modifier.module';
 
 @Module({
   imports: [
@@ -115,6 +116,7 @@ import { SyncModule } from './modules/sync/sync.module';
     AdminModule,
     PrinterModule,
     SyncModule,
+    MenuModifierModule,
   ],
   controllers: [AppController],
   providers: [AppService, AuditService],

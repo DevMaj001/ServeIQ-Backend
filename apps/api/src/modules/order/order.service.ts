@@ -46,15 +46,17 @@ export class OrderService {
           throw new NotFoundException(`Menu item ${item.menu_item_id} not found`);
         }
 
+        const modifierTotal = (item.modifiers || []).reduce((sum, m) => sum + (m.price_kobo * m.qty), 0);
         const order = manager.getRepository(Order).create({
           tab_id: tabId,
           menu_item_id: item.menu_item_id,
           quantity: item.quantity,
           unit_price_kobo: menuItem.price_kobo,
-          subtotal_kobo: item.quantity * menuItem.price_kobo,
+          subtotal_kobo: (item.quantity * menuItem.price_kobo) + modifierTotal,
           round_number: item.round_number || 1,
           created_by: userId,
           notes: item.notes,
+          modifiers: item.modifiers || null,
         });
         orders.push(await manager.getRepository(Order).save(order));
       }
@@ -85,16 +87,22 @@ export class OrderService {
 
   async updateOrder(id: string, updateDto: any) {
     const order = await this.findOne(id);
-    
+
     if (updateDto.quantity !== undefined) {
       order.quantity = updateDto.quantity;
-      order.subtotal_kobo = order.quantity * order.unit_price_kobo;
     }
-    
+
+    if (updateDto.modifiers !== undefined) {
+      order.modifiers = updateDto.modifiers;
+    }
+
     if (updateDto.notes !== undefined) {
       order.notes = updateDto.notes;
     }
-    
+
+    const modifierTotal = (order.modifiers || []).reduce((sum, m) => sum + (m.price_kobo * m.qty), 0);
+    order.subtotal_kobo = (order.quantity * order.unit_price_kobo) + modifierTotal;
+
     return this.orderRepository.save(order);
   }
 

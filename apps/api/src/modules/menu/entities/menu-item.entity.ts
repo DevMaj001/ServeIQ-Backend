@@ -7,9 +7,12 @@ import {
   DeleteDateColumn,
   Index,
   ManyToOne,
+  ManyToMany,
   JoinColumn,
+  JoinTable,
 } from 'typeorm';
 import { Supplier } from '../../supplier/entities/supplier.entity';
+import { ModifierGroup } from '../../menu-modifier/modifier-group.entity';
 
 @Entity('menu_items')
 export class MenuItem {
@@ -55,6 +58,14 @@ export class MenuItem {
 
   @Column({ default: true })
   track_stock: boolean;
+
+  @ManyToMany(() => ModifierGroup, (mg) => mg.menu_items)
+  @JoinTable({
+    name: 'menu_item_modifier_groups',
+    joinColumn: { name: 'menu_item_id', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'modifier_group_id', referencedColumnName: 'id' },
+  })
+  modifierGroups: ModifierGroup[];
 
   @Index()
   @Column({ type: 'uuid', nullable: true })

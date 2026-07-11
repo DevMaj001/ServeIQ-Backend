@@ -38,6 +38,9 @@ export class Order {
   @Column({ type: 'text', nullable: true })
   notes: string;
 
+  @Column({ type: 'jsonb', nullable: true })
+  modifiers: { id: string; name: string; price_kobo: number; qty: number }[];
+
   @Column()
   created_by: string;
 

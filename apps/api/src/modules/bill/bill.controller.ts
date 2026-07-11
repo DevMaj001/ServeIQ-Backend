@@ -51,6 +51,35 @@ export class BillController {
     return this.billService.processPayment(tabId, req.user.userId, req.user.role, paymentDto);
   }
 
+  @Post('tab/:tabId/split-evenly')
+  @ApiOperation({ summary: 'Split the bill evenly among N ways' })
+  @ApiParam({ name: 'tabId' })
+  async splitEvenly(@Param('tabId') tabId: string, @Request() req: any, @Body() body: { splits: number }) {
+    return this.billService.splitEvenly(tabId, req.user.userId, req.user.role, body.splits);
+  }
+
+  @Post('tab/:tabId/split-by-item')
+  @ApiOperation({ summary: 'Split the bill by assigning items to each split' })
+  @ApiParam({ name: 'tabId' })
+  async splitByItem(@Param('tabId') tabId: string, @Request() req: any, @Body() body: { allocations: { order_ids: string[]; label?: string }[] }) {
+    return this.billService.splitByItem(tabId, req.user.userId, req.user.role, body.allocations);
+  }
+
+  @Get('tab/:tabId/splits')
+  @ApiOperation({ summary: 'Get all split bills for a tab' })
+  @ApiParam({ name: 'tabId' })
+  async getSplitBills(@Param('tabId') tabId: string) {
+    return this.billService.getSplitBills(tabId);
+  }
+
+  @Post('tab/:tabId/splits/:billId/pay')
+  @ApiOperation({ summary: 'Pay an individual split bill' })
+  @ApiParam({ name: 'tabId' })
+  @ApiParam({ name: 'billId' })
+  async paySplit(@Param('tabId') tabId: string, @Param('billId') billId: string, @Request() req: any, @Body() paymentDto: ProcessPaymentDto) {
+    return this.billService.processSplitPayment(tabId, billId, req.user.userId, req.user.role, paymentDto);
+  }
+
   @Get('tab/:tabId/receipt')
   @ApiOperation({ summary: 'Get receipt details as JSON' })
   @ApiParam({ name: 'tabId', description: 'Tab UUID', example: 'tab-uuid-here' })

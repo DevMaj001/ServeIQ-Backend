@@ -222,6 +222,120 @@ export class BillService {
     };
   }
 
+  // ── Split Checks ──
+
+  async splitEvenly(tabId: string, userId: string, userRole: string, numSplits: number) {
+    const tab = await this.tabRepository.findOne({ where: { id: tabId } });
+    if (!tab) throw new NotFoundException('Tab not found');
+
+    const orders = await this.orderRepository.find({ where: { tab_id: tabId } });
+    if (orders.length === 0) throw new BadRequestException('No items on this tab');
+
+    const total = orders.reduce((sum, o) => sum + o.subtotal_kobo, 0);
+    const baseAmount = Math.floor(total / numSplits);
+    const remainder = total - (baseAmount * numSplits);
+
+    const splitGroup = `split_${Date.now()}_${tabId.slice(0, 8)}`;
+    const bills = [];
+
+    for (let i = 0; i < numSplits; i++) {
+      const amount = baseAmount + (i < remainder ? 1 : 0);
+      bills.push(await this.billRepository.save(this.billRepository.create({
+        tab_id: tabId,
+        split_group: splitGroup,
+        subtotal_kobo: amount,
+        service_charge_kobo: 0,
+        tax_kobo: 0,
+        discount_kobo: 0,
+        total_kobo: amount,
+        payment_status: 'pending',
+        issued_by: userId,
+      })));
+    }
+
+    await this.tabRepository.update(tabId, { status: 'billed' });
+    return bills;
+  }
+
+  async splitByItem(tabId: string, userId: string, userRole: string, allocations: { order_ids: string[]; label?: string }[]) {
+    const tab = await this.tabRepository.findOne({ where: { id: tabId } });
+    if (!tab) throw new NotFoundException('Tab not found');
+
+    const allOrders = await this.orderRepository.find({ where: { tab_id: tabId } });
+    const orderMap = new Map(allOrders.map(o => [o.id, o]));
+    const splitGroup = `split_${Date.now()}_${tabId.slice(0, 8)}`;
+    const bills = [];
+
+    for (const allocation of allocations) {
+      let subtotal = 0;
+      for (const oid of allocation.order_ids) {
+        const order = orderMap.get(oid);
+        if (order) subtotal += order.subtotal_kobo;
+      }
+      if (subtotal === 0) continue;
+
+      bills.push(await this.billRepository.save(this.billRepository.create({
+        tab_id: tabId,
+        split_group: splitGroup,
+        subtotal_kobo: subtotal,
+        service_charge_kobo: 0,
+        tax_kobo: 0,
+        discount_kobo: 0,
+        total_kobo: subtotal,
+        payment_status: 'pending',
+        issued_by: userId,
+      })));
+    }
+
+    await this.tabRepository.update(tabId, { status: 'billed' });
+    return bills;
+  }
+
+  async getSplitBills(tabId: string) {
+    return this.billRepository.find({
+      where: { tab_id: tabId },
+      order: { created_at: 'ASC' },
+    });
+  }
+
+  async processSplitPayment(tabId: string, billId: string, userId: string, userRole: string, paymentDto: ProcessPaymentDto) {
+    const bill = await this.billRepository.findOne({ where: { id: billId, tab_id: tabId } });
+    if (!bill) throw new NotFoundException('Split bill not found');
+    if (bill.paid_at) throw new BadRequestException('This split bill is already paid');
+
+    if (paymentDto.idempotency_key) {
+      const dup = await this.billRepository.findOne({ where: { idempotency_key: paymentDto.idempotency_key } });
+      if (dup?.paid_at) return dup;
+    }
+
+    bill.payment_method = paymentDto.method;
+    bill.payment_amount_kobo = paymentDto.amount;
+    if (paymentDto.reference) bill.payment_reference = paymentDto.reference;
+    if (paymentDto.terminal_id) bill.terminal_id = paymentDto.terminal_id;
+    if (paymentDto.idempotency_key) bill.idempotency_key = paymentDto.idempotency_key;
+    bill.paid_at = new Date();
+    bill.payment_status = 'paid';
+    const saved = await this.billRepository.save(bill);
+
+    const allBills = await this.billRepository.find({ where: { tab_id: tabId } });
+    const allPaid = allBills.every(b => b.paid_at);
+    const anyPaid = allBills.some(b => b.paid_at);
+
+    if (allPaid) {
+      const tab = await this.tabRepository.findOne({ where: { id: tabId } });
+      if (tab) {
+        await this.tabRepository.update(tabId, { status: 'paid', closed_at: new Date() });
+        if (tab.table_id) {
+          await this.tableRepository.update(tab.table_id, { status: TableStatus.AVAILABLE });
+        }
+      }
+    } else if (!anyPaid) {
+      await this.tabRepository.update(tabId, { status: 'billed' });
+    }
+
+    return saved;
+  }
+
   async getReceipt(tabId: string) {
     return this.buildReceiptData(tabId);
   }

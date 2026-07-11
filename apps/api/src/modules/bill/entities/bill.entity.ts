@@ -12,9 +12,15 @@ export class Bill {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Index({ unique: true })
+  @Index()
   @Column({ type: 'uuid' })
   tab_id: string;
+
+  @Column({ type: 'varchar', length: 20, default: 'pending' })
+  payment_status: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  split_group: string;
 
   @Column({ type: 'integer' })
   subtotal_kobo: number;
@@ -52,6 +58,9 @@ export class Bill {
 
   @Column({ nullable: true })
   paid_at: Date;
+
+  @Column({ nullable: true })
+  voided_at: Date;
 
   @Column()
   issued_by: string;
