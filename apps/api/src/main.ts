@@ -5,7 +5,13 @@ import helmet from 'helmet';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { AppDataSource } from './database/data-source';
+import { ensureTables } from './database/ensure-tables';
 async function bootstrap() {
+  const ds = await AppDataSource.initialize();
+  await ensureTables(ds).catch(e => console.error('[bootstrap] ensureTables error:', e));
+  await ds.destroy().catch(() => {});
+
   const app = await NestFactory.create(AppModule);
 
   // Security headers
