@@ -71,13 +71,12 @@ export class IngredientService {
   }
 
   async findUntracked(branchId: string) {
-    return this.menuItemRepo.find({
-      where: [
-        { branch_id: branchId, track_stock: false },
-        { branch_id: branchId, track_stock: null as any },
-      ],
-      order: { name: 'ASC' },
-    });
+    return this.menuItemRepo
+      .createQueryBuilder('mi')
+      .where('mi.branch_id = :branchId', { branchId })
+      .andWhere('(mi.track_stock IS NULL OR mi.track_stock = :val)', { val: false })
+      .orderBy('mi.name', 'ASC')
+      .getMany();
   }
 
   async remove(id: string, branchId: string) {
