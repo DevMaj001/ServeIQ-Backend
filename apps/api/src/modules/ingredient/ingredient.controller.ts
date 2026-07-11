@@ -34,8 +34,7 @@ export class IngredientController {
   @Get('inventory/untracked-items')
   @ApiOperation({ summary: 'Get menu items that are not tracked for stock' })
   async getUntracked(@Request() req: any) {
-    const data = await this.ingredientService.findUntracked(req.user.branchId);
-    return { success: true, data };
+    return this.ingredientService.findUntracked(req.user.branchId);
   }
 
   @Get('inventory/audit')
