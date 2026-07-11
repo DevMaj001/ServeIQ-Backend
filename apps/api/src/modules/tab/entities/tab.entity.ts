@@ -24,6 +24,9 @@ export class Tab {
   @Column({ type: 'uuid' })
   waiter_id: string;
 
+  @Column({ type: 'uuid', nullable: true })
+  shift_id: string;
+
   @Column({ nullable: true })
   cashier_id: string;
 

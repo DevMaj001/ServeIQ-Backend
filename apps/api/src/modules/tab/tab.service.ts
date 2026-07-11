@@ -63,6 +63,7 @@ export class TabService {
       // 1. Create Tab
       const newTab = this.tabRepository.create({
         ...createDto,
+        shift_id: openShift.id,
         status: 'open',
         opened_at: new Date(),
         tab_number: `TAB-${Date.now()}`,
