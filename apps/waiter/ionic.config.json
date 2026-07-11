@@ -1,7 +1,0 @@
-{
-  "name": "waiter",
-  "integrations": {
-    "capacitor": {}
-  },
-  "type": "angular-standalone"
-}
