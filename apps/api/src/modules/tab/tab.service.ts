@@ -34,7 +34,7 @@ export class TabService {
   async openTab(createDto: any, currentUserId?: string, currentUserRole?: string) {
     // Require an open shift before opening a tab
     const openShift = await this.shiftRepo.findOne({
-      where: { branch_id: createDto.branch_id, closed_at: null },
+      where: { branch_id: createDto.branch_id, status: 'open' },
     });
     if (!openShift) {
       throw new BadRequestException('No open shift for this branch. Please open a shift first.');
