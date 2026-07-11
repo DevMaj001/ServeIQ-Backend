@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Business } from '../business/entities/business.entity';
@@ -6,6 +6,7 @@ import { Branch } from '../branch/entities/branch.entity';
 import { User } from '../user/entities/user.entity';
 import { Bill } from '../bill/entities/bill.entity';
 import { UserRole } from '../../common/shared';
+import { UpdateBusinessDto } from './dto/update-business.dto';
 
 @Injectable()
 export class AdminService {
@@ -168,5 +169,18 @@ export class AdminService {
       page: params.page,
       per_page: params.per_page,
     };
+  }
+
+  async updateBusiness(id: string, dto: UpdateBusinessDto) {
+    const business = await this.businessRepo.findOne({ where: { id } });
+    if (!business) {
+      throw new NotFoundException('Business not found');
+    }
+
+    if (dto.name !== undefined) business.name = dto.name;
+    if (dto.is_active !== undefined) business.is_active = dto.is_active;
+    if (dto.subscription_plan !== undefined) business.subscription_plan = dto.subscription_plan;
+
+    return this.businessRepo.save(business);
   }
 }

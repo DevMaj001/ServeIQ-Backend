@@ -1,10 +1,11 @@
-import { Controller, Get, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Patch, Param, Body, Query, UseGuards, Request, NotFoundException } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../../common/shared';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery, ApiParam, ApiResponse } from '@nestjs/swagger';
+import { UpdateBusinessDto } from './dto/update-business.dto';
 
 @ApiTags('Admin')
 @ApiBearerAuth('access-token')
@@ -43,5 +44,18 @@ export class AdminController {
       status,
       plan,
     });
+  }
+
+  @Patch('businesses/:id')
+  @ApiOperation({ summary: 'Update a business (toggle active, change plan, etc.)' })
+  @ApiParam({ name: 'id', description: 'Business UUID' })
+  @ApiResponse({ status: 200, description: 'Business updated.' })
+  @ApiResponse({ status: 404, description: 'Business not found.' })
+  async updateBusiness(@Param('id') id: string, @Body() dto: UpdateBusinessDto) {
+    const updated = await this.adminService.updateBusiness(id, dto);
+    if (!updated) {
+      throw new NotFoundException('Business not found');
+    }
+    return updated;
   }
 }
