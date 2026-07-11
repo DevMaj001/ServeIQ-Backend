@@ -5,6 +5,9 @@ import { Tab } from './entities/tab.entity';
 import { Table, TableStatus } from '../table/entities/table.entity';
 import { User } from '../user/entities/user.entity';
 import { Order } from '../order/entities/order.entity';
+import { StockMovement } from '../ingredient/entities/stock-movement.entity';
+import { MenuItem } from '../menu/entities/menu-item.entity';
+import { StockMovementType } from '../../common/shared';
 
 @Injectable()
 export class TabService {
@@ -17,6 +20,10 @@ export class TabService {
     private userRepository: Repository<User>,
     @InjectRepository(Order)
     private orderRepository: Repository<Order>,
+    @InjectRepository(StockMovement)
+    private movementRepo: Repository<StockMovement>,
+    @InjectRepository(MenuItem)
+    private menuItemRepo: Repository<MenuItem>,
     @Inject(DataSource)
     private dataSource: DataSource,
   ) {}
@@ -225,26 +232,66 @@ export class TabService {
       throw new ForbiddenException('You cannot void another waiter\'s tab');
     }
 
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    // Double-reversal guard: if a void_reversal already exists for this tab, skip
+    const existingReversal = await this.movementRepo.findOne({
+      where: { reference_id: id, type: StockMovementType.VOID_REVERSAL },
+    });
 
-    try {
-      await queryRunner.manager.update(Tab, id, {
+    await this.dataSource.transaction(async (manager) => {
+      const tabRepo = manager.getRepository(Tab);
+      const tableRepo = manager.getRepository(Table);
+      const movementRepo = manager.getRepository(StockMovement);
+      const menuItemRepo = manager.getRepository(MenuItem);
+
+      await tabRepo.update(id, {
         status: 'voided',
         notes: `VOIDED: ${reason}`,
         closed_at: new Date(),
       });
-      await queryRunner.manager.update(Table, tab.table_id, { status: TableStatus.AVAILABLE });
+      await tableRepo.update(tab.table_id, { status: TableStatus.AVAILABLE });
 
-      await queryRunner.commitTransaction();
-      return this.findOne(id, branchId);
-    } catch (err) {
-      await queryRunner.rollbackTransaction();
-      throw err;
-    } finally {
-      await queryRunner.release();
-    }
+      if (existingReversal) return;
+
+      const consumptions = await movementRepo.find({
+        where: { reference_id: id, type: StockMovementType.ORDER_CONSUMPTION },
+      });
+      if (consumptions.length === 0) return;
+
+      // Aggregate reversals per menu_item_id
+      const reversalByItem = new Map<string, number>();
+      for (const row of consumptions) {
+        const qty = Math.abs(Number(row.quantity_change));
+        reversalByItem.set(row.menu_item_id, (reversalByItem.get(row.menu_item_id) || 0) + qty);
+      }
+
+      // Sort IDs to prevent deadlocks
+      const sortedIds = [...reversalByItem.keys()].sort();
+
+      for (const menuItemId of sortedIds) {
+        const qty = reversalByItem.get(menuItemId)!;
+        const item = await menuItemRepo.findOne({
+          where: { id: menuItemId },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!item || !item.track_stock) continue;
+
+        item.quantity_in_stock = Number(item.quantity_in_stock) + qty;
+        await menuItemRepo.save(item);
+
+        const movement = movementRepo.create({
+          branch_id: branchId,
+          menu_item_id: item.id,
+          type: StockMovementType.VOID_REVERSAL,
+          quantity_change: qty,
+          quantity_after: Number(item.quantity_in_stock),
+          reference_id: id,
+          notes: `Void reversal for tab ${id}`,
+        });
+        await movementRepo.save(movement);
+      }
+    });
+
+    return this.findOne(id, branchId);
   }
 
   async update(id: string, branchId: string, updateDto: any) {

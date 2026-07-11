@@ -32,6 +32,7 @@ export enum StockMovementType {
   WASTE = 'waste',
   TRANSFER = 'transfer',
   PURCHASE = 'purchase',
+  VOID_REVERSAL = 'void_reversal',
 }
 
 export interface ApiResponse<T> {
