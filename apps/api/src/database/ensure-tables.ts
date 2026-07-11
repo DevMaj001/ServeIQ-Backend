@@ -5,6 +5,10 @@ export async function ensureTables(ds: DataSource) {
     `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'modifier_groups')`
   ).then(r => r[0]?.exists);
 
+  // Always apply shift_id column (independent of modifier_groups guard)
+  await ds.query(`ALTER TABLE "tabs" ADD COLUMN IF NOT EXISTS "shift_id" uuid`);
+  await ds.query(`CREATE INDEX IF NOT EXISTS "IDX_tabs_shift_id" ON "tabs" ("shift_id")`);
+
   if (hasModifierGroups) return;
 
   console.log('[ensureTables] Running deferred DDL for modifiers, splits, sync, printing...');
