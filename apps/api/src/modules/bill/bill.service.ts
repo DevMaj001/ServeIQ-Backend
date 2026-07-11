@@ -170,6 +170,7 @@ export class BillService {
     // Generate PDF receipt and upload to Cloudinary
     try {
       const receiptData = await this.buildReceiptData(tabId);
+      if (!receiptData) return bill;
       const pdfBuffer = this.receiptService.generatePdf(receiptData);
       const uploadResult = await this.cloudinaryService.uploadFile(
         pdfBuffer,
