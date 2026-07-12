@@ -21,8 +21,8 @@ export class CreatePlansAndSubscriptions1784000000000 implements MigrationInterf
 
         await queryRunner.query(`INSERT INTO "plans" ("name", "price", "currency", "billing_interval", "features", "is_active", "paystack_plan_code") VALUES
           ('Basic', 0, 'NGN', 'monthly', '{"max_tables": 5, "max_waiters": 3, "reporting_enabled": false}', true, NULL),
-          ('Pro', 2500000, 'NGN', 'monthly', '{"max_tables": 20, "max_waiters": 15, "reporting_enabled": true}', true, 'PLN_qtves056ssz1vii'),
-          ('Enterprise', 7500000, 'NGN', 'monthly', '{"max_tables": 100, "max_waiters": 50, "reporting_enabled": true}', true, 'PLN_urcrd2ef9ud68pg')
+          ('Pro', 35000, 'NGN', 'monthly', '{"max_tables": 20, "max_waiters": 15, "reporting_enabled": true}', true, 'PLN_qtves056ssz1vii'),
+          ('Enterprise', 100000, 'NGN', 'monthly', '{"max_tables": 100, "max_waiters": 50, "reporting_enabled": true}', true, 'PLN_urcrd2ef9ud68pg')
         `);
     }
 

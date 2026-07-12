@@ -9,6 +9,10 @@ export async function ensureTables(ds: DataSource) {
   await ds.query(`ALTER TABLE "tabs" ADD COLUMN IF NOT EXISTS "shift_id" uuid`);
   await ds.query(`CREATE INDEX IF NOT EXISTS "IDX_tabs_shift_id" ON "tabs" ("shift_id")`);
 
+  // Update plan prices
+  await ds.query(`UPDATE "plans" SET "price" = 35000 WHERE "name" = 'Pro' AND "price" = 2500000`);
+  await ds.query(`UPDATE "plans" SET "price" = 100000 WHERE "name" = 'Enterprise' AND "price" = 7500000`);
+
   if (hasModifierGroups) return;
 
   console.log('[ensureTables] Running deferred DDL for modifiers, splits, sync, printing...');
