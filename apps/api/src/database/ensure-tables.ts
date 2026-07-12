@@ -9,9 +9,9 @@ export async function ensureTables(ds: DataSource) {
   await ds.query(`ALTER TABLE "tabs" ADD COLUMN IF NOT EXISTS "shift_id" uuid`);
   await ds.query(`CREATE INDEX IF NOT EXISTS "IDX_tabs_shift_id" ON "tabs" ("shift_id")`);
 
-  // Update plan prices (NGN kobo)
-  await ds.query(`UPDATE "plans" SET "price" = 3500000 WHERE "name" = 'Pro' AND "currency" = 'NGN' AND "price" = 2500000`);
-  await ds.query(`UPDATE "plans" SET "price" = 10000000 WHERE "name" = 'Enterprise' AND "currency" = 'NGN' AND "price" = 7500000`);
+  // Update plan prices (NGN kobo) — catches old seed values and any previous bad deploy values
+  await ds.query(`UPDATE "plans" SET "price" = 3500000 WHERE "name" = 'Pro' AND "currency" = 'NGN' AND "price" IN (2500000, 35000)`);
+  await ds.query(`UPDATE "plans" SET "price" = 10000000 WHERE "name" = 'Enterprise' AND "currency" = 'NGN' AND "price" IN (7500000, 100000)`);
 
   // Insert multi-currency equivalents if they don't exist yet
   await ds.query(`INSERT INTO "plans" ("name", "price", "currency", "billing_interval", "features", "is_active") SELECT 'Pro', 2200, 'USD', 'monthly', '{"max_tables": 20, "max_waiters": 15, "reporting_enabled": true}', true WHERE NOT EXISTS (SELECT 1 FROM "plans" WHERE "name" = 'Pro' AND "currency" = 'USD')`);
