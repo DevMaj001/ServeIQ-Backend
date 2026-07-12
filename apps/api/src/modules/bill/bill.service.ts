@@ -57,7 +57,7 @@ export class BillService {
     }
 
     const orders = await this.orderRepository.find({ where: { tab_id: tabId } });
-    const subtotal = orders.reduce((sum, order) => sum + order.subtotal_kobo, 0);
+    const subtotal = orders.reduce((sum, order) => sum + (order.subtotal_kobo ?? 0), 0);
 
     const serviceChargePercent = generateBillDto?.service_charge_percent ?? 10;
     const serviceCharge = Math.round(subtotal * (serviceChargePercent / 100));
