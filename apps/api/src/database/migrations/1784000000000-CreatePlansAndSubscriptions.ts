@@ -21,8 +21,14 @@ export class CreatePlansAndSubscriptions1784000000000 implements MigrationInterf
 
         await queryRunner.query(`INSERT INTO "plans" ("name", "price", "currency", "billing_interval", "features", "is_active", "paystack_plan_code") VALUES
           ('Basic', 0, 'NGN', 'monthly', '{"max_tables": 5, "max_waiters": 3, "reporting_enabled": false}', true, NULL),
-          ('Pro', 35000, 'NGN', 'monthly', '{"max_tables": 20, "max_waiters": 15, "reporting_enabled": true}', true, 'PLN_qtves056ssz1vii'),
-          ('Enterprise', 100000, 'NGN', 'monthly', '{"max_tables": 100, "max_waiters": 50, "reporting_enabled": true}', true, 'PLN_urcrd2ef9ud68pg')
+          ('Pro', 3500000, 'NGN', 'monthly', '{"max_tables": 20, "max_waiters": 15, "reporting_enabled": true}', true, 'PLN_qtves056ssz1vii'),
+          ('Enterprise', 10000000, 'NGN', 'monthly', '{"max_tables": 100, "max_waiters": 50, "reporting_enabled": true}', true, 'PLN_urcrd2ef9ud68pg'),
+          ('Pro', 2200, 'USD', 'monthly', '{"max_tables": 20, "max_waiters": 15, "reporting_enabled": true}', true, NULL),
+          ('Enterprise', 6250, 'USD', 'monthly', '{"max_tables": 100, "max_waiters": 50, "reporting_enabled": true}', true, NULL),
+          ('Pro', 1700, 'GBP', 'monthly', '{"max_tables": 20, "max_waiters": 15, "reporting_enabled": true}', true, NULL),
+          ('Enterprise', 4900, 'GBP', 'monthly', '{"max_tables": 100, "max_waiters": 50, "reporting_enabled": true}', true, NULL),
+          ('Pro', 2000, 'EUR', 'monthly', '{"max_tables": 20, "max_waiters": 15, "reporting_enabled": true}', true, NULL),
+          ('Enterprise', 5700, 'EUR', 'monthly', '{"max_tables": 100, "max_waiters": 50, "reporting_enabled": true}', true, NULL)
         `);
     }
 

@@ -9,9 +9,17 @@ export async function ensureTables(ds: DataSource) {
   await ds.query(`ALTER TABLE "tabs" ADD COLUMN IF NOT EXISTS "shift_id" uuid`);
   await ds.query(`CREATE INDEX IF NOT EXISTS "IDX_tabs_shift_id" ON "tabs" ("shift_id")`);
 
-  // Update plan prices
-  await ds.query(`UPDATE "plans" SET "price" = 35000 WHERE "name" = 'Pro' AND "price" = 2500000`);
-  await ds.query(`UPDATE "plans" SET "price" = 100000 WHERE "name" = 'Enterprise' AND "price" = 7500000`);
+  // Update plan prices (NGN kobo)
+  await ds.query(`UPDATE "plans" SET "price" = 3500000 WHERE "name" = 'Pro' AND "currency" = 'NGN' AND "price" = 2500000`);
+  await ds.query(`UPDATE "plans" SET "price" = 10000000 WHERE "name" = 'Enterprise' AND "currency" = 'NGN' AND "price" = 7500000`);
+
+  // Insert multi-currency equivalents if they don't exist yet
+  await ds.query(`INSERT INTO "plans" ("name", "price", "currency", "billing_interval", "features", "is_active") SELECT 'Pro', 2200, 'USD', 'monthly', '{"max_tables": 20, "max_waiters": 15, "reporting_enabled": true}', true WHERE NOT EXISTS (SELECT 1 FROM "plans" WHERE "name" = 'Pro' AND "currency" = 'USD')`);
+  await ds.query(`INSERT INTO "plans" ("name", "price", "currency", "billing_interval", "features", "is_active") SELECT 'Pro', 1700, 'GBP', 'monthly', '{"max_tables": 20, "max_waiters": 15, "reporting_enabled": true}', true WHERE NOT EXISTS (SELECT 1 FROM "plans" WHERE "name" = 'Pro' AND "currency" = 'GBP')`);
+  await ds.query(`INSERT INTO "plans" ("name", "price", "currency", "billing_interval", "features", "is_active") SELECT 'Pro', 2000, 'EUR', 'monthly', '{"max_tables": 20, "max_waiters": 15, "reporting_enabled": true}', true WHERE NOT EXISTS (SELECT 1 FROM "plans" WHERE "name" = 'Pro' AND "currency" = 'EUR')`);
+  await ds.query(`INSERT INTO "plans" ("name", "price", "currency", "billing_interval", "features", "is_active") SELECT 'Enterprise', 6250, 'USD', 'monthly', '{"max_tables": 100, "max_waiters": 50, "reporting_enabled": true}', true WHERE NOT EXISTS (SELECT 1 FROM "plans" WHERE "name" = 'Enterprise' AND "currency" = 'USD')`);
+  await ds.query(`INSERT INTO "plans" ("name", "price", "currency", "billing_interval", "features", "is_active") SELECT 'Enterprise', 4900, 'GBP', 'monthly', '{"max_tables": 100, "max_waiters": 50, "reporting_enabled": true}', true WHERE NOT EXISTS (SELECT 1 FROM "plans" WHERE "name" = 'Enterprise' AND "currency" = 'GBP')`);
+  await ds.query(`INSERT INTO "plans" ("name", "price", "currency", "billing_interval", "features", "is_active") SELECT 'Enterprise', 5700, 'EUR', 'monthly', '{"max_tables": 100, "max_waiters": 50, "reporting_enabled": true}', true WHERE NOT EXISTS (SELECT 1 FROM "plans" WHERE "name" = 'Enterprise' AND "currency" = 'EUR')`);
 
   if (hasModifierGroups) return;
 
