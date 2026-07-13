@@ -101,19 +101,21 @@ export class DashboardService {
   }
 
   async getSalesReport(branchId: string, dateFrom?: string, dateTo?: string) {
-    const from = dateFrom ? new Date(dateFrom) : new Date(new Date().setHours(0, 0, 0, 0));
-    const to = dateTo ? new Date(dateTo) : new Date(new Date().setHours(23, 59, 59, 999));
-
-    if (!dateFrom) from.setHours(0, 0, 0, 0);
-
-    const bills = await this.billRepository
+    const query = this.billRepository
       .createQueryBuilder('bill')
       .innerJoin(Tab, 'tab', 'tab.id::varchar = bill.tab_id::varchar')
-      .where('tab.branch_id::varchar = :branchId', { branchId })
-      .andWhere('bill.paid_at >= :from', { from })
-      .andWhere('bill.paid_at <= :to', { to })
-      .orderBy('bill.paid_at', 'DESC')
-      .getMany();
+      .where('tab.branch_id::varchar = :branchId', { branchId });
+
+    if (dateFrom) {
+      const from = new Date(dateFrom);
+      query.andWhere('bill.paid_at >= :from', { from });
+    }
+    if (dateTo) {
+      const to = new Date(dateTo);
+      query.andWhere('bill.paid_at <= :to', { to });
+    }
+
+    const bills = await query.orderBy('bill.paid_at', 'DESC').getMany();
 
     const totalRevenue = bills.reduce((sum, b) => sum + b.total_kobo, 0);
     const byMethod: Record<string, number> = {};
@@ -123,8 +125,6 @@ export class DashboardService {
     }
 
     return {
-      from,
-      to,
       total_revenue_kobo: totalRevenue,
       transaction_count: bills.length,
       average_bill_kobo: bills.length > 0 ? Math.round(totalRevenue / bills.length) : 0,
