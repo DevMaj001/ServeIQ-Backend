@@ -119,10 +119,13 @@ export class TabService {
     };
   }
 
-  async findAllByBranch(branchId: string, status?: string, pagination?: { page: number; per_page: number }) {
+  async findAllByBranch(branchId: string, status?: string, waiterId?: string, pagination?: { page: number; per_page: number }) {
     const where: any = { branch_id: branchId };
     if (status) {
       where.status = status;
+    }
+    if (waiterId) {
+      where.waiter_id = waiterId;
     }
     
     const skip = pagination ? (pagination.page - 1) * pagination.per_page : undefined;
@@ -152,6 +155,26 @@ export class TabService {
     }
 
     return { data: tabsWithDetails, total };
+  }
+
+  async getTabWaiters(branchId: string) {
+    const raw = await this.tabRepository
+      .createQueryBuilder('tab')
+      .select('DISTINCT tab.waiter_id', 'waiter_id')
+      .where('tab.branch_id = :branchId', { branchId })
+      .andWhere('tab.waiter_id IS NOT NULL')
+      .getRawMany();
+
+    const ids = raw.map(r => r.waiter_id);
+    if (ids.length === 0) return [];
+
+    const users = await this.userRepository
+      .createQueryBuilder('user')
+      .select(['user.id', 'user.full_name', 'user.role'])
+      .where('user.id IN (:...ids)', { ids })
+      .getMany();
+
+    return users;
   }
 
   async closeTab(id: string, branchId: string, currentUserId?: string, currentUserRole?: string) {

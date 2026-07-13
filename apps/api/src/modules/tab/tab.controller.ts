@@ -16,8 +16,9 @@ export class TabController {
   constructor(private readonly tabService: TabService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get all tabs for the branch (optionally filtered by status)' })
+  @ApiOperation({ summary: 'Get all tabs for the branch (optionally filtered by status or waiter)' })
   @ApiQuery({ name: 'status', required: false, enum: ['open', 'billed', 'paid', 'voided'] })
+  @ApiQuery({ name: 'waiter_id', required: false, description: 'Filter by waiter UUID' })
   @ApiQuery({ name: 'page', required: false, example: '1' })
   @ApiQuery({ name: 'per_page', required: false, example: '20' })
   @ApiResponse({ status: 200, description: 'List of tabs with details.', type: [Tab] })
@@ -25,12 +26,21 @@ export class TabController {
   async findAll(
     @Request() req: any,
     @Query('status') status?: string,
+    @Query('waiter_id') waiterId?: string,
     @Query('page') page?: string,
     @Query('per_page') per_page?: string,
   ) {
     const pagination = getPaginationParams({ page, per_page });
-    const { data, total } = await this.tabService.findAllByBranch(req.user.branchId, status, pagination);
+    const { data, total } = await this.tabService.findAllByBranch(req.user.branchId, status, waiterId, pagination);
     return paginate(data, total, pagination);
+  }
+
+  @Get('waiter-list')
+  @ApiOperation({ summary: 'List all users who have tabs in this branch (for filter dropdown)' })
+  @ApiResponse({ status: 200, description: 'List of users with waiter name and id.' })
+  @ApiResponse({ status: 401, description: 'Unauthorized.' })
+  async getTabWaiters(@Request() req: any) {
+    return this.tabService.getTabWaiters(req.user.branchId);
   }
 
   @Post('open')
