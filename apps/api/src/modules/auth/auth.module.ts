@@ -26,7 +26,7 @@ import { SubscriptionModule } from '../subscription/subscription.module';
       useFactory: (configService: ConfigService) => ({
         secret: configService.get('JWT_SECRET') || 'serveiq-secret-2024',
         signOptions: {
-          expiresIn: configService.get('JWT_EXPIRES_IN', '24h'),
+          expiresIn: (configService.get('JWT_EXPIRES_IN', '24h') as any),
         },
       }),
     }),
