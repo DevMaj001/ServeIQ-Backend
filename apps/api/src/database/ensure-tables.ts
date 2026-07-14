@@ -9,6 +9,10 @@ export async function ensureTables(ds: DataSource) {
   await ds.query(`ALTER TABLE "tabs" ADD COLUMN IF NOT EXISTS "shift_id" uuid`);
   await ds.query(`CREATE INDEX IF NOT EXISTS "IDX_tabs_shift_id" ON "tabs" ("shift_id")`);
 
+  // Always apply brand color columns
+  await ds.query(`ALTER TABLE "businesses" ADD COLUMN IF NOT EXISTS "brand_primary_color" character varying`);
+  await ds.query(`ALTER TABLE "businesses" ADD COLUMN IF NOT EXISTS "brand_accent_color" character varying`);
+
   // Update plan prices (NGN kobo) — catches old seed values and any previous bad deploy values
   await ds.query(`UPDATE "plans" SET "price" = 3500000 WHERE "name" = 'Pro' AND "currency" = 'NGN' AND "price" IN (2500000, 35000)`);
   await ds.query(`UPDATE "plans" SET "price" = 10000000 WHERE "name" = 'Enterprise' AND "currency" = 'NGN' AND "price" IN (7500000, 100000)`);
