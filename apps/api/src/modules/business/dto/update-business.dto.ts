@@ -35,4 +35,12 @@ export class UpdateBusinessDto {
   @IsOptional()
   @IsString()
   logo_url?: string;
+
+  @IsOptional()
+  @IsString()
+  brand_primary_color?: string;
+
+  @IsOptional()
+  @IsString()
+  brand_accent_color?: string;
 }

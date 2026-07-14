@@ -53,6 +53,12 @@ export class Business {
   @Column({ nullable: true })
   cac_document_url: string;
 
+  @Column({ nullable: true })
+  brand_primary_color: string;
+
+  @Column({ nullable: true })
+  brand_accent_color: string;
+
   @Column({ default: true })
   is_active: boolean;
 
