@@ -22,7 +22,7 @@ export class PublicMenuController {
   async getPublicMenu(@Param('branchId') branchId: string) {
     const branch = await this.branchRepo.findOne({
       where: { id: branchId },
-      relations: ['business'],
+      relations: { business: true },
     });
     if (!branch) {
       throw new NotFoundException('Branch not found');
