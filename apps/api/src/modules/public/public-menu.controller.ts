@@ -48,6 +48,7 @@ export class PublicMenuController {
       data: {
         business_name: branch.business.name,
         branch_name: branch.name,
+        logo_url: branch.business.logo_url || null,
         items: mapped,
       },
     };
