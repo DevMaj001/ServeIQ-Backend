@@ -20,7 +20,10 @@ export class PublicMenuController {
   @ApiResponse({ status: 200, description: 'Public menu items.' })
   @ApiResponse({ status: 404, description: 'Branch not found.' })
   async getPublicMenu(@Param('branchId') branchId: string) {
-    const branch = await this.branchRepo.findOne({ where: { id: branchId } });
+    const branch = await this.branchRepo.findOne({
+      where: { id: branchId },
+      relations: ['business'],
+    });
     if (!branch) {
       throw new NotFoundException('Branch not found');
     }
@@ -43,6 +46,7 @@ export class PublicMenuController {
     return {
       success: true,
       data: {
+        business_name: branch.business.name,
         branch_name: branch.name,
         items: mapped,
       },
