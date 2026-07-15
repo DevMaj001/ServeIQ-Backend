@@ -51,13 +51,13 @@ export class Order {
   @Column({ type: 'uuid', nullable: true })
   approved_by: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   approved_at: Date | null;
 
   @Column({ type: 'uuid', nullable: true })
   declined_by: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   declined_at: Date | null;
 
   @Column({ type: 'text', nullable: true })
@@ -69,19 +69,19 @@ export class Order {
   @Column({ type: 'integer', nullable: true })
   estimated_preparation_time_seconds: number | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   timer_started_at: Date | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   timer_ends_at: Date | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   actual_ready_time: Date | null;
 
   @Column({ type: 'uuid', nullable: true })
   delivered_by_supervisor: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   delivered_at: Date | null;
 
   @CreateDateColumn()
