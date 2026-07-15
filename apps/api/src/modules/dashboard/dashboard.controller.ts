@@ -26,9 +26,16 @@ export class DashboardController {
 
   @Get('reports/sales')
   @ApiOperation({ summary: 'Sales report with optional date range and payment method breakdown' })
-  @ApiQuery({ name: 'dateFrom', required: false, example: '2026-06-01' })
-  @ApiQuery({ name: 'dateTo', required: false, example: '2026-06-28' })
-  @ApiResponse({ status: 200, description: 'Sales report data.' })
+  @ApiQuery({ name: 'dateFrom', required: false, example: '2026-06-01', description: 'Start date (inclusive). Omit for all-time.' })
+  @ApiQuery({ name: 'dateTo', required: false, example: '2026-06-28', description: 'End date (inclusive). Omit for all-time.' })
+  @ApiResponse({ status: 200, description: 'Sales report data.', schema: {
+    example: {
+      total_revenue_kobo: 52692500,
+      transaction_count: 29,
+      average_bill_kobo: 1816982,
+      breakdown_by_method: { cash: 35000000, transfer: 17692500 },
+    },
+  } })
   async getSalesReport(
     @Request() req: any,
     @Query('dateFrom') dateFrom?: string,

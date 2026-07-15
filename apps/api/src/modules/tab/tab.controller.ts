@@ -20,8 +20,8 @@ export class TabController {
   @ApiQuery({ name: 'status', required: false, enum: ['open', 'billed', 'paid', 'voided'] })
   @ApiQuery({ name: 'waiter_id', required: false, description: 'Filter by waiter UUID' })
   @ApiQuery({ name: 'page', required: false, example: '1' })
-  @ApiQuery({ name: 'per_page', required: false, example: '20' })
-  @ApiResponse({ status: 200, description: 'List of tabs with details.', type: [Tab] })
+  @ApiQuery({ name: 'per_page', required: false, example: '20', description: 'Defaults to 20, max 100' })
+  @ApiResponse({ status: 200, description: 'Paginated list of tabs with waiter/table/orders.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async findAll(
     @Request() req: any,
@@ -37,7 +37,12 @@ export class TabController {
 
   @Get('waiter-list')
   @ApiOperation({ summary: 'List all users who have tabs in this branch (for filter dropdown)' })
-  @ApiResponse({ status: 200, description: 'List of users with waiter name and id.' })
+  @ApiResponse({ status: 200, description: 'List of users with waiter name and id.', schema: {
+    example: [
+      { id: 'uuid-1', full_name: 'Stella Celetine', role: 'waiter' },
+      { id: 'uuid-2', full_name: 'Admin User', role: 'owner' },
+    ],
+  } })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async getTabWaiters(@Request() req: any) {
     return this.tabService.getTabWaiters(req.user.branchId);
