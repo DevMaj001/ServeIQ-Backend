@@ -120,6 +120,7 @@ export class AuthController {
     description:
       'Authenticates a waiter using their 4-digit PIN and branch ID. Returns a JWT scoped to the WAITER role.',
   })
+  @ApiBody({ type: WaiterLoginDto })
   @ApiResponse({
     status: 200,
     description: 'Waiter authenticated — JWT access token returned.',
@@ -129,7 +130,10 @@ export class AuthController {
   })
   @ApiResponse({ status: 400, description: 'Validation error.' })
   @ApiResponse({ status: 401, description: 'Invalid PIN.' })
-  async waiterLogin(@Body() dto: WaiterLoginDto) {
+  async waiterLogin(@Body() payload: any) {
+    const dto = new WaiterLoginDto();
+    dto.pin = payload.pin || payload.passCode || payload.code || '';
+    dto.branchId = payload.branchId || payload.branch_id || payload.business_id || '';
     return this.authService.waiterLogin(dto);
   }
 
