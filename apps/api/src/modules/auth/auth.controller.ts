@@ -129,10 +129,7 @@ export class AuthController {
   })
   @ApiResponse({ status: 400, description: 'Validation error.' })
   @ApiResponse({ status: 401, description: 'Invalid PIN.' })
-  async waiterLogin(@Body() payload: any) {
-    const dto = new WaiterLoginDto();
-    dto.pin = payload.pin || payload.passCode || payload.code || '';
-    dto.branchId = payload.branchId || payload.branch_id || '';
+  async waiterLogin(@Body() dto: WaiterLoginDto) {
     return this.authService.waiterLogin(dto);
   }
 
