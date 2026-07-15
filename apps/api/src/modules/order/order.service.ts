@@ -142,17 +142,15 @@ export class OrderService {
         throw new BadRequestException('Order is not pending approval');
       }
 
-      let departmentId = dto.department;
-      if (departmentId) {
-        const dept = await this.departmentRepo.findOne({ where: { id: departmentId, branch_id: tab.branch_id } });
-        if (!dept) throw new NotFoundException('Department not found in this branch');
-      }
+      const departmentId = dto.department;
+      const dept = await this.departmentRepo.findOne({ where: { id: departmentId, branch_id: tab.branch_id } });
+      if (!dept) throw new NotFoundException('Department not found in this branch');
 
       const now = new Date();
       order.order_status = OrderStatus.APPROVED;
       order.approved_by = userId;
       order.approved_at = now;
-      order.assigned_department = departmentId || null;
+      order.assigned_department = departmentId;
       order.estimated_preparation_time_seconds = dto.estimated_preparation_time_seconds;
       order.timer_started_at = now;
       order.timer_ends_at = new Date(now.getTime() + dto.estimated_preparation_time_seconds * 1000);

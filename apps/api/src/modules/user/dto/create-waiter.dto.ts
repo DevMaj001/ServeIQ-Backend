@@ -1,5 +1,8 @@
-import { IsNotEmpty, IsString, IsOptional, IsEmail } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional, IsEmail, IsIn } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { UserRole } from '../../../common/shared';
+
+const CREATABLE_ROLES = [UserRole.WAITER, UserRole.SUPERVISOR] as const;
 
 export class CreateWaiterDto {
   @ApiProperty({ example: 'Jane Waiter', description: 'Full name of the waiter' })
@@ -26,4 +29,9 @@ export class CreateWaiterDto {
   @IsOptional()
   @IsString()
   avatar_url?: string;
+
+  @ApiPropertyOptional({ example: 'supervisor', description: 'Role to assign (waiter or supervisor). Defaults to waiter if omitted.' })
+  @IsOptional()
+  @IsIn(CREATABLE_ROLES, { message: 'Role must be either "waiter" or "supervisor"' })
+  role?: string;
 }

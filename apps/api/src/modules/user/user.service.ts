@@ -57,7 +57,7 @@ export class UserService {
         attempts++;
         pin = String(Math.floor(1000 + Math.random() * 9000));
         const existing = await this.userRepository.find({
-          where: { business_id: businessId, role: UserRole.WAITER, is_active: true },
+          where: { business_id: businessId, is_active: true },
         });
         const pinTaken = await Promise.all(
           existing.map((w) => (w.pin_hash ? bcrypt.compare(pin, w.pin_hash) : Promise.resolve(false))),
@@ -68,12 +68,14 @@ export class UserService {
       const salt = await bcrypt.genSalt();
       const pinHash = await bcrypt.hash(pin, salt);
 
-      // Waiters don't always have email — generate a placeholder if not supplied or empty
+      const targetRole = dto.role ?? UserRole.WAITER;
+
+      // Generate a placeholder email if not supplied
       const email = (dto.email && dto.email.trim() !== '') 
         ? dto.email 
-        : `waiter-${Date.now()}-${Math.floor(Math.random() * 1000)}@internal.serveiq`;
+        : `staff-${Date.now()}-${Math.floor(Math.random() * 1000)}@internal.serveiq`;
 
-      // Generate a random secure password (waiter logs in via PIN, not password)
+      // Generate a random secure password (PIN-based users don't use password login)
       const randomPassword = await bcrypt.hash(Math.random().toString(36), salt);
 
       const user = this.userRepository.create({
@@ -85,7 +87,7 @@ export class UserService {
         avatar_url: dto.avatar_url,
         password_hash: randomPassword,
         pin_hash: pinHash,
-        role: UserRole.WAITER,
+        role: targetRole as UserRole,
         is_active: true,
       });
 
@@ -94,7 +96,7 @@ export class UserService {
       await this.auditService.log({
         branchId: dto.branchId,
         userId: savedUser.id,
-        action: 'WAITER_CREATED',
+        action: targetRole === UserRole.SUPERVISOR ? 'SUPERVISOR_CREATED' : 'WAITER_CREATED',
         entityType: 'User',
         entityId: savedUser.id,
         payload: { fullName: savedUser.full_name, email: savedUser.email, role: savedUser.role },
@@ -126,7 +128,7 @@ export class UserService {
       }
       
       // For any other DB error, wrap it in a BadRequestException or re-throw
-      throw new BadRequestException(`Failed to create waiter: ${err.message || 'Unknown database error'}`);
+      throw new BadRequestException(`Failed to create user: ${err.message || 'Unknown database error'}`);
     }
   }
 
@@ -244,21 +246,37 @@ export class UserService {
     return user;
   }
 
-  async removeWaiter(id: string, businessId: string) {
-    const waiter = await this.userRepository.findOne({
-      where: { id, business_id: businessId, role: UserRole.WAITER },
+  async removeUser(id: string, businessId: string) {
+    const user = await this.userRepository.findOne({
+      where: { id, business_id: businessId },
     });
-    if (!waiter) throw new NotFoundException('Waiter not found or does not belong to your business');
+    if (!user) {
+      const existsElsewhere = await this.userRepository.findOne({ where: { id } });
+      if (existsElsewhere) {
+        throw new NotFoundException('User exists but belongs to a different business');
+      }
+      throw new NotFoundException('User not found');
+    }
+
+    // Prevent deleting the last OWNER in a business
+    if (user.role === UserRole.OWNER) {
+      const ownerCount = await this.userRepository.count({
+        where: { business_id: businessId, role: UserRole.OWNER },
+      });
+      if (ownerCount <= 1) {
+        throw new BadRequestException('Cannot delete the last owner of this business');
+      }
+    }
 
     await this.auditService.log({
-      branchId: waiter.branch_id,
-      userId: waiter.id,
-      action: 'WAITER_DELETED',
+      branchId: user.branch_id,
+      userId: user.id,
+      action: user.role === UserRole.SUPERVISOR ? 'SUPERVISOR_DELETED' : 'USER_DELETED',
       entityType: 'User',
-      entityId: waiter.id,
-      payload: { fullName: waiter.full_name, email: waiter.email },
+      entityId: user.id,
+      payload: { fullName: user.full_name, email: user.email, role: user.role },
     });
 
-    return this.userRepository.remove(waiter);
+    return this.userRepository.remove(user);
   }
 }

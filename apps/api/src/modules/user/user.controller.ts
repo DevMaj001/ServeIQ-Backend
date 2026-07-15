@@ -28,10 +28,11 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post('waiters')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Create a new waiter' })
-  @ApiResponse({ status: 201, description: 'Waiter created.' })
+  @ApiOperation({ summary: 'Create a waiter or supervisor' })
+  @ApiResponse({ status: 201, description: 'User created.' })
   @ApiResponse({ status: 400, description: 'Validation error.' })
   async createWaiter(
     @Request() req: { user: { businessId: string } },
@@ -114,14 +115,15 @@ export class UserController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Delete a waiter' })
-  @ApiResponse({ status: 200, description: 'Waiter deleted.' })
-  async deleteWaiter(
+  @ApiOperation({ summary: 'Delete a user (Owner/Manager only)' })
+  @ApiResponse({ status: 200, description: 'User deleted.' })
+  async deleteUser(
     @Request() req: { user: { businessId: string } },
     @Param('id') id: string,
   ) {
-    return this.userService.removeWaiter(id, req.user.businessId);
+    return this.userService.removeUser(id, req.user.businessId);
   }
 }

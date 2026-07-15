@@ -2,7 +2,7 @@ import { Inject, Injectable, UnauthorizedException, ConflictException, BadReques
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
-import { DataSource, MoreThan } from 'typeorm';
+import { DataSource, MoreThan, In } from 'typeorm';
 import { User } from '../user/entities/user.entity';
 import { Business } from '../business/entities/business.entity';
 import { Branch } from '../branch/entities/branch.entity';
@@ -122,7 +122,7 @@ export class AuthService {
     }
 
     const whereClause: any = {
-      role: UserRole.WAITER,
+      role: In([UserRole.WAITER, UserRole.SUPERVISOR]),
       is_active: true,
     };
 
@@ -130,13 +130,13 @@ export class AuthService {
       whereClause.branch_id = dto.branchId;
     }
 
-    const waiters = await this.dataSource.getRepository(User).find({
+    const users = await this.dataSource.getRepository(User).find({
       where: whereClause,
     });
 
-    for (const waiter of waiters) {
-      if (waiter.pin_hash && (await bcrypt.compare(dto.pin, waiter.pin_hash))) {
-        return this.generateTokens(waiter);
+    for (const user of users) {
+      if (user.pin_hash && (await bcrypt.compare(dto.pin, user.pin_hash))) {
+        return this.generateTokens(user);
       }
     }
 
