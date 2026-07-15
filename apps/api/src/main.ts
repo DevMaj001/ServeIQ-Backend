@@ -71,6 +71,7 @@ async function bootstrap() {
       },
       'access-token',
     )
+    .addServer(`https://serveiq-backend.onrender.com`, 'Production')
     .addServer(`http://localhost:${process.env.PORT ?? 3000}`, 'Local')
     .build();
 
@@ -83,7 +84,6 @@ async function bootstrap() {
     },
   });
 
-  await app.listen(process.env.PORT ?? 3000);
-  console.log(`\n📚 Swagger UI → http://localhost:${process.env.PORT ?? 3000}/api/docs\n`);
+  await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
 }
 bootstrap();
