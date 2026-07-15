@@ -12,6 +12,9 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '../../common/shared';
 import { UserService } from './user.service';
 import { CreateWaiterDto } from './dto/create-waiter.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -84,9 +87,10 @@ export class UserController {
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Update a user/waiter profile' })
+  @ApiOperation({ summary: 'Update a user/waiter profile (Owner/Manager only)' })
   @ApiResponse({ status: 200, description: 'User updated.' })
   @ApiResponse({ status: 404, description: 'User not found.' })
   async update(

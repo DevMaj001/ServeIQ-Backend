@@ -11,12 +11,13 @@ import { Table as RestaurantTable, TableStatus } from '../modules/table/entities
 import { MenuItem } from '../modules/menu/entities/menu-item.entity';
 import { Tab } from '../modules/tab/entities/tab.entity';
 import { Subscription, SubscriptionStatus } from '../modules/subscription/entities/subscription.entity';
+import { Department } from '../modules/department/entities/department.entity';
 import { UserRole } from '../common/shared';
 
 const AppDataSource = new DataSource({
   type: 'postgres',
   url: process.env.DATABASE_URL,
-  entities: [Business, Branch, User, RestaurantTable, MenuItem, Tab, Subscription],
+  entities: [Business, Branch, User, RestaurantTable, MenuItem, Tab, Subscription, Department],
   synchronize: false,
   logging: true,
   ssl: { rejectUnauthorized: false },
@@ -106,6 +107,32 @@ async function seed() {
   const savedWaiter = await userRepo.save(waiter);
   console.log('Created waiter:', savedWaiter.id);
 
+  // Create Supervisor User
+  const supervisor = userRepo.create({
+    business_id: savedBusiness.id,
+    branch_id: savedBranch.id,
+    full_name: 'Supervisor User',
+    email: 'supervisor@demo.com',
+    password_hash: passwordHash,
+    pin_hash: pinHash,
+    role: UserRole.SUPERVISOR,
+    is_active: true,
+  });
+  const savedSupervisor = await userRepo.save(supervisor);
+  console.log('Created supervisor:', savedSupervisor.id);
+
+  // Create Departments
+  const departmentRepo = AppDataSource.getRepository(Department);
+  const departments = [
+    { name: 'Kitchen', branch_id: savedBranch.id },
+    { name: 'Bar', branch_id: savedBranch.id },
+    { name: 'Grill Station', branch_id: savedBranch.id },
+  ];
+  for (const dept of departments) {
+    await departmentRepo.save(departmentRepo.create(dept));
+  }
+  console.log('Created', departments.length, 'departments');
+
   // Create Tables
   const tables = [];
   for (let i = 1; i <= 10; i++) {
@@ -163,6 +190,7 @@ async function seed() {
   console.log('Login credentials:');
   console.log('  Owner: owner@demo.com / password123');
   console.log('  Waiter: waiter@demo.com / password123 (PIN: 1234)');
+  console.log('  Supervisor: supervisor@demo.com / password123 (PIN: 1234)');
   console.log('Sample Tab ID:', savedTab.id);
   console.log('Branch ID:', savedBranch.id);
 

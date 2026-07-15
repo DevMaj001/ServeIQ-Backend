@@ -22,6 +22,14 @@ describe('OrderService', () => {
       deductByTab: jest.fn().mockResolvedValue(undefined),
     } as any;
 
+    const departmentRepo = {
+      findOne: jest.fn(),
+    } as any;
+
+    const auditService = {
+      log: jest.fn().mockResolvedValue(undefined),
+    } as any;
+
     const manager = {
       getRepository: jest.fn().mockReturnValue({
         create: jest.fn((dto) => dto),
@@ -47,8 +55,10 @@ describe('OrderService', () => {
       orderRepository,
       menuRepository,
       tabRepository,
+      departmentRepo,
       dataSource,
       ingredientService,
+      auditService,
     );
 
     await service.addOrderItems('tab-1', [{ menu_item_id: 'menu-1', quantity: 3 }], 'user-1');

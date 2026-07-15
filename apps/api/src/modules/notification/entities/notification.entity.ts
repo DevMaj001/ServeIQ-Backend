@@ -6,6 +6,7 @@ export enum NotificationType {
   BILL_VOIDED = 'bill_voided',
   STOCK_REORDER = 'stock_reorder',
   SUBSCRIPTION_EXPIRING = 'subscription_expiring',
+  ORDER_READY = 'order_ready',
 }
 
 @Entity('notifications')

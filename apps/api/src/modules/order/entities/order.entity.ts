@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   Index,
 } from 'typeorm';
+import { OrderStatus } from '../../../common/shared';
 
 @Entity('orders')
 export class Order {
@@ -43,6 +44,45 @@ export class Order {
 
   @Column()
   created_by: string;
+
+  @Column({ type: 'varchar', length: 40, default: OrderStatus.PENDING_SUPERVISOR_APPROVAL })
+  order_status: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  approved_by: string | null;
+
+  @Column({ nullable: true })
+  approved_at: Date | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  declined_by: string | null;
+
+  @Column({ nullable: true })
+  declined_at: Date | null;
+
+  @Column({ type: 'text', nullable: true })
+  decline_reason: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  assigned_department: string | null;
+
+  @Column({ type: 'integer', nullable: true })
+  estimated_preparation_time_seconds: number | null;
+
+  @Column({ nullable: true })
+  timer_started_at: Date | null;
+
+  @Column({ nullable: true })
+  timer_ends_at: Date | null;
+
+  @Column({ nullable: true })
+  actual_ready_time: Date | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  delivered_by_supervisor: string | null;
+
+  @Column({ nullable: true })
+  delivered_at: Date | null;
 
   @CreateDateColumn()
   created_at: Date;

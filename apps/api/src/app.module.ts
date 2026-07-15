@@ -30,6 +30,7 @@ import { Notification } from './modules/notification/entities/notification.entit
 import { Printer } from './modules/printer/printer.entity';
 import { PrintJob } from './modules/printer/print-job.entity';
 import { SyncQueue } from './modules/sync/sync.entity';
+import { Department } from './modules/department/entities/department.entity';
 
 import { AuthModule } from './modules/auth/auth.module';
 import { BusinessModule } from './modules/business/business.module';
@@ -51,6 +52,7 @@ import { PrinterModule } from './modules/printer/printer.module';
 import { SyncModule } from './modules/sync/sync.module';
 import { MenuModifierModule } from './modules/menu-modifier/menu-modifier.module';
 import { PublicModule } from './modules/public/public.module';
+import { DepartmentModule } from './modules/department/department.module';
 
 @Module({
   imports: [
@@ -84,6 +86,7 @@ import { PublicModule } from './modules/public/public.module';
         Printer,
         PrintJob,
         SyncQueue,
+        Department,
       ],
       migrationsRun: true,
       synchronize: process.env.NODE_ENV === 'development',
@@ -119,6 +122,7 @@ import { PublicModule } from './modules/public/public.module';
     SyncModule,
     MenuModifierModule,
     PublicModule,
+    DepartmentModule,
   ],
   controllers: [AppController],
   providers: [AppService, AuditService],

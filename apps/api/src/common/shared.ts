@@ -4,6 +4,18 @@ export enum UserRole {
   MANAGER = 'manager',
   WAITER = 'waiter',
   CASHIER = 'cashier',
+  SUPERVISOR = 'supervisor',
+}
+
+export enum OrderStatus {
+  PENDING_SUPERVISOR_APPROVAL = 'pending_supervisor_approval',
+  APPROVED = 'approved',
+  ASSIGNED_TO_DEPARTMENT = 'assigned_to_department',
+  PREPARING = 'preparing',
+  READY_FOR_PICKUP = 'ready_for_pickup',
+  DELIVERED = 'delivered',
+  COMPLETED = 'completed',
+  DECLINED = 'declined',
 }
 
 export enum TabStatus {
