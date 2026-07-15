@@ -29,6 +29,34 @@ export class OrderController {
     return this.orderService.addOrderItems(tabId, items, req.user.userId);
   }
 
+  // ── Static routes must come BEFORE :id ──
+  @Get('pending')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Get pending approval orders (Supervisor queue)' })
+  @ApiResponse({ status: 200, description: 'Pending orders list.' })
+  async findPending(@Request() req: any) {
+    return this.orderService.findPendingByBranch(req.user.branchId);
+  }
+
+  @Get('preparing')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Get currently preparing orders with active countdowns' })
+  @ApiResponse({ status: 200, description: 'Preparing orders list.' })
+  async findPreparing(@Request() req: any) {
+    return this.orderService.findPreparingByBranch(req.user.branchId);
+  }
+
+  @Get('ready-for-pickup')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Get orders ready for pickup (timer expired)' })
+  @ApiResponse({ status: 200, description: 'Ready for pickup orders list.' })
+  async findReadyForPickup(@Request() req: any) {
+    return this.orderService.findReadyForPickupByBranch(req.user.branchId);
+  }
+
   @Get('tab/:tabId')
   @ApiOperation({ summary: 'Get all orders for a specific tab' })
   @ApiParam({ name: 'tabId', description: 'Tab UUID', example: 'tab-uuid-here' })
@@ -38,6 +66,7 @@ export class OrderController {
     return this.orderService.findByTab(tabId);
   }
 
+  // ── :id routes ──
   @Get(':id')
   @ApiOperation({ summary: 'Get a specific order item by ID' })
   @ApiParam({ name: 'id', description: 'Order item UUID' })
@@ -104,32 +133,5 @@ export class OrderController {
   @ApiResponse({ status: 404, description: 'Order not found.' })
   async deliver(@Param('id') id: string, @Request() req: any) {
     return this.orderService.deliver(id, req.user.userId);
-  }
-
-  @Get('queue/pending')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER)
-  @ApiOperation({ summary: 'Get pending approval orders (Supervisor queue)' })
-  @ApiResponse({ status: 200, description: 'Pending orders list.' })
-  async findPending(@Request() req: any) {
-    return this.orderService.findPendingByBranch(req.user.branchId);
-  }
-
-  @Get('queue/preparing')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER)
-  @ApiOperation({ summary: 'Get currently preparing orders with active countdowns' })
-  @ApiResponse({ status: 200, description: 'Preparing orders list.' })
-  async findPreparing(@Request() req: any) {
-    return this.orderService.findPreparingByBranch(req.user.branchId);
-  }
-
-  @Get('queue/ready-for-pickup')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER)
-  @ApiOperation({ summary: 'Get orders ready for pickup (timer expired)' })
-  @ApiResponse({ status: 200, description: 'Ready for pickup orders list.' })
-  async findReadyForPickup(@Request() req: any) {
-    return this.orderService.findReadyForPickupByBranch(req.user.branchId);
   }
 }
