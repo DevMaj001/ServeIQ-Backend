@@ -146,7 +146,7 @@ export class UserService {
       where,
       skip,
       take,
-      select: { id: true, full_name: true, email: true, phone: true, avatar_url: true, is_active: true, created_at: true },
+      select: { id: true, full_name: true, email: true, phone: true, avatar_url: true, role: true, is_active: true, created_at: true },
     });
     return { data, total };
   }
