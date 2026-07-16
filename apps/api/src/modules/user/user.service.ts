@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from './entities/user.entity';
 import { Branch } from '../branch/entities/branch.entity';
@@ -132,8 +132,13 @@ export class UserService {
     }
   }
 
-  async findAllWaiters(branchId: string, pagination?: { page: number; per_page: number }) {
-    const where = { branch_id: branchId, role: UserRole.WAITER };
+  async findAllWaiters(branchId: string, pagination?: { page: number; per_page: number }, roleFilter?: string) {
+    const where: any = { branch_id: branchId };
+    if (roleFilter === 'all') {
+      where.role = In([UserRole.WAITER, UserRole.SUPERVISOR]);
+    } else {
+      where.role = UserRole.WAITER;
+    }
     const skip = pagination ? (pagination.page - 1) * pagination.per_page : undefined;
     const take = pagination ? pagination.per_page : undefined;
 

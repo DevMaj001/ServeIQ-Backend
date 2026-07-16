@@ -62,17 +62,19 @@ export class UserController {
   @Get('waiters')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'List all waiters in the branch' })
+  @ApiOperation({ summary: 'List waiters (or all staff with ?role=all) in the branch' })
   @ApiQuery({ name: 'page', required: false, example: '1' })
   @ApiQuery({ name: 'per_page', required: false, example: '20' })
-  @ApiResponse({ status: 200, description: 'List of waiters.', type: [User] })
+  @ApiQuery({ name: 'role', required: false, example: 'all', description: 'Pass "all" to include supervisors' })
+  @ApiResponse({ status: 200, description: 'List of staff.', type: [User] })
   async getWaiters(
     @Request() req: { user: { branchId: string } },
     @Query('page') page?: string,
     @Query('per_page') per_page?: string,
+    @Query('role') role?: string,
   ) {
     const pagination = getPaginationParams({ page, per_page });
-    const { data, total } = await this.userService.findAllWaiters(req.user.branchId, pagination);
+    const { data, total } = await this.userService.findAllWaiters(req.user.branchId, pagination, role);
     return paginate(data, total, pagination);
   }
 
