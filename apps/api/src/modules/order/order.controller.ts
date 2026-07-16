@@ -78,17 +78,21 @@ export class OrderController {
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Update order item quantity or notes' })
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Update order item (Supervisor/Manager/Owner only)' })
   @ApiParam({ name: 'id', description: 'Order item UUID' })
   @ApiResponse({ status: 200, description: 'Order item updated.' })
   @ApiResponse({ status: 404, description: 'Order item not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async update(@Param('id') id: string, @Body() updateDto: UpdateOrderDto) {
+  async update(@Param('id') id: string, @Request() req: any, @Body() updateDto: UpdateOrderDto) {
     return this.orderService.updateOrder(id, updateDto);
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Remove an order item from a tab' })
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Remove order item (Supervisor/Manager/Owner only)' })
   @ApiParam({ name: 'id', description: 'Order item UUID' })
   @ApiResponse({ status: 200, description: 'Order item removed.' })
   @ApiResponse({ status: 404, description: 'Order item not found.' })

@@ -77,9 +77,10 @@ export class UserController {
   }
 
   @Patch('waiters/:id/reset-pin')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Reset waiter PIN' })
+  @ApiOperation({ summary: 'Reset waiter PIN (Owner/Manager only)' })
   async resetWaiterPin(
     @Request() req: { user: { businessId: string } },
     @Param('id') id: string,
@@ -103,9 +104,10 @@ export class UserController {
   }
 
   @Patch(':id/deactivate')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Deactivate a user (soft)' })
+  @ApiOperation({ summary: 'Deactivate a user (Owner/Manager only)' })
   @ApiResponse({ status: 200, description: 'User deactivated.' })
   async deactivateUser(
     @Request() req: { user: { businessId: string } },

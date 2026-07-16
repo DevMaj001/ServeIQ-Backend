@@ -1,6 +1,9 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Request, Query, NotFoundException, HttpException, HttpStatus } from '@nestjs/common';
 import { IngredientService } from './ingredient.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '../../common/shared';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 
 @ApiTags('Inventory')
@@ -59,21 +62,27 @@ export class IngredientController {
   }
 
   @Post('inventory')
-  @ApiOperation({ summary: 'Create a new inventory item (menu item with stock tracking)' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Create inventory item (Owner/Manager only)' })
   @ApiResponse({ status: 201, description: 'Item created.' })
   async create(@Request() req: any, @Body() body: any) {
     return this.ingredientService.create(req.user.branchId, { ...body, created_by: req.user.userId });
   }
 
   @Patch('inventory/:id')
-  @ApiOperation({ summary: 'Update an inventory item' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Update inventory item (Owner/Manager only)' })
   @ApiParam({ name: 'id' })
   async update(@Param('id') id: string, @Request() req: any, @Body() body: any) {
     return this.ingredientService.update(id, req.user.branchId, body);
   }
 
   @Delete('inventory/:id')
-  @ApiOperation({ summary: 'Delete an inventory item' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Delete inventory item (Owner/Manager only)' })
   @ApiParam({ name: 'id' })
   async remove(@Param('id') id: string, @Request() req: any) {
     return this.ingredientService.remove(id, req.user.branchId);
@@ -105,7 +114,9 @@ export class IngredientController {
   }
 
   @Post('inventory/reconcile')
-  @ApiOperation({ summary: 'Reconcile inventory — submit physical counts' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Reconcile inventory (Owner/Manager only)' })
   async reconcile(@Request() req: any, @Body() body: { reconciliation_id: string; counts: { menu_item_id: string; physical_count: number }[] }) {
     const data = await this.ingredientService.reconcile(req.user.branchId, body);
     return { success: true, data };

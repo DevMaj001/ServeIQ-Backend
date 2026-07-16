@@ -88,7 +88,11 @@ export class BillService {
     return savedBill;
   }
 
-  async applyDiscount(tabId: string, dto: ApplyDiscountDto) {
+  async applyDiscount(tabId: string, branchId: string, dto: ApplyDiscountDto) {
+    const tab = await this.tabRepository.findOne({ where: { id: tabId } });
+    if (!tab) throw new NotFoundException('Tab not found');
+    if (tab.branch_id !== branchId) throw new ForbiddenException('Tab does not belong to your branch');
+
     const bill = await this.billRepository.findOne({ where: { tab_id: tabId } });
     if (!bill) throw new NotFoundException('Bill not found');
     if (bill.paid_at) throw new BadRequestException('Cannot modify a paid bill');
@@ -292,7 +296,11 @@ export class BillService {
     return bills;
   }
 
-  async getSplitBills(tabId: string) {
+  async getSplitBills(tabId: string, branchId: string) {
+    const tab = await this.tabRepository.findOne({ where: { id: tabId } });
+    if (!tab) throw new NotFoundException('Tab not found');
+    if (tab.branch_id !== branchId) throw new ForbiddenException('Tab does not belong to your branch');
+
     return this.billRepository.find({
       where: { tab_id: tabId },
       order: { created_at: 'ASC' },
@@ -337,11 +345,19 @@ export class BillService {
     return saved;
   }
 
-  async getReceipt(tabId: string) {
+  async getReceipt(tabId: string, branchId: string) {
+    const tab = await this.tabRepository.findOne({ where: { id: tabId } });
+    if (!tab) throw new NotFoundException('Tab not found');
+    if (tab.branch_id !== branchId) throw new ForbiddenException('Tab does not belong to your branch');
+
     return this.buildReceiptData(tabId);
   }
 
-  async getReceiptPdf(tabId: string): Promise<Buffer> {
+  async getReceiptPdf(tabId: string, branchId: string): Promise<Buffer> {
+    const tab = await this.tabRepository.findOne({ where: { id: tabId } });
+    if (!tab) throw new NotFoundException('Tab not found');
+    if (tab.branch_id !== branchId) throw new ForbiddenException('Tab does not belong to your branch');
+
     const data = await this.buildReceiptData(tabId);
     if (!data) throw new NotFoundException('Bill not found');
     return this.receiptService.generatePdf(data);

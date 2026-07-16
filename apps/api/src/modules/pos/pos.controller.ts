@@ -1,6 +1,9 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request } from '@nestjs/common';
 import { PosService } from './pos.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '../../common/shared';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { CreatePosTerminalDto } from './dto/create-pos-terminal.dto';
 import { UpdatePosTerminalDto } from './dto/update-pos-terminal.dto';
@@ -40,7 +43,9 @@ export class PosController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Create a new POS terminal' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Create a POS terminal (Owner/Manager only)' })
   @ApiResponse({ status: 201, description: 'POS terminal created.' })
   @ApiResponse({ status: 400, description: 'Validation error.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
@@ -49,7 +54,9 @@ export class PosController {
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Update a POS terminal' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Update a POS terminal (Owner/Manager only)' })
   @ApiParam({ name: 'id', description: 'POS Terminal UUID' })
   @ApiResponse({ status: 200, description: 'POS terminal updated.' })
   @ApiResponse({ status: 404, description: 'POS terminal not found.' })
@@ -59,7 +66,9 @@ export class PosController {
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete a POS terminal' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Delete a POS terminal (Owner/Manager only)' })
   @ApiParam({ name: 'id', description: 'POS Terminal UUID' })
   @ApiResponse({ status: 200, description: 'POS terminal deleted.' })
   @ApiResponse({ status: 404, description: 'POS terminal not found.' })

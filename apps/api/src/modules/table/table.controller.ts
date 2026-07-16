@@ -1,6 +1,9 @@
 import { Controller, Get, Post, Body, Param, Patch, Delete, UseGuards, Request, Query } from '@nestjs/common';
 import { TableService } from './table.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '../../common/shared';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { CreateTableDto } from './dto/create-table.dto';
 import { UpdateTableDto } from './dto/update-table.dto';
@@ -42,7 +45,9 @@ export class TableController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Create a new table' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Create a new table (Owner/Manager only)' })
   @ApiResponse({ status: 201, description: 'Table created.', type: Table })
   @ApiResponse({ status: 400, description: 'Validation error.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
@@ -61,7 +66,9 @@ export class TableController {
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Update a table' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Update a table (Owner/Manager only)' })
   @ApiParam({ name: 'id', description: 'Table UUID' })
   @ApiResponse({ status: 200, description: 'Table updated.' })
   @ApiResponse({ status: 404, description: 'Table not found.' })
@@ -89,6 +96,8 @@ export class TableController {
   }
 
   @Post(':id/release')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiOperation({ summary: 'Force-release a table and void its open tab (owner/manager only)' })
   @ApiParam({ name: 'id', description: 'Table UUID' })
   @ApiResponse({ status: 200, description: 'Table released.' })
@@ -99,7 +108,9 @@ export class TableController {
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete a table' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Delete a table (Owner/Manager only)' })
   @ApiParam({ name: 'id', description: 'Table UUID' })
   @ApiResponse({ status: 200, description: 'Table deleted.' })
   @ApiResponse({ status: 404, description: 'Table not found.' })

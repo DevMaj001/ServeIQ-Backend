@@ -3,6 +3,9 @@ import { ApiTags, ApiBearerAuth, ApiOperation, ApiParam, ApiQuery } from '@nestj
 import { Observable, map } from 'rxjs';
 import { PrinterService } from './printer.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '../../common/shared';
 
 @ApiTags('Printers & KDS')
 @ApiBearerAuth('access-token')
@@ -25,20 +28,26 @@ export class PrinterController {
   }
 
   @Post('printers')
-  @ApiOperation({ summary: 'Register a new printer' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Register a printer (Owner/Manager only)' })
   async create(@Request() req: any, @Body() body: any) {
     return this.printerService.create(req.user.branchId, body);
   }
 
   @Patch('printers/:id')
-  @ApiOperation({ summary: 'Update printer configuration' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Update printer configuration (Owner/Manager only)' })
   @ApiParam({ name: 'id' })
   async update(@Param('id') id: string, @Request() req: any, @Body() body: any) {
     return this.printerService.update(id, req.user.branchId, body);
   }
 
   @Delete('printers/:id')
-  @ApiOperation({ summary: 'Remove a printer' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Remove a printer (Owner/Manager only)' })
   @ApiParam({ name: 'id' })
   async remove(@Param('id') id: string, @Request() req: any) {
     return this.printerService.remove(id, req.user.branchId);

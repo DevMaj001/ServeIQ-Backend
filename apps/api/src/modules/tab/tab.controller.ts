@@ -1,6 +1,9 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Request, Query } from '@nestjs/common';
 import { TabService } from './tab.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '../../common/shared';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { OpenTabDto } from './dto/open-tab.dto';
 import { TransferTabDto } from './dto/transfer-tab.dto';
@@ -82,7 +85,9 @@ export class TabController {
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Update a tab' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Update a tab (Supervisor/Manager/Owner only)' })
   @ApiParam({ name: 'id', description: 'Tab UUID' })
   @ApiResponse({ status: 200, description: 'Tab updated.' })
   @ApiResponse({ status: 404, description: 'Tab not found.' })
@@ -92,7 +97,9 @@ export class TabController {
   }
 
   @Post(':id/transfer')
-  @ApiOperation({ summary: 'Transfer a tab to a different table' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Transfer a tab to a different table (Supervisor/Manager/Owner)' })
   @ApiParam({ name: 'id', description: 'Tab UUID' })
   @ApiResponse({ status: 200, description: 'Tab transferred to new table.' })
   @ApiResponse({ status: 400, description: 'Target table not available.' })
@@ -106,7 +113,9 @@ export class TabController {
   }
 
   @Post(':id/void')
-  @ApiOperation({ summary: 'Void a tab with a reason (manager only)' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Void a tab with a reason (Supervisor/Manager/Owner)' })
   @ApiParam({ name: 'id', description: 'Tab UUID' })
   @ApiResponse({ status: 200, description: 'Tab voided.' })
   @ApiResponse({ status: 400, description: 'Tab is not open.' })
@@ -120,7 +129,9 @@ export class TabController {
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete a tab' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Delete a tab (Owner/Manager only)' })
   @ApiParam({ name: 'id', description: 'Tab UUID' })
   @ApiResponse({ status: 200, description: 'Tab deleted.' })
   @ApiResponse({ status: 404, description: 'Tab not found.' })

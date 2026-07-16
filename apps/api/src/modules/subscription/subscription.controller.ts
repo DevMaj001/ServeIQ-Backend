@@ -44,9 +44,10 @@ export class SubscriptionController {
   }
 
   @Post('cancel')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Cancel subscription at end of current billing period' })
+  @ApiOperation({ summary: 'Cancel subscription (Owner only)' })
   @ApiResponse({ status: 200, description: 'Subscription marked as canceled' })
   @ApiResponse({ status: 400, description: 'Subscription is not eligible for cancellation' })
   async cancel(@Request() req: any) {

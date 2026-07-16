@@ -46,7 +46,9 @@ export class BranchController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Create a new branch under the authenticated business' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER)
+  @ApiOperation({ summary: 'Create a new branch (Owner only)' })
   @ApiResponse({ status: 201, description: 'Branch created.' })
   @ApiResponse({ status: 400, description: 'Validation error.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
@@ -58,7 +60,9 @@ export class BranchController {
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Update a branch by ID' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER)
+  @ApiOperation({ summary: 'Update a branch (Owner only)' })
   @ApiParam({ name: 'id', description: 'Branch UUID', example: 'a1b2c3d4-...' })
   @ApiResponse({ status: 200, description: 'Branch updated.' })
   @ApiResponse({ status: 404, description: 'Branch not found.' })
@@ -92,7 +96,9 @@ export class BranchController {
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete a branch' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER)
+  @ApiOperation({ summary: 'Delete a branch (Owner only)' })
   @ApiParam({ name: 'id', description: 'Branch UUID' })
   @ApiResponse({ status: 200, description: 'Branch deleted.' })
   @ApiResponse({ status: 404, description: 'Branch not found.' })

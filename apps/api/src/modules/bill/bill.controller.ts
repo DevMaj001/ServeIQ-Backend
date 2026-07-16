@@ -2,6 +2,9 @@ import { Controller, Get, Post, Body, Param, UseGuards, Request, Res } from '@ne
 import { Response } from 'express';
 import { BillService } from './bill.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '../../common/shared';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiBody, ApiProduces } from '@nestjs/swagger';
 import { ProcessPaymentDto } from './dto/process-payment.dto';
 import { GenerateBillDto } from './dto/generate-bill.dto';
@@ -30,10 +33,12 @@ export class BillController {
   }
 
   @Post('tab/:tabId/apply-discount')
-  @ApiOperation({ summary: 'Apply a discount to a bill (fixed kobo or percentage)' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Apply a discount to a bill (Supervisor/Manager/Owner only)' })
   @ApiParam({ name: 'tabId' })
-  async applyDiscount(@Param('tabId') tabId: string, @Body() dto: ApplyDiscountDto) {
-    return this.billService.applyDiscount(tabId, dto);
+  async applyDiscount(@Param('tabId') tabId: string, @Request() req: any, @Body() dto: ApplyDiscountDto) {
+    return this.billService.applyDiscount(tabId, req.user.branchId, dto);
   }
 
   @Post('tab/:tabId/pay')
@@ -68,8 +73,8 @@ export class BillController {
   @Get('tab/:tabId/splits')
   @ApiOperation({ summary: 'Get all split bills for a tab' })
   @ApiParam({ name: 'tabId' })
-  async getSplitBills(@Param('tabId') tabId: string) {
-    return this.billService.getSplitBills(tabId);
+  async getSplitBills(@Param('tabId') tabId: string, @Request() req: any) {
+    return this.billService.getSplitBills(tabId, req.user.branchId);
   }
 
   @Post('tab/:tabId/splits/:billId/pay')
@@ -86,8 +91,8 @@ export class BillController {
   @ApiResponse({ status: 200, description: 'Receipt details.' })
   @ApiResponse({ status: 404, description: 'Tab or bill not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async getReceipt(@Param('tabId') tabId: string) {
-    return this.billService.getReceipt(tabId);
+  async getReceipt(@Param('tabId') tabId: string, @Request() req: any) {
+    return this.billService.getReceipt(tabId, req.user.branchId);
   }
 
   @Get('tab/:tabId/receipt/pdf')
@@ -97,8 +102,8 @@ export class BillController {
   @ApiResponse({ status: 200, description: 'PDF receipt.' })
   @ApiResponse({ status: 404, description: 'Tab or bill not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async getReceiptPdf(@Param('tabId') tabId: string, @Res() res: Response) {
-    const pdf = await this.billService.getReceiptPdf(tabId);
+  async getReceiptPdf(@Param('tabId') tabId: string, @Request() req: any, @Res() res: Response) {
+    const pdf = await this.billService.getReceiptPdf(tabId, req.user.branchId);
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename="receipt-${tabId}.pdf"`,

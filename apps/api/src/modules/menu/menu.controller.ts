@@ -3,6 +3,9 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { MenuService } from './menu.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '../../common/shared';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiConsumes } from '@nestjs/swagger';
 import { CreateMenuItemDto } from './dto/create-menu-item.dto';
 import { UpdateMenuItemDto } from './dto/update-menu-item.dto';
@@ -53,7 +56,9 @@ export class MenuController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Create a new menu item' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Create a new menu item (Owner/Manager only)' })
   @ApiResponse({ status: 201, description: 'Menu item created.', type: MenuItem })
   @ApiResponse({ status: 400, description: 'Validation error.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
@@ -70,7 +75,9 @@ export class MenuController {
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Update a menu item' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Update a menu item (Owner/Manager only)' })
   @ApiParam({ name: 'id', description: 'Menu item UUID' })
   @ApiResponse({ status: 200, description: 'Menu item updated.' })
   @ApiResponse({ status: 404, description: 'Menu item not found.' })
@@ -88,6 +95,8 @@ export class MenuController {
   }
 
   @Post('import')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
@@ -119,7 +128,9 @@ export class MenuController {
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete a menu item' })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Delete a menu item (Owner/Manager only)' })
   @ApiParam({ name: 'id', description: 'Menu item UUID' })
   @ApiResponse({ status: 200, description: 'Menu item deleted.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
