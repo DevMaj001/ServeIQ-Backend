@@ -53,6 +53,7 @@ import { SyncModule } from './modules/sync/sync.module';
 import { MenuModifierModule } from './modules/menu-modifier/menu-modifier.module';
 import { PublicModule } from './modules/public/public.module';
 import { DepartmentModule } from './modules/department/department.module';
+import { AuditModule } from './modules/audit/audit.module';
 
 @Module({
   imports: [
@@ -123,6 +124,7 @@ import { DepartmentModule } from './modules/department/department.module';
     MenuModifierModule,
     PublicModule,
     DepartmentModule,
+    AuditModule,
   ],
   controllers: [AppController],
   providers: [AppService, AuditService],
