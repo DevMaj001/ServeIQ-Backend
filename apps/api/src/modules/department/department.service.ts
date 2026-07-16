@@ -10,8 +10,10 @@ export class DepartmentService {
     private departmentRepo: Repository<Department>,
   ) {}
 
-  async findAll(branchId: string) {
-    return this.departmentRepo.find({ where: { branch_id: branchId, is_active: true } });
+  async findAll(branchId: string, includeInactive = false) {
+    const where: any = { branch_id: branchId };
+    if (!includeInactive) where.is_active = true;
+    return this.departmentRepo.find({ where, order: { name: 'ASC' } });
   }
 
   async findOne(id: string) {
@@ -23,5 +25,17 @@ export class DepartmentService {
   async create(branchId: string, name: string) {
     const dept = this.departmentRepo.create({ branch_id: branchId, name });
     return this.departmentRepo.save(dept);
+  }
+
+  async update(id: string, data: { name?: string; is_active?: boolean }) {
+    const dept = await this.findOne(id);
+    if (data.name !== undefined) dept.name = data.name;
+    if (data.is_active !== undefined) dept.is_active = data.is_active;
+    return this.departmentRepo.save(dept);
+  }
+
+  async remove(id: string) {
+    const dept = await this.findOne(id);
+    return this.departmentRepo.remove(dept);
   }
 }
