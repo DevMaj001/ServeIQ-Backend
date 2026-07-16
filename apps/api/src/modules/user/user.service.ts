@@ -151,24 +151,24 @@ export class UserService {
     return { data, total };
   }
 
-  async resetWaiterPin(waiterId: string, businessId: string): Promise<{ pin: string }> {
-    const waiter = await this.userRepository.findOne({
-      where: { id: waiterId, business_id: businessId, role: UserRole.WAITER },
+  async resetWaiterPin(userId: string, businessId: string): Promise<{ pin: string }> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId, business_id: businessId, role: In([UserRole.WAITER, UserRole.SUPERVISOR]) },
     });
-    if (!waiter) throw new NotFoundException('Waiter not found');
+    if (!user) throw new NotFoundException('Staff member not found');
 
     const pin = String(Math.floor(1000 + Math.random() * 9000));
     const salt = await bcrypt.genSalt();
-    waiter.pin_hash = await bcrypt.hash(pin, salt);
-    await this.userRepository.save(waiter);
+    user.pin_hash = await bcrypt.hash(pin, salt);
+    await this.userRepository.save(user);
 
     await this.auditService.log({
-      branchId: waiter.branch_id,
-      userId: waiter.id,
-      action: 'WAITER_PIN_RESET',
+      branchId: user.branch_id,
+      userId: user.id,
+      action: 'STAFF_PIN_RESET',
       entityType: 'User',
-      entityId: waiter.id,
-      payload: { fullName: waiter.full_name },
+      entityId: user.id,
+      payload: { fullName: user.full_name },
     });
 
     return { pin };
