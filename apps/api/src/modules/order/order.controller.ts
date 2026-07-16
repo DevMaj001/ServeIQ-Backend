@@ -32,8 +32,8 @@ export class OrderController {
   // ── Static routes must come BEFORE :id ──
   @Get('pending')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER)
-  @ApiOperation({ summary: 'Get pending approval orders (Supervisor queue)' })
+  @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER, UserRole.WAITER)
+  @ApiOperation({ summary: 'Get pending approval orders' })
   @ApiResponse({ status: 200, description: 'Pending orders list.' })
   async findPending(@Request() req: any) {
     return this.orderService.findPendingByBranch(req.user.branchId);
@@ -41,7 +41,7 @@ export class OrderController {
 
   @Get('preparing')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER)
+  @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER, UserRole.WAITER)
   @ApiOperation({ summary: 'Get currently preparing orders with active countdowns' })
   @ApiResponse({ status: 200, description: 'Preparing orders list.' })
   async findPreparing(@Request() req: any) {
@@ -50,7 +50,7 @@ export class OrderController {
 
   @Get('ready-for-pickup')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER)
+  @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER, UserRole.WAITER)
   @ApiOperation({ summary: 'Get orders ready for pickup (timer expired)' })
   @ApiResponse({ status: 200, description: 'Ready for pickup orders list.' })
   async findReadyForPickup(@Request() req: any) {
