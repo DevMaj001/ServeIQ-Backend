@@ -192,6 +192,13 @@ export class UserService {
 
   async update(id: string, branchId: string, updateDto: any) {
     const user = await this.findOne(id, branchId);
+    const forbidden = ['password_hash', 'pin_hash', 'id', 'created_at', 'updated_at', 'deleted_at'];
+    forbidden.forEach(f => delete updateDto[f]);
+    if (updateDto.password) {
+      const salt = await bcrypt.genSalt();
+      user.password_hash = await bcrypt.hash(updateDto.password, salt);
+      delete updateDto.password;
+    }
     Object.assign(user, updateDto);
     return this.userRepository.save(user);
   }
