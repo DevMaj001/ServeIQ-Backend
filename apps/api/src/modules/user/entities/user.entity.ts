@@ -41,16 +41,16 @@ export class User {
   @Column({ unique: true })
   email: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   phone: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   avatar_url: string;
 
   @Column()
   password_hash: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   pin_hash: string;
 
   @Column({ type: 'varchar', length: 20, default: UserRole.WAITER })
@@ -67,13 +67,13 @@ export class User {
   @Column({ default: true })
   is_active: boolean;
 
-  @Column({ nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   email_verified_at: Date;
 
-  @Column({ nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   last_login_at: Date;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   invited_by: string;
 
   @CreateDateColumn()
