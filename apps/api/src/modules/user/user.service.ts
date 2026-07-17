@@ -75,8 +75,10 @@ export class UserService {
         ? dto.email 
         : `staff-${Date.now()}-${Math.floor(Math.random() * 1000)}@internal.serveiq`;
 
-      // Generate a random secure password (PIN-based users don't use password login)
-      const randomPassword = await bcrypt.hash(Math.random().toString(36), salt);
+      // Managers/chefs use the admin dashboard (email+password login).
+      // Waiters/supervisors use PIN-based login on the POS app.
+      const needsPassword = targetRole === UserRole.MANAGER || targetRole === UserRole.CHEF;
+      const passwordHash = needsPassword ? pinHash : await bcrypt.hash(Math.random().toString(36), salt);
 
       const user = this.userRepository.create({
         business_id: businessId,
@@ -85,7 +87,7 @@ export class UserService {
         email,
         phone: dto.phone,
         avatar_url: dto.avatar_url,
-        password_hash: randomPassword,
+        password_hash: passwordHash,
         pin_hash: pinHash,
         role: targetRole as UserRole,
         is_active: true,
@@ -93,10 +95,14 @@ export class UserService {
 
       const savedUser = await this.userRepository.save(user);
 
+      const auditAction =
+        targetRole === UserRole.SUPERVISOR ? 'SUPERVISOR_CREATED' :
+        targetRole === UserRole.MANAGER ? 'MANAGER_CREATED' :
+        targetRole === UserRole.CHEF ? 'CHEF_CREATED' : 'WAITER_CREATED';
       await this.auditService.log({
         branchId: dto.branchId,
         userId: savedUser.id,
-        action: targetRole === UserRole.SUPERVISOR ? 'SUPERVISOR_CREATED' : 'WAITER_CREATED',
+        action: auditAction,
         entityType: 'User',
         entityId: savedUser.id,
         payload: { fullName: savedUser.full_name, email: savedUser.email, role: savedUser.role },
