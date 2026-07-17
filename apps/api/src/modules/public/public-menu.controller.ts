@@ -47,13 +47,10 @@ export class PublicMenuController {
     }));
 
     return {
-      success: true,
-      data: {
-        business_name: branch.business.name,
-        branch_name: branch.name,
-        logo_url: branch.business.logo_url || null,
-        items: mapped,
-      },
+      business_name: branch.business.name,
+      branch_name: branch.name,
+      logo_url: branch.business.logo_url || null,
+      items: mapped,
     };
   }
 
@@ -71,9 +68,6 @@ export class PublicMenuController {
       select: { id: true, image_url: true, link_url: true, title: true, sort_order: true },
     });
 
-    return {
-      success: true,
-      data: ads,
-    };
+    return ads;
   }
 }

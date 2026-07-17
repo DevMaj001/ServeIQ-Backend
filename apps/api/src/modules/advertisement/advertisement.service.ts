@@ -45,6 +45,6 @@ export class AdvertisementService {
   async remove(id: string, branchId: string) {
     const ad = await this.findOne(id, branchId);
     await this.adRepo.remove(ad);
-    return { success: true };
+    return { deleted: true };
   }
 }
