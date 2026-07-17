@@ -82,7 +82,7 @@ export class UserController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Reset staff PIN (Owner/Manager only) — works for waiters and supervisors' })
+  @ApiOperation({ summary: 'Reset staff PIN (Owner/Manager only) — works for waiters, supervisors, managers, and chefs' })
   async resetWaiterPin(
     @Request() req: { user: { businessId: string } },
     @Param('id') id: string,

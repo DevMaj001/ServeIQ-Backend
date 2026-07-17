@@ -153,7 +153,7 @@ export class UserService {
 
   async resetWaiterPin(userId: string, businessId: string): Promise<{ pin: string }> {
     const user = await this.userRepository.findOne({
-      where: { id: userId, business_id: businessId, role: In([UserRole.WAITER, UserRole.SUPERVISOR]) },
+      where: { id: userId, business_id: businessId, role: In([UserRole.WAITER, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.CHEF]) },
     });
     if (!user) throw new NotFoundException('Staff member not found');
 
