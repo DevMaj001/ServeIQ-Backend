@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../../common/shared';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
@@ -45,7 +46,7 @@ export class RoleController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   @RequirePermissions(PERMISSIONS.VIEW_STAFF)
   @ApiBearerAuth('access-token')
@@ -55,7 +56,7 @@ export class RoleController {
   }
 
   @Get('permissions')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   @RequirePermissions(PERMISSIONS.VIEW_STAFF)
   @ApiBearerAuth('access-token')
@@ -65,7 +66,7 @@ export class RoleController {
   }
 
   @Put(':id/permissions')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER)
   @RequirePermissions(PERMISSIONS.ASSIGN_ROLES)
   @ApiBearerAuth('access-token')

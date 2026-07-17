@@ -154,7 +154,6 @@ import { RoleModule } from './modules/role/role.module';
     AuditService,
     PermissionsGuard,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
-    { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
 })
 export class AppModule {}
