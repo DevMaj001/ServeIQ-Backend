@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Permission } from './entities/permission.entity';
@@ -180,7 +180,7 @@ const DEFAULT_ROLES: RoleDef[] = [
 ];
 
 @Injectable()
-export class RoleSeedService implements OnModuleInit {
+export class RoleSeedService implements OnApplicationBootstrap {
   constructor(
     @InjectRepository(Permission)
     private permissionRepo: Repository<Permission>,
@@ -188,7 +188,7 @@ export class RoleSeedService implements OnModuleInit {
     private roleRepo: Repository<Role>,
   ) {}
 
-  async onModuleInit() {
+  async onApplicationBootstrap() {
     await this.seed();
   }
 
