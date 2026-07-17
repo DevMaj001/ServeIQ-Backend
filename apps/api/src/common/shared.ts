@@ -6,6 +6,7 @@ export enum UserRole {
   CHEF = 'chef',
   CASHIER = 'cashier',
   SUPERVISOR = 'supervisor',
+  CHEF = 'chef',
 }
 
 export enum OrderStatus {

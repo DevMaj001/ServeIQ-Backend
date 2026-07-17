@@ -30,8 +30,8 @@ export class CreateWaiterDto {
   @IsString()
   avatar_url?: string;
 
-  @ApiPropertyOptional({ example: 'manager', description: 'Role to assign (waiter, supervisor, or manager). Defaults to waiter if omitted.' })
+  @ApiPropertyOptional({ example: 'waiter', description: 'Role to assign. Defaults to waiter.' })
   @IsOptional()
-  @IsIn(CREATABLE_ROLES, { message: 'Role must be one of: waiter, supervisor, manager' })
+  @IsIn(CREATABLE_ROLES, { message: 'Role must be one of: waiter, supervisor, manager, chef' })
   role?: string;
 }
