@@ -87,21 +87,20 @@ export class UserService {
       const roleName = targetRole.charAt(0).toUpperCase() + targetRole.slice(1);
       const pbacRole = await this.roleRepository.findOne({ where: { name: roleName } });
 
-      const user = this.userRepository.create({
-        business_id: businessId,
-        branch_id: dto.branchId,
-        full_name: dto.fullName,
-        email,
-        phone: dto.phone || null,
-        avatar_url: dto.avatar_url || null,
-        password_hash: passwordHash,
-        pin_hash: pinHash,
-        role: targetRole as UserRole,
-        role_id: pbacRole?.id || null,
-        is_active: true,
-      } as any);
+      const user = new User();
+      user.business_id = businessId;
+      user.branch_id = dto.branchId;
+      user.full_name = dto.fullName;
+      user.email = email;
+      user.phone = dto.phone || null;
+      user.avatar_url = dto.avatar_url || null;
+      user.password_hash = passwordHash;
+      user.pin_hash = pinHash;
+      user.role = targetRole as UserRole;
+      user.role_id = pbacRole?.id || null;
+      user.is_active = true;
 
-      const savedUser = (await this.userRepository.save(user)) as User;
+      const savedUser = await this.userRepository.save(user);
 
       const auditAction =
         targetRole === UserRole.SUPERVISOR ? 'SUPERVISOR_CREATED' :
