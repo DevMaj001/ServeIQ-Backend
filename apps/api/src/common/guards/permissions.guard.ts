@@ -36,7 +36,7 @@ export class PermissionsGuard implements CanActivate {
     if (user.role_id) {
       const role = await this.roleRepo.findOne({
         where: { id: user.role_id },
-        relations: ['permissions'],
+        relations: { permissions: true },
       });
       if (!role) throw new ForbiddenException('Role not found');
 
