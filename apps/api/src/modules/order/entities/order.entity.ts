@@ -84,6 +84,16 @@ export class Order {
   @Column({ type: 'timestamp', nullable: true })
   delivered_at: Date | null;
 
+  @Index({ unique: true })
+  @Column({ type: 'varchar', length: 12, nullable: true })
+  tracking_code: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  tracking_generated_at: Date | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  preparing_at: Date | null;
+
   @CreateDateColumn()
   created_at: Date;
 

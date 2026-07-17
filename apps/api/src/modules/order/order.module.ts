@@ -11,9 +11,10 @@ import { AuditLog } from '../../entities/audit-log.entity';
 import { AuditService } from '../../common/services/audit.service';
 import { IngredientModule } from '../ingredient/ingredient.module';
 import { NotificationModule } from '../notification/notification.module';
+import { TrackingModule } from '../tracking/tracking.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Order, MenuItem, Tab, Department, AuditLog]), IngredientModule, NotificationModule],
+  imports: [TypeOrmModule.forFeature([Order, MenuItem, Tab, Department, AuditLog]), IngredientModule, NotificationModule, TrackingModule],
   providers: [OrderService, OrderScheduler, AuditService],
   controllers: [OrderController],
   exports: [OrderService],

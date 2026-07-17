@@ -10,6 +10,7 @@ import { AuditService } from '../../common/services/audit.service';
 import { Department } from '../department/entities/department.entity';
 import { ApproveOrderDto } from './dto/approve-order.dto';
 import { DeclineOrderDto } from './dto/decline-order.dto';
+import { TrackingService } from '../tracking/tracking.service';
 
 @Injectable()
 export class OrderService {
@@ -26,6 +27,7 @@ export class OrderService {
     private dataSource: DataSource,
     private ingredientService: IngredientService,
     private auditService: AuditService,
+    private trackingService: TrackingService,
   ) {}
 
   async addOrderItems(tabId: string, items: any[], userId: string) {
@@ -146,10 +148,20 @@ export class OrderService {
       const dept = await this.departmentRepo.findOne({ where: { id: departmentId, branch_id: tab.branch_id } });
       if (!dept) throw new NotFoundException('Department not found in this branch');
 
+      if (!order.tracking_code) {
+        order.tracking_code = await this.trackingService.generateUniqueCode();
+        order.tracking_generated_at = new Date();
+      }
+
       const now = new Date();
       order.order_status = OrderStatus.APPROVED;
       order.approved_by = userId;
       order.approved_at = now;
+      // preparing_at intentionally set to the same timestamp as approved_at because there is
+      // no Chef-confirmed "cooking started" signal yet. When the planned Chef role (V1.2)
+      // adds a real PREPARING status transition, replace this line with the independent
+      // timestamp set at that actual transition point.
+      order.preparing_at = now;
       order.assigned_department = departmentId;
       order.estimated_preparation_time_seconds = dto.estimated_preparation_time_seconds;
       order.timer_started_at = now;

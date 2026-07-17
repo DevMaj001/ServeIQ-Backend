@@ -19,7 +19,7 @@ const EXCLUDED_MATCHES = [
   '/api/v1/webhooks/paystack',
 ];
 
-const EXCLUDED_PREFIXES = ['/api/v1/auth/', '/api/v1/subscriptions/', '/api/v1/webhooks/paystack', '/api/v1/public/'];
+const EXCLUDED_PREFIXES = ['/api/v1/auth/', '/api/v1/subscriptions/', '/api/v1/webhooks/paystack', '/api/v1/public/', '/api/v1/tracking/'];
 
 @Injectable()
 export class SubscriptionGuard implements CanActivate {
