@@ -33,6 +33,8 @@ import { PrintJob } from './modules/printer/print-job.entity';
 import { SyncQueue } from './modules/sync/sync.entity';
 import { Department } from './modules/department/entities/department.entity';
 import { Advertisement } from './modules/advertisement/entities/advertisement.entity';
+import { AddTrackingAndTimestampsToOrders1792000000000 } from './database/migrations/1792000000000-AddTrackingAndTimestampsToOrders';
+import { CreateAdvertisementsTable1793000000000 } from './database/migrations/1793000000000-CreateAdvertisementsTable';
 
 import { AuthModule } from './modules/auth/auth.module';
 import { BusinessModule } from './modules/business/business.module';
@@ -94,7 +96,7 @@ import { AdvertisementModule } from './modules/advertisement/advertisement.modul
         Department,
         Advertisement,
       ],
-      migrations: [process.env.NODE_ENV === 'production' ? 'dist/database/migrations/*.js' : 'src/database/migrations/*.ts'],
+      migrations: [AddTrackingAndTimestampsToOrders1792000000000, CreateAdvertisementsTable1793000000000],
       migrationsRun: true,
       synchronize: process.env.NODE_ENV === 'development',
       logging: process.env.NODE_ENV === 'development',
