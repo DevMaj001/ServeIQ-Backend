@@ -42,10 +42,10 @@ export class User {
   email: string;
 
   @Column({ nullable: true })
-  phone: string;
+  phone: string | null;
 
   @Column({ nullable: true })
-  avatar_url: string;
+  avatar_url: string | null;
 
   @Column()
   password_hash: string;
@@ -58,7 +58,7 @@ export class User {
 
   @Index()
   @Column({ type: 'uuid', nullable: true })
-  role_id: string;
+  role_id: string | null;
 
   @ManyToOne(() => Role)
   @JoinColumn({ name: 'role_id' })
