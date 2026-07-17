@@ -135,7 +135,7 @@ export class UserService {
   async findAllWaiters(branchId: string, pagination?: { page: number; per_page: number }, roleFilter?: string) {
     const where: any = { branch_id: branchId };
     if (roleFilter === 'all') {
-      where.role = In([UserRole.WAITER, UserRole.SUPERVISOR]);
+      where.role = In([UserRole.WAITER, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.CHEF]);
     } else {
       where.role = UserRole.WAITER;
     }
