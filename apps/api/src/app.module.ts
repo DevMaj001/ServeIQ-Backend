@@ -94,6 +94,7 @@ import { AdvertisementModule } from './modules/advertisement/advertisement.modul
         Department,
         Advertisement,
       ],
+      migrations: [process.env.NODE_ENV === 'production' ? 'dist/database/migrations/*.js' : 'src/database/migrations/*.ts'],
       migrationsRun: true,
       synchronize: process.env.NODE_ENV === 'development',
       logging: process.env.NODE_ENV === 'development',
