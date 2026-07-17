@@ -2,6 +2,7 @@ import { Controller, Get, Param, Logger, Req, NotFoundException } from '@nestjs/
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { Request } from 'express';
+import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
 import { TrackingService } from './tracking.service';
 
 @ApiTags('Tracking')
@@ -12,6 +13,7 @@ export class TrackingController {
   constructor(private readonly trackingService: TrackingService) {}
 
   @Get(':code')
+  @SkipTransform()
   @Throttle({ default: { limit: 20, ttl: 60000 } })
   @ApiOperation({ summary: 'Get order tracking info by tracking code (no auth required)' })
   @ApiResponse({ status: 200, description: 'Order tracking info.' })

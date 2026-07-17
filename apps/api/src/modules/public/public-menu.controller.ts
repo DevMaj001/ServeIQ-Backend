@@ -68,6 +68,12 @@ export class PublicMenuController {
       select: { id: true, image_url: true, link_url: true, title: true, sort_order: true },
     });
 
-    return ads;
+    return ads.map(ad => ({
+      id: ad.id,
+      imageUrl: ad.image_url,
+      linkUrl: ad.link_url,
+      title: ad.title,
+      sortOrder: ad.sort_order,
+    }));
   }
 }
