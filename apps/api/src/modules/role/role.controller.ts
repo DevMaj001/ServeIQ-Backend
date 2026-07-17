@@ -27,7 +27,7 @@ export class RoleController {
   @ApiOperation({ summary: 'Get all permission codes for the current user' })
   async getMyPermissions(@Request() req: any): Promise<{ permissions: string[] }> {
     if (req.user.role === 'superadmin') {
-      const all = await this.permissionRepo.find({ select: ['code'] });
+      const all = await this.permissionRepo.find({ select: { code: true } });
       return { permissions: all.map(p => p.code) };
     }
 
@@ -37,7 +37,7 @@ export class RoleController {
 
     const role = await this.roleRepo.findOne({
       where: { id: req.user.role_id },
-      relations: ['permissions'],
+      relations: { permissions: true },
     });
     if (!role) return { permissions: [] };
 
@@ -51,7 +51,7 @@ export class RoleController {
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'List all roles with their permissions' })
   async listRoles(): Promise<Role[]> {
-    return this.roleRepo.find({ relations: ['permissions'] });
+    return this.roleRepo.find({ relations: { permissions: true } });
   }
 
   @Get('permissions')
@@ -76,7 +76,7 @@ export class RoleController {
     @Param('id') id: string,
     @Body() body: { permissionIds: string[] },
   ): Promise<Role> {
-    const role = await this.roleRepo.findOne({ where: { id }, relations: ['permissions'] });
+    const role = await this.roleRepo.findOne({ where: { id }, relations: { permissions: true } });
     if (!role) throw new NotFoundException('Role not found');
     if (role.is_system && role.name === 'Owner') {
       // Owner role always has all permissions — skip update

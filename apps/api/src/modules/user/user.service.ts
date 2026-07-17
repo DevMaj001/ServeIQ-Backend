@@ -92,16 +92,16 @@ export class UserService {
         branch_id: dto.branchId,
         full_name: dto.fullName,
         email,
-        phone: dto.phone,
-        avatar_url: dto.avatar_url,
+        phone: dto.phone || null,
+        avatar_url: dto.avatar_url || null,
         password_hash: passwordHash,
         pin_hash: pinHash,
         role: targetRole as UserRole,
         role_id: pbacRole?.id || null,
         is_active: true,
-      });
+      } as any);
 
-      const savedUser = await this.userRepository.save(user);
+      const savedUser = (await this.userRepository.save(user)) as User;
 
       const auditAction =
         targetRole === UserRole.SUPERVISOR ? 'SUPERVISOR_CREATED' :
