@@ -4,12 +4,13 @@ import { Permission } from './entities/permission.entity';
 import { Role } from './entities/role.entity';
 import { RolePermission } from './entities/role-permission.entity';
 import { RoleSeedService } from './role-seed.service';
-import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { RoleController } from './role.controller';
 
 @Global()
 @Module({
   imports: [TypeOrmModule.forFeature([Permission, Role, RolePermission])],
-  providers: [RoleSeedService, PermissionsGuard],
-  exports: [TypeOrmModule, PermissionsGuard],
+  controllers: [RoleController],
+  providers: [RoleSeedService],
+  exports: [TypeOrmModule],
 })
 export class RoleModule {}

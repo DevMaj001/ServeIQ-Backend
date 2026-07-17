@@ -43,12 +43,11 @@ export class PermissionsGuard implements CanActivate {
       const userPermissionCodes = new Set(role.permissions.map(p => p.code));
       const hasAll = requiredPermissions.every(p => userPermissionCodes.has(p));
       if (hasAll) return true;
+      throw new ForbiddenException('Insufficient permissions');
     }
 
-    // Fallback: if user.role matches a system role name, check against the legacy string-based system
-    // This ensures backward compatibility during migration
-    if (user.role === 'superadmin') return true;
-
-    throw new ForbiddenException('Insufficient permissions');
+    // Migration fallback: user has no role_id (legacy) — skip PBAC check,
+    // let the existing RolesGuard handle it. New users will have role_id set.
+    return true;
   }
 }

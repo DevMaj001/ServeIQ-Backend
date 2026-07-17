@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { PermissionsGuard } from './common/guards/permissions.guard';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
@@ -150,7 +151,9 @@ import { RoleModule } from './modules/role/role.module';
   providers: [
     AppService,
     AuditService,
+    PermissionsGuard,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
 })
 export class AppModule {}
