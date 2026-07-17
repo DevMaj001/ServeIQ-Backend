@@ -193,6 +193,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role,
+      role_id: user.role_id,
       businessId: user.business_id,
       branchId: user.branch_id,
     };
@@ -206,6 +207,7 @@ export class AuthService {
         id: user.id,
         email: user.email,
         role: user.role,
+        role_id: user.role_id,
         fullName: user.full_name,
         business: user.business_id,
         branch: user.branch_id,

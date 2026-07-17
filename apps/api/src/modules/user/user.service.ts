@@ -4,6 +4,7 @@ import { Repository, In } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from './entities/user.entity';
 import { Branch } from '../branch/entities/branch.entity';
+import { Role } from '../role/entities/role.entity';
 import { UserRole } from '../../common/shared';
 import { CreateWaiterDto } from './dto/create-waiter.dto';
 import { AuditService } from '../../common/services/audit.service';
@@ -15,6 +16,8 @@ export class UserService {
     private userRepository: Repository<User>,
     @InjectRepository(Branch)
     private branchRepository: Repository<Branch>,
+    @InjectRepository(Role)
+    private roleRepository: Repository<Role>,
     private auditService: AuditService,
   ) {}
 
@@ -80,6 +83,10 @@ export class UserService {
       const needsPassword = targetRole === UserRole.MANAGER || targetRole === UserRole.CHEF;
       const passwordHash = needsPassword ? pinHash : await bcrypt.hash(Math.random().toString(36), salt);
 
+      // Look up the PBAC Role entity for this user's role
+      const roleName = targetRole.charAt(0).toUpperCase() + targetRole.slice(1);
+      const pbacRole = await this.roleRepository.findOne({ where: { name: roleName } });
+
       const user = this.userRepository.create({
         business_id: businessId,
         branch_id: dto.branchId,
@@ -90,6 +97,7 @@ export class UserService {
         password_hash: passwordHash,
         pin_hash: pinHash,
         role: targetRole as UserRole,
+        role_id: pbacRole?.id || null,
         is_active: true,
       });
 
@@ -116,6 +124,7 @@ export class UserService {
           phone: savedUser.phone,
           avatar_url: savedUser.avatar_url,
           role: savedUser.role,
+          role_id: savedUser.role_id,
           branch_id: savedUser.branch_id,
         },
         pin, // Plain PIN — shown once to admin

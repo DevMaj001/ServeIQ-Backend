@@ -11,6 +11,7 @@ import {
 } from 'typeorm';
 import { Business } from '../../business/entities/business.entity';
 import { Branch } from '../../branch/entities/branch.entity';
+import { Role } from '../../role/entities/role.entity';
 import { UserRole } from '../../../common/shared';
 
 @Entity('users')
@@ -54,6 +55,14 @@ export class User {
 
   @Column({ type: 'varchar', length: 20, default: UserRole.WAITER })
   role: UserRole;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  role_id: string;
+
+  @ManyToOne(() => Role)
+  @JoinColumn({ name: 'role_id' })
+  roleEntity: Role;
 
   @Column({ default: true })
   is_active: boolean;

@@ -33,6 +33,9 @@ import { PrintJob } from './modules/printer/print-job.entity';
 import { SyncQueue } from './modules/sync/sync.entity';
 import { Department } from './modules/department/entities/department.entity';
 import { Advertisement } from './modules/advertisement/entities/advertisement.entity';
+import { Permission } from './modules/role/entities/permission.entity';
+import { Role } from './modules/role/entities/role.entity';
+import { RolePermission } from './modules/role/entities/role-permission.entity';
 import { AddTrackingAndTimestampsToOrders1792000000000 } from './database/migrations/1792000000000-AddTrackingAndTimestampsToOrders';
 import { CreateAdvertisementsTable1793000000000 } from './database/migrations/1793000000000-CreateAdvertisementsTable';
 
@@ -60,6 +63,7 @@ import { DepartmentModule } from './modules/department/department.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { TrackingModule } from './modules/tracking/tracking.module';
 import { AdvertisementModule } from './modules/advertisement/advertisement.module';
+import { RoleModule } from './modules/role/role.module';
 
 @Module({
   imports: [
@@ -95,6 +99,9 @@ import { AdvertisementModule } from './modules/advertisement/advertisement.modul
         SyncQueue,
         Department,
         Advertisement,
+        Permission,
+        Role,
+        RolePermission,
       ],
       migrations: [AddTrackingAndTimestampsToOrders1792000000000, CreateAdvertisementsTable1793000000000],
       migrationsRun: true,
@@ -137,6 +144,7 @@ import { AdvertisementModule } from './modules/advertisement/advertisement.modul
     AuditModule,
     TrackingModule,
     AdvertisementModule,
+    RoleModule,
   ],
   controllers: [AppController],
   providers: [
