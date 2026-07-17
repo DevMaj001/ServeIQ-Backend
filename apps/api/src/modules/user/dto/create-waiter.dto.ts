@@ -2,7 +2,7 @@ import { IsNotEmpty, IsString, IsOptional, IsEmail, IsIn } from 'class-validator
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { UserRole } from '../../../common/shared';
 
-const CREATABLE_ROLES = [UserRole.WAITER, UserRole.SUPERVISOR, UserRole.MANAGER] as const;
+const CREATABLE_ROLES = [UserRole.WAITER, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.CHEF] as const;
 
 export class CreateWaiterDto {
   @ApiProperty({ example: 'Jane Waiter', description: 'Full name of the waiter' })

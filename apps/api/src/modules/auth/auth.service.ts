@@ -122,7 +122,7 @@ export class AuthService {
     }
 
     const whereClause: any = {
-      role: In([UserRole.WAITER, UserRole.SUPERVISOR]),
+      role: In([UserRole.WAITER, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.CHEF]),
       is_active: true,
     };
 
