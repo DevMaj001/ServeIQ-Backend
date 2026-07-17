@@ -39,6 +39,7 @@ import { Role } from './modules/role/entities/role.entity';
 import { RolePermission } from './modules/role/entities/role-permission.entity';
 import { AddTrackingAndTimestampsToOrders1792000000000 } from './database/migrations/1792000000000-AddTrackingAndTimestampsToOrders';
 import { CreateAdvertisementsTable1793000000000 } from './database/migrations/1793000000000-CreateAdvertisementsTable';
+import { CreatePermissionsAndRoles1794000000000 } from './database/migrations/1794000000000-CreatePermissionsAndRoles';
 
 import { AuthModule } from './modules/auth/auth.module';
 import { BusinessModule } from './modules/business/business.module';
@@ -104,7 +105,7 @@ import { RoleModule } from './modules/role/role.module';
         Role,
         RolePermission,
       ],
-      migrations: [AddTrackingAndTimestampsToOrders1792000000000, CreateAdvertisementsTable1793000000000],
+      migrations: [AddTrackingAndTimestampsToOrders1792000000000, CreateAdvertisementsTable1793000000000, CreatePermissionsAndRoles1794000000000],
       migrationsRun: true,
       synchronize: process.env.NODE_ENV === 'development',
       logging: process.env.NODE_ENV === 'development',
