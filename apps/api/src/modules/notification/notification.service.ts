@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Notification } from './entities/notification.entity';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 
@@ -35,7 +35,7 @@ export class NotificationService {
 
   async markAsRead(ids: string[], branchId: string) {
     await this.notificationRepository.update(
-      { id: ids as any, branch_id: branchId },
+      { id: In(ids), branch_id: branchId },
       { is_read: true },
     );
     return { success: true };
