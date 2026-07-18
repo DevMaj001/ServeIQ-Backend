@@ -80,8 +80,9 @@ export class RoleController {
     const role = await this.roleRepo.findOne({ where: { id }, relations: { permissions: true } });
     if (!role) throw new NotFoundException('Role not found');
     if (role.is_system && role.name === 'Owner') {
-      // Owner role always has all permissions — skip update
-      throw new BadRequestException('Cannot modify the Owner role permissions');
+      throw new BadRequestException(
+        'The Owner role is a protected system role that always has all permissions. It cannot be modified.',
+      );
     }
 
     const permissions = await this.permissionRepo.find({ where: body.permission_ids.map(id => ({ id })) });
