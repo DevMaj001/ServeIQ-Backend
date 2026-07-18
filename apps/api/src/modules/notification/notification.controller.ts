@@ -43,6 +43,14 @@ export class NotificationController {
     return this.notificationService.markAsRead(dto.ids, req.user.branchId);
   }
 
+  @Patch(':id/read')
+  @ApiOperation({ summary: 'Mark a single notification as read' })
+  @ApiParam({ name: 'id', description: 'Notification UUID' })
+  @ApiResponse({ status: 200, description: 'Marked as read.' })
+  async markOneAsRead(@Param('id') id: string, @Request() req: any) {
+    return this.notificationService.markAsRead([id], req.user.branchId);
+  }
+
   @Patch('read-all')
   @ApiOperation({ summary: 'Mark all notifications as read' })
   @ApiResponse({ status: 200, description: 'All marked as read.' })

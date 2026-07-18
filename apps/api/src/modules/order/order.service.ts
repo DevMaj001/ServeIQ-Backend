@@ -265,7 +265,7 @@ export class OrderService {
         w.full_name AS "waiterName",
         SUM(o.subtotal_kobo) AS "totalKobo",
         MIN(o.timer_ends_at) AS "timerEndsAt",
-        MIN(d.id)::text AS "departmentId",
+        (ARRAY_AGG(d.id))[1] AS "departmentId",
         MIN(d.name) AS "departmentName",
         JSON_AGG(
           JSON_BUILD_OBJECT(
