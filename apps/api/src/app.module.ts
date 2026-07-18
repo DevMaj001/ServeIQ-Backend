@@ -108,7 +108,7 @@ import { RoleModule } from './modules/role/role.module';
       migrationsRun: true,
       synchronize: false,
       logging: false,
-      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+      ssl: process.env.DB_SSL === 'true' || process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
       retryAttempts: 10,
       retryDelay: 3000,
       autoLoadEntities: true,
