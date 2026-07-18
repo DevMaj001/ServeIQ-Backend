@@ -114,7 +114,7 @@ import { RoleModule } from './modules/role/role.module';
       autoLoadEntities: true,
     }),
     ThrottlerModule.forRoot({
-      throttlers: [{ ttl: 60000, limit: 60 }],
+      throttlers: [{ ttl: 60000, limit: 300 }],
     }),
     TypeOrmModule.forFeature([AuditLog]),
     AuthModule,

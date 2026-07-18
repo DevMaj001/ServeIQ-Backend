@@ -46,6 +46,11 @@ export class BillService {
     const tab = await this.tabRepository.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
 
+    const existing = await this.billRepository.findOne({ where: { tab_id: tabId } });
+    if (existing) {
+      return existing;
+    }
+
     if (
       tab.waiter_id &&
       userId &&
