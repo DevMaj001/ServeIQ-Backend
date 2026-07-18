@@ -17,10 +17,12 @@ import { UserRole } from '../common/shared';
 const AppDataSource = new DataSource({
   type: 'postgres',
   url: process.env.DATABASE_URL,
-  entities: [Business, Branch, User, RestaurantTable, MenuItem, Tab, Subscription, Department],
+  entities: ['src/modules/**/*.entity.ts'],
   synchronize: false,
   logging: true,
-  ssl: { rejectUnauthorized: false },
+  ssl: process.env.NODE_ENV === 'production' || process.env.DB_SSL === 'true'
+    ? { rejectUnauthorized: false }
+    : false,
 });
 
 async function seed() {
@@ -52,7 +54,6 @@ async function seed() {
     name: 'Demo Restaurant',
     slug: 'demo-restaurant',
     type: 'restaurant',
-    owner_id: 'pending',
     email: 'owner@demo.com',
   });
   const savedBusiness = await businessRepo.save(business);

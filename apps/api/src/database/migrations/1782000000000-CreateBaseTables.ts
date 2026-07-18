@@ -16,7 +16,7 @@ export class CreateBaseTables1782000000000 implements MigrationInterface {
             "name" character varying NOT NULL,
             "slug" character varying NOT NULL,
             "type" "public"."businesses_type_enum" NOT NULL,
-            "owner_id" uuid NOT NULL,
+            "owner_id" uuid,
             "email" character varying NOT NULL,
             "phone" character varying,
             "address" text,

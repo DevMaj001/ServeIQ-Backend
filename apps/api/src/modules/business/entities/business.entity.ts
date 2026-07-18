@@ -23,7 +23,7 @@ export class Business {
   @Column({ type: 'enum', enum: ['bar', 'lounge', 'restaurant', 'club', 'cafe'] })
   type: string;
 
-  @Column()
+  @Column({ nullable: true })
   owner_id: string;
 
   @Column()
