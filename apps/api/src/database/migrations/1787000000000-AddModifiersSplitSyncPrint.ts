@@ -8,12 +8,12 @@ export class AddModifiersSplitSyncPrint1787000000000 implements MigrationInterfa
         await queryRunner.query(`DROP INDEX IF EXISTS "bills_tab_id_unique"`);
         await queryRunner.query(`DROP INDEX IF EXISTS "IDX_bills_tab_id"`);
         await queryRunner.query(`CREATE INDEX "IDX_bills_tab_id" ON "bills" ("tab_id")`);
-        await queryRunner.query(`ALTER TABLE "bills" ADD COLUMN "payment_status" varchar(20) NOT NULL DEFAULT 'pending'`);
-        await queryRunner.query(`ALTER TABLE "bills" ADD COLUMN "split_group" varchar(50)`);
-        await queryRunner.query(`ALTER TABLE "bills" ADD COLUMN "voided_at" timestamptz`);
+        await queryRunner.query(`ALTER TABLE "bills" ADD COLUMN IF NOT EXISTS "payment_status" varchar(20) NOT NULL DEFAULT 'pending'`);
+        await queryRunner.query(`ALTER TABLE "bills" ADD COLUMN IF NOT EXISTS "split_group" varchar(50)`);
+        await queryRunner.query(`ALTER TABLE "bills" ADD COLUMN IF NOT EXISTS "voided_at" timestamptz`);
 
         // Orders: add modifiers jsonb column
-        await queryRunner.query(`ALTER TABLE "orders" ADD COLUMN "modifiers" jsonb`);
+        await queryRunner.query(`ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "modifiers" jsonb`);
 
         // Printers table
         await queryRunner.query(`

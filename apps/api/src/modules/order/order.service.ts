@@ -246,37 +246,82 @@ export class OrderService {
     });
   }
 
-  async findPendingByBranch(branchId: string) {
-    const tabs = await this.tabRepository.find({ where: { branch_id: branchId } });
-    const tabIds = tabs.map(t => t.id);
-    if (tabIds.length === 0) return [];
+  private async findGroupedOrdersByBranch(
+    branchId: string,
+    statuses: OrderStatus[],
+    orderBy: 'created_at' | 'timer_ends_at',
+  ): Promise<any[]> {
+    const orderClause = orderBy === 'timer_ends_at'
+      ? 'MIN(o.timer_ends_at) ASC NULLS LAST'
+      : 'MIN(o.created_at) ASC';
 
-    return this.orderRepository.find({
-      where: { tab_id: In(tabIds), order_status: OrderStatus.PENDING_SUPERVISOR_APPROVAL },
-      order: { created_at: 'ASC' },
-    });
+    const sql = `
+      SELECT
+        o.tab_id::text AS "tabId",
+        o.created_at AS "createdAt",
+        t.table_id::text AS "tableId",
+        tbl.table_number AS "tableNumber",
+        t.waiter_id::text AS "waiterId",
+        w.full_name AS "waiterName",
+        SUM(o.subtotal_kobo) AS "totalKobo",
+        MIN(o.timer_ends_at) AS "timerEndsAt",
+        MIN(d.id)::text AS "departmentId",
+        MIN(d.name) AS "departmentName",
+        JSON_AGG(
+          JSON_BUILD_OBJECT(
+            'id', o.id,
+            'menuItemId', o.menu_item_id,
+            'menuItemName', mi.name,
+            'quantity', o.quantity,
+            'unitPriceKobo', o.unit_price_kobo,
+            'subtotalKobo', o.subtotal_kobo,
+            'notes', o.notes,
+            'modifiers', o.modifiers,
+            'orderStatus', o.order_status,
+            'timerEndsAt', o.timer_ends_at,
+            'trackingCode', o.tracking_code,
+            'declineReason', o.decline_reason,
+            'createdAt', o.created_at
+          ) ORDER BY o.created_at
+        ) AS items
+      FROM orders o
+      JOIN tabs t ON t.id = o.tab_id
+      LEFT JOIN tables tbl ON tbl.id = t.table_id
+      LEFT JOIN users w ON w.id = t.waiter_id
+      LEFT JOIN menu_items mi ON mi.id = o.menu_item_id
+      LEFT JOIN departments d ON d.id = o.assigned_department
+      WHERE t.branch_id = $1
+        AND o.order_status = ANY($2::text[])
+      GROUP BY o.tab_id, o.created_at, t.table_id, tbl.table_number, t.waiter_id, w.full_name
+      ORDER BY ${orderClause}
+    `;
+
+    const rows = await this.dataSource.query(sql, [branchId, statuses]);
+    return rows;
+  }
+
+  async findPendingByBranch(branchId: string) {
+    return this.findGroupedOrdersByBranch(
+      branchId,
+      [OrderStatus.PENDING_SUPERVISOR_APPROVAL],
+      'created_at',
+    );
   }
 
   async findPreparingByBranch(branchId: string) {
-    const tabs = await this.tabRepository.find({ where: { branch_id: branchId } });
-    const tabIds = tabs.map(t => t.id);
-    if (tabIds.length === 0) return [];
-
-    return this.orderRepository.find({
-      where: { tab_id: In(tabIds), order_status: In([OrderStatus.APPROVED, OrderStatus.ASSIGNED_TO_DEPARTMENT, OrderStatus.PREPARING]) },
-      order: { timer_ends_at: 'ASC' },
-    });
+    return this.findGroupedOrdersByBranch(
+      branchId,
+      [OrderStatus.APPROVED, OrderStatus.ASSIGNED_TO_DEPARTMENT, OrderStatus.PREPARING],
+      'timer_ends_at',
+    );
   }
 
   async findReadyForPickupByBranch(branchId: string) {
-    const tabs = await this.tabRepository.find({ where: { branch_id: branchId } });
-    const tabIds = tabs.map(t => t.id);
-    if (tabIds.length === 0) return [];
-
-    return this.orderRepository.find({
-      where: { tab_id: In(tabIds), order_status: OrderStatus.READY_FOR_PICKUP },
-      order: { timer_ends_at: 'ASC' },
-    });
+    return this.findGroupedOrdersByBranch(
+      branchId,
+      [OrderStatus.READY_FOR_PICKUP],
+      'timer_ends_at',
+    );
   }
 
   async expireTimers() {

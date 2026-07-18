@@ -6,14 +6,14 @@ export class AddTaxAndIdempotencyToBills1786000000000 implements MigrationInterf
     public async up(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(`
             ALTER TABLE "bills"
-            ADD COLUMN "tax_kobo" integer NOT NULL DEFAULT 0
+            ADD COLUMN IF NOT EXISTS "tax_kobo" integer NOT NULL DEFAULT 0
         `);
         await queryRunner.query(`
             ALTER TABLE "bills"
-            ADD COLUMN "idempotency_key" varchar NULL
+            ADD COLUMN IF NOT EXISTS "idempotency_key" varchar NULL
         `);
         await queryRunner.query(`
-            CREATE UNIQUE INDEX "IDX_bills_idempotency_key" ON "bills" ("idempotency_key")
+            CREATE UNIQUE INDEX IF NOT EXISTS "IDX_bills_idempotency_key" ON "bills" ("idempotency_key")
             WHERE "idempotency_key" IS NOT NULL
         `);
     }

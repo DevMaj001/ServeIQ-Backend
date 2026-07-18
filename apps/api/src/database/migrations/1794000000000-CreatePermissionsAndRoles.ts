@@ -29,11 +29,9 @@ export class CreatePermissionsAndRoles1794000000000 implements MigrationInterfac
         `);
         await queryRunner.query(`
             CREATE TABLE IF NOT EXISTS "role_permissions" (
-                "id" uuid NOT NULL DEFAULT gen_random_uuid(),
                 "role_id" uuid NOT NULL,
                 "permission_id" uuid NOT NULL,
-                "created_at" TIMESTAMP NOT NULL DEFAULT now(),
-                CONSTRAINT "PK_role_permissions" PRIMARY KEY ("id")
+                CONSTRAINT "PK_role_permissions" PRIMARY KEY ("role_id", "permission_id")
             )
         `);
         await queryRunner.query(`

@@ -5,14 +5,11 @@ export class RemoveIngredientLayer1785000000000 implements MigrationInterface {
 
     public async up(queryRunner: QueryRunner): Promise<void> {
         // === STEP 1: Add stock columns to menu_items ===
-        await queryRunner.query(`
-            ALTER TABLE "menu_items"
-            ADD COLUMN "quantity_in_stock" decimal(12,3) NOT NULL DEFAULT 0,
-            ADD COLUMN "reorder_level" decimal(12,3) NOT NULL DEFAULT 0,
-            ADD COLUMN "cost_price_kobo" integer,
-            ADD COLUMN "track_stock" boolean NOT NULL DEFAULT true,
-            ADD COLUMN "supplier_id" uuid
-        `);
+        await queryRunner.query(`ALTER TABLE "menu_items" ADD COLUMN IF NOT EXISTS "quantity_in_stock" decimal(12,3) NOT NULL DEFAULT 0`);
+        await queryRunner.query(`ALTER TABLE "menu_items" ADD COLUMN IF NOT EXISTS "reorder_level" decimal(12,3) NOT NULL DEFAULT 0`);
+        await queryRunner.query(`ALTER TABLE "menu_items" ADD COLUMN IF NOT EXISTS "cost_price_kobo" integer`);
+        await queryRunner.query(`ALTER TABLE "menu_items" ADD COLUMN IF NOT EXISTS "track_stock" boolean NOT NULL DEFAULT true`);
+        await queryRunner.query(`ALTER TABLE "menu_items" ADD COLUMN IF NOT EXISTS "supplier_id" uuid`);
 
         await queryRunner.query(`
             CREATE INDEX IF NOT EXISTS "IDX_menu_items_supplier_id"
@@ -21,24 +18,32 @@ export class RemoveIngredientLayer1785000000000 implements MigrationInterface {
 
         // Add FK constraint for supplier_id
         await queryRunner.query(`
-            ALTER TABLE "menu_items"
-            ADD CONSTRAINT "FK_menu_items_supplier_id"
-            FOREIGN KEY ("supplier_id") REFERENCES "suppliers"("id")
-            ON DELETE NO ACTION ON UPDATE NO ACTION
+            DO $$ BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_menu_items_supplier_id') THEN
+                    ALTER TABLE "menu_items"
+                    ADD CONSTRAINT "FK_menu_items_supplier_id"
+                    FOREIGN KEY ("supplier_id") REFERENCES "suppliers"("id")
+                    ON DELETE NO ACTION ON UPDATE NO ACTION;
+                END IF;
+            END $$;
         `);
 
         // === STEP 2: Repoint stock_movements ===
         // Add menu_item_id column to the existing stock_movements table alongside ingredient_id
         await queryRunner.query(`
             ALTER TABLE "stock_movements"
-            ADD COLUMN "menu_item_id" uuid
+            ADD COLUMN IF NOT EXISTS "menu_item_id" uuid
         `);
 
         await queryRunner.query(`
-            ALTER TABLE "stock_movements"
-            ADD CONSTRAINT "FK_stock_movements_menu_item_id"
-            FOREIGN KEY ("menu_item_id") REFERENCES "menu_items"("id")
-            ON DELETE NO ACTION ON UPDATE NO ACTION
+            DO $$ BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_stock_movements_menu_item_id') THEN
+                    ALTER TABLE "stock_movements"
+                    ADD CONSTRAINT "FK_stock_movements_menu_item_id"
+                    FOREIGN KEY ("menu_item_id") REFERENCES "menu_items"("id")
+                    ON DELETE NO ACTION ON UPDATE NO ACTION;
+                END IF;
+            END $$;
         `);
 
         // New partial unique index for order_consumption dedup on menu_item_id

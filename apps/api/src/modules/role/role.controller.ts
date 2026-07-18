@@ -75,7 +75,7 @@ export class RoleController {
   @ApiResponse({ status: 404, description: 'Role not found.' })
   async updateRolePermissions(
     @Param('id') id: string,
-    @Body() body: { permissionIds: string[] },
+    @Body() body: { permission_ids: string[] },
   ): Promise<Role> {
     const role = await this.roleRepo.findOne({ where: { id }, relations: { permissions: true } });
     if (!role) throw new NotFoundException('Role not found');
@@ -84,7 +84,7 @@ export class RoleController {
       throw new BadRequestException('Cannot modify the Owner role permissions');
     }
 
-    const permissions = await this.permissionRepo.find({ where: body.permissionIds.map(id => ({ id })) });
+    const permissions = await this.permissionRepo.find({ where: body.permission_ids.map(id => ({ id })) });
     role.permissions = permissions;
     return this.roleRepo.save(role);
   }

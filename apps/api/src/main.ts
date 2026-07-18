@@ -8,9 +8,14 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppDataSource } from './database/data-source';
 import { ensureTables } from './database/ensure-tables';
 async function bootstrap() {
-  const ds = await AppDataSource.initialize();
-  await ensureTables(ds).catch(e => console.error('[bootstrap] ensureTables error:', e));
-  await ds.destroy().catch(() => {});
+  let ds;
+  try {
+    ds = await AppDataSource.initialize();
+    await ensureTables(ds).catch(e => console.error('[bootstrap] ensureTables error:', e));
+    await ds.destroy().catch(() => {});
+  } catch (e) {
+    console.error('[bootstrap] DataSource init error (non-fatal):', e);
+  }
 
   const app = await NestFactory.create(AppModule);
 

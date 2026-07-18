@@ -36,7 +36,7 @@ import { Department } from './modules/department/entities/department.entity';
 import { Advertisement } from './modules/advertisement/entities/advertisement.entity';
 import { Permission } from './modules/role/entities/permission.entity';
 import { Role } from './modules/role/entities/role.entity';
-import { RolePermission } from './modules/role/entities/role-permission.entity';
+import { CreateBaseTables1782000000000 } from './database/migrations/1782000000000-CreateBaseTables';
 import { AddTrackingAndTimestampsToOrders1792000000000 } from './database/migrations/1792000000000-AddTrackingAndTimestampsToOrders';
 import { CreateAdvertisementsTable1793000000000 } from './database/migrations/1793000000000-CreateAdvertisementsTable';
 import { CreatePermissionsAndRoles1794000000000 } from './database/migrations/1794000000000-CreatePermissionsAndRoles';
@@ -103,13 +103,12 @@ import { RoleModule } from './modules/role/role.module';
         Advertisement,
         Permission,
         Role,
-        RolePermission,
       ],
-      migrations: [AddTrackingAndTimestampsToOrders1792000000000, CreateAdvertisementsTable1793000000000, CreatePermissionsAndRoles1794000000000],
+      migrations: [CreateBaseTables1782000000000, AddTrackingAndTimestampsToOrders1792000000000, CreateAdvertisementsTable1793000000000, CreatePermissionsAndRoles1794000000000],
       migrationsRun: true,
       synchronize: process.env.NODE_ENV === 'development',
       logging: process.env.NODE_ENV === 'development',
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
       retryAttempts: 10,
       retryDelay: 3000,
       autoLoadEntities: true,
