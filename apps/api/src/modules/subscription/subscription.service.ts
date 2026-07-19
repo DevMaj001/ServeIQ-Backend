@@ -67,8 +67,16 @@ export class SubscriptionService {
     let customerCode = subscription?.paystack_customer_code ?? null;
 
     if (!customerCode) {
-      const customerResp = await this.paystack.customer.create({ email: customerEmail });
-      customerCode = customerResp?.data?.customer_code;
+      let customerResp;
+      try {
+        customerResp = await this.paystack.customer.create({ email: customerEmail });
+      } catch (e) {
+        throw new BadRequestException(`Paystack customer creation failed: ${e.message}`);
+      }
+      if (!customerResp?.status) {
+        throw new BadRequestException(customerResp?.message || 'Failed to create Paystack customer');
+      }
+      customerCode = customerResp.data?.customer_code;
       if (!customerCode) {
         throw new BadRequestException('Failed to create Paystack customer');
       }
@@ -79,15 +87,20 @@ export class SubscriptionService {
       throw new BadRequestException('Plan has not been configured with a Paystack plan code');
     }
 
-    const initializeResp = await this.paystack.transaction.initialize({
-      amount: plan.price,
-      email: customerEmail,
-      plan: paystackPlanCode,
-      channels: ['card', 'bank', 'ussd', 'qr', 'mobile_money', 'bank_transfer'],
-    });
+    let initializeResp;
+    try {
+      initializeResp = await this.paystack.transaction.initialize({
+        amount: plan.price,
+        email: customerEmail,
+        plan: paystackPlanCode,
+        channels: ['card', 'bank', 'ussd', 'qr', 'mobile_money', 'bank_transfer'],
+      });
+    } catch (e) {
+      throw new BadRequestException(`Paystack transaction initialization failed: ${e.message}`);
+    }
 
-    if (!initializeResp?.data) {
-      throw new BadRequestException('Failed to initialize Paystack transaction');
+    if (!initializeResp?.status) {
+      throw new BadRequestException(initializeResp?.message || 'Failed to initialize Paystack transaction');
     }
 
     if (subscription) {
