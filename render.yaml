@@ -15,7 +15,7 @@ services:
       - key: DB_SSL
         value: "true"
       - key: DATABASE_URL
-        value: postgresql://postgres:aJ99ObW0ZcFVgXYM@db.jynvpfmduwfqnifuepxn.supabase.co:6543/postgres?sslmode=require&pgbouncer=true
+        value: postgresql://postgres.jynvpfmduwfqnifuepxn:aJ99ObW0ZcFVgXYM@aws-1-us-west-2.pooler.supabase.com:6543/postgres
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_EXPIRES_IN

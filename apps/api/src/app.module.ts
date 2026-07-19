@@ -41,8 +41,6 @@ import { AddTrackingAndTimestampsToOrders1792000000000 } from './database/migrat
 import { CreateAdvertisementsTable1793000000000 } from './database/migrations/1793000000000-CreateAdvertisementsTable';
 import { CreatePermissionsAndRoles1794000000000 } from './database/migrations/1794000000000-CreatePermissionsAndRoles';
 import { CreatePlansAndSubscriptions1784000000000 } from './database/migrations/1784000000000-CreatePlansAndSubscriptions';
-import { BackfillUserRoleId1752892800000 } from './database/migrations/1752892800000-BackfillUserRoleId';
-import { MakeUserRoleIdNotNull1752892800001 } from './database/migrations/1752892800001-MakeUserRoleIdNotNull';
 
 import { AuthModule } from './modules/auth/auth.module';
 import { BusinessModule } from './modules/business/business.module';
@@ -107,7 +105,7 @@ import { RoleModule } from './modules/role/role.module';
         Permission,
         Role,
       ],
-      migrations: [CreateBaseTables1782000000000, BackfillUserRoleId1752892800000, MakeUserRoleIdNotNull1752892800001, CreatePlansAndSubscriptions1784000000000, AddTrackingAndTimestampsToOrders1792000000000, CreateAdvertisementsTable1793000000000, CreatePermissionsAndRoles1794000000000],
+      migrations: [CreateBaseTables1782000000000, CreatePlansAndSubscriptions1784000000000, AddTrackingAndTimestampsToOrders1792000000000, CreateAdvertisementsTable1793000000000, CreatePermissionsAndRoles1794000000000],
       migrationsRun: true,
       synchronize: false,
       logging: false,
