@@ -42,6 +42,7 @@ import { CreateAdvertisementsTable1793000000000 } from './database/migrations/17
 import { CreatePermissionsAndRoles1794000000000 } from './database/migrations/1794000000000-CreatePermissionsAndRoles';
 import { CreatePlansAndSubscriptions1784000000000 } from './database/migrations/1784000000000-CreatePlansAndSubscriptions';
 import { CreateNotificationsTable1784000000003 } from './database/migrations/1784000000003-CreateNotificationsTable';
+import { CreateDepartmentsTable1790000000000 } from './database/migrations/1790000000000-CreateDepartmentsTable';
 
 import { AuthModule } from './modules/auth/auth.module';
 import { BusinessModule } from './modules/business/business.module';
@@ -106,7 +107,7 @@ import { RoleModule } from './modules/role/role.module';
         Permission,
         Role,
       ],
-      migrations: [CreateBaseTables1782000000000, CreatePlansAndSubscriptions1784000000000, AddTrackingAndTimestampsToOrders1792000000000, CreateAdvertisementsTable1793000000000, CreatePermissionsAndRoles1794000000000, CreateNotificationsTable1784000000003],
+      migrations: [CreateBaseTables1782000000000, CreatePlansAndSubscriptions1784000000000, AddTrackingAndTimestampsToOrders1792000000000, CreateAdvertisementsTable1793000000000, CreatePermissionsAndRoles1794000000000, CreateNotificationsTable1784000000003, CreateDepartmentsTable1790000000000],
       migrationsRun: true,
       synchronize: false,
       logging: false,
