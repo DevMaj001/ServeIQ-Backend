@@ -13,9 +13,7 @@ services:
       - key: CORS_ORIGIN
         value: https://serve-iq-one.vercel.app,https://serveiq-admin.vercel.app
       - key: DATABASE_URL
-        fromDatabase:
-          name: serveiq-db
-          property: connectionString
+        value: postgresql://postgres:aJ99ObW0ZcFVgXYM@db.jynvpfmduwfqnifuepxn.supabase.co:5432/postgres
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_EXPIRES_IN
