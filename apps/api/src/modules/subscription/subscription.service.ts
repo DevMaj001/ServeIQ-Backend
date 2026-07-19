@@ -42,6 +42,10 @@ export class SubscriptionService {
   }
 
   async initialize(branchId: string, planId: string) {
+    if (!this.paystack) {
+      throw new BadRequestException('Payment gateway (Paystack) is not configured');
+    }
+
     const plan = await this.planRepo.findOne({ where: { id: planId, is_active: true } });
     if (!plan) {
       throw new NotFoundException('Plan not found or inactive');
@@ -64,10 +68,13 @@ export class SubscriptionService {
 
     if (!customerCode) {
       const customerResp = await this.paystack.customer.create({ email: customerEmail });
-      customerCode = customerResp.data.customer_code;
+      customerCode = customerResp?.data?.customer_code;
+      if (!customerCode) {
+        throw new BadRequestException('Failed to create Paystack customer');
+      }
     }
 
-    let paystackPlanCode = plan.paystack_plan_code;
+    const paystackPlanCode = plan.paystack_plan_code;
     if (!paystackPlanCode) {
       throw new BadRequestException('Plan has not been configured with a Paystack plan code');
     }
@@ -78,6 +85,10 @@ export class SubscriptionService {
       plan: paystackPlanCode,
       channels: ['card', 'bank', 'ussd', 'qr', 'mobile_money', 'bank_transfer'],
     });
+
+    if (!initializeResp?.data) {
+      throw new BadRequestException('Failed to initialize Paystack transaction');
+    }
 
     if (subscription) {
       subscription.plan_id = planId;
