@@ -27,7 +27,7 @@ export class RoleController {
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Get all permission codes for the current user' })
   async getMyPermissions(@Request() req: any): Promise<{ permissions: string[] }> {
-    if (req.user.role === 'superadmin') {
+    if (req.user.role === 'superadmin' || req.user.role === 'owner') {
       const all = await this.permissionRepo.find({ select: { code: true } });
       return { permissions: all.map(p => p.code) };
     }
