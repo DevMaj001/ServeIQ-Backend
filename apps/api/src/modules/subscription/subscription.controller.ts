@@ -5,9 +5,9 @@ import { InitializeSubscriptionDto } from './dto/initialize-subscription.dto';
 import { AdminGrantDto } from './dto/admin-grant.dto';
 import { AdminExtendGraceDto } from './dto/admin-extend-grace.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { UserRole } from '../../common/shared';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { PERMISSIONS } from '../role/permission-codes';
 
 @ApiTags('Subscriptions')
 @Controller({ path: 'subscriptions', version: '1' })
@@ -44,8 +44,8 @@ export class SubscriptionController {
   }
 
   @Post('cancel')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.MANAGE_SUBSCRIPTION)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Cancel subscription (Owner only)' })
   @ApiResponse({ status: 200, description: 'Subscription marked as canceled' })
@@ -55,8 +55,8 @@ export class SubscriptionController {
   }
 
   @Post('admin/grant')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPERADMIN)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.MANAGE_SUBSCRIPTION)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Manually grant or extend a subscription (superadmin only)' })
   @ApiResponse({ status: 200, description: 'Subscription granted or extended' })
@@ -65,8 +65,8 @@ export class SubscriptionController {
   }
 
   @Post('admin/extend-grace')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.SUPERADMIN)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.MANAGE_SUBSCRIPTION)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Extend grace period for a branch subscription (superadmin only)' })
   @ApiResponse({ status: 200, description: 'Grace period extended' })

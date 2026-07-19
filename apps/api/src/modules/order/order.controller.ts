@@ -103,8 +103,8 @@ export class OrderController {
 
   @Post(':id/approve')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER)
-  @ApiOperation({ summary: 'Approve a pending order (Supervisor only) — requires department + prep time' })
+  @Roles(UserRole.SUPERVISOR, UserRole.OWNER)
+  @ApiOperation({ summary: 'Approve a pending order (Supervisor/Owner only) — requires department + prep time' })
   @ApiParam({ name: 'id', description: 'Order item UUID' })
   @ApiBody({ type: ApproveOrderDto })
   @ApiResponse({ status: 200, description: 'Order approved and timer started.' })

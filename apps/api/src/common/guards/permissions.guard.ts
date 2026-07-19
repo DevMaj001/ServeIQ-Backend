@@ -32,22 +32,20 @@ export class PermissionsGuard implements CanActivate {
     // super_admin bypasses all permission checks
     if (user.role === 'superadmin') return true;
 
-    // If user has a role_id, load role permissions from DB
-    if (user.role_id) {
-      const role = await this.roleRepo.findOne({
-        where: { id: user.role_id },
-        relations: { permissions: true },
-      });
-      if (!role) throw new ForbiddenException('Role not found');
-
-      const userPermissionCodes = new Set(role.permissions.map(p => p.code));
-      const hasAll = requiredPermissions.every(p => userPermissionCodes.has(p));
-      if (hasAll) return true;
-      throw new ForbiddenException('Insufficient permissions');
+    // User must have role_id — legacy fallback removed
+    if (!user.role_id) {
+      throw new ForbiddenException('User role not linked to permission system. Contact admin to update your account.');
     }
 
-    // Migration fallback: user has no role_id (legacy) — skip PBAC check,
-    // let the existing RolesGuard handle it. New users will have role_id set.
-    return true;
+    const role = await this.roleRepo.findOne({
+      where: { id: user.role_id },
+      relations: { permissions: true },
+    });
+    if (!role) throw new ForbiddenException('Role not found');
+
+    const userPermissionCodes = new Set(role.permissions.map(p => p.code));
+    const hasAll = requiredPermissions.every(p => userPermissionCodes.has(p));
+    if (hasAll) return true;
+    throw new ForbiddenException('Insufficient permissions');
   }
 }

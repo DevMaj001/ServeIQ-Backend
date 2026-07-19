@@ -102,7 +102,6 @@ const DEFAULT_ROLES: RoleDef[] = [
     description: 'Oversees daily operations',
     isSystem: true,
     permissions: [
-      PERMISSIONS.APPROVE_ORDERS,
       PERMISSIONS.DECLINE_ORDERS,
       PERMISSIONS.EDIT_ORDERS,
       PERMISSIONS.MARK_READY,
@@ -127,6 +126,7 @@ const DEFAULT_ROLES: RoleDef[] = [
       PERMISSIONS.VIEW_STAFF,
       PERMISSIONS.VIEW_TRACKING,
       PERMISSIONS.GENERATE_TRACKING,
+      PERMISSIONS.MANAGE_RESERVATIONS,
     ],
   },
   {
