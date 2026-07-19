@@ -29,8 +29,8 @@ export class PermissionsGuard implements CanActivate {
     const { user } = context.switchToHttp().getRequest();
     if (!user) return false;
 
-    // super_admin bypasses all permission checks
-    if (user.role === 'superadmin') return true;
+    // super_admin and owner bypass all permission checks
+    if (user.role === 'superadmin' || user.role === 'owner') return true;
 
     // User must have role_id — legacy fallback removed
     if (!user.role_id) {
