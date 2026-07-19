@@ -15,6 +15,7 @@ const EXCLUDED_MATCHES = [
   '/api/v1/auth/waiter-login',
   '/api/v1/auth/send-email-verification',
   '/api/v1/auth/verify-email',
+  '/api/v1/roles/my-permissions',
   '/api/v1/subscriptions/initialize',
   '/api/v1/webhooks/paystack',
 ];
