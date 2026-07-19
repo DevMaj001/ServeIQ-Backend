@@ -37,7 +37,7 @@ export class AuthService {
         name: dto.businessName,
         slug: dto.businessName.toLowerCase().replace(/ /g, '-'),
         type: dto.businessType,
-        owner_id: 'pending',
+        owner_id: null,
         email: dto.email,
         logo_url: dto.logoUrl ?? null,
         cac_document_url: dto.cacDocumentUrl ?? null,
