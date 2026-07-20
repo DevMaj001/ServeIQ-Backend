@@ -137,6 +137,18 @@ export class AuthController {
     return this.authService.waiterLogin(dto);
   }
 
+  @Post('impersonate')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Impersonate a business (super admin only)',
+    description: 'Returns a JWT scoped to the given business/branch for super admin support access.',
+  })
+  async impersonate(@Request() req: any, @Body() dto: { businessId: string; branchId?: string }) {
+    return this.authService.impersonate(req.user, dto);
+  }
+
   @Post('activate')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60000 } })

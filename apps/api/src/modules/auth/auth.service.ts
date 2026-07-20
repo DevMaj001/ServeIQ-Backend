@@ -1,4 +1,4 @@
-import { Inject, Injectable, UnauthorizedException, ConflictException, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, UnauthorizedException, ConflictException, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
@@ -166,6 +166,25 @@ export class AuthService {
     }
 
     return this.generateTokens(user);
+  }
+
+  async impersonate(currentUser: any, dto: { businessId: string; branchId?: string }) {
+    if (currentUser.role !== 'super_admin' && currentUser.role !== 'superadmin') {
+      throw new ForbiddenException('Only super administrators can impersonate businesses');
+    }
+    if (!dto.businessId) {
+      throw new BadRequestException('businessId is required');
+    }
+    const payload = {
+      sub: currentUser.userId,
+      email: currentUser.email,
+      role: 'super_admin',
+      businessId: dto.businessId,
+      branchId: dto.branchId || dto.businessId,
+    };
+    return {
+      access_token: this.jwtService.sign(payload),
+    };
   }
 
   private async generateRefreshToken(userId: string): Promise<string | null> {
