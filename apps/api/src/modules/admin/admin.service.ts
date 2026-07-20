@@ -98,6 +98,11 @@ export class AdminService {
       active_subscriptions: activeSubscriptions,
       expired_subscriptions: expiredSubscriptions,
       past_due_subscriptions: pastDueSubscriptions,
+      subscription_active: activeSubscriptions,
+      subscription_expired: expiredSubscriptions,
+      subscription_past_due: pastDueSubscriptions,
+      subscription_trialing: statusBreakdown.find(r => r.status === 'trialing')?.count || 0,
+      subscription_canceled: statusBreakdown.find(r => r.status === 'canceled')?.count || 0,
       subscription_breakdown: planBreakdown.map((r: any) => ({
         plan: r.plan || 'free_trial',
         count: Number(r.count),
@@ -182,22 +187,55 @@ export class AdminService {
       ownerMap[o.business_id] = o;
     }
 
+    const branchSubscriptionMap: Record<string, { status: string; plan: string | null; expires_at: string | null }> = {};
+    if (businessIds.length > 0) {
+      const branches = await this.branchRepo
+        .createQueryBuilder('br')
+        .select(['br.id', 'br.business_id'])
+        .where('br.business_id IN (:...ids)', { ids: businessIds })
+        .getMany();
+      const branchIds = branches.map(br => br.id);
+      if (branchIds.length > 0) {
+        const subscriptions = await this.subscriptionRepo
+          .createQueryBuilder('s')
+          .leftJoinAndSelect('s.plan', 'p')
+          .where('s.branch_id IN (:...branchIds)', { branchIds })
+          .getMany();
+        const branchToBusiness = new Map(branches.map(br => [br.id, br.business_id]));
+        for (const sub of subscriptions) {
+          const businessId = branchToBusiness.get(sub.branch_id);
+          if (businessId) {
+            branchSubscriptionMap[businessId] = {
+              status: sub.status,
+              plan: sub.plan?.name || 'free_trial',
+              expires_at: sub.current_period_end ? sub.current_period_end.toISOString() : null,
+            };
+          }
+        }
+      }
+    }
+
     return {
-      data: businesses.map(b => ({
-        id: b.id,
-        name: b.name,
-        slug: b.slug,
-        type: b.type,
-        email: b.email,
-        phone: b.phone,
-        is_active: b.is_active,
-        subscription_plan: b.subscription_plan,
-        owner_name: ownerMap[b.id]?.full_name || null,
-        owner_email: ownerMap[b.id]?.email || null,
-        branch_count: branchCounts[b.id] ?? 0,
-        address: b.address,
-        created_at: b.created_at,
-      })),
+      data: businesses.map(b => {
+        const sub = branchSubscriptionMap[b.id] || {};
+        return {
+          id: b.id,
+          name: b.name,
+          slug: b.slug,
+          type: b.type,
+          email: b.email,
+          phone: b.phone,
+          is_active: b.is_active,
+          subscription_plan: sub.plan || b.subscription_plan,
+          subscription_status: sub.status || null,
+          subscription_expires_at: sub.expires_at || null,
+          owner_name: ownerMap[b.id]?.full_name || null,
+          owner_email: ownerMap[b.id]?.email || null,
+          branch_count: branchCounts[b.id] ?? 0,
+          address: b.address,
+          created_at: b.created_at,
+        };
+      }),
       total,
       page: params.page,
       per_page: params.per_page,
