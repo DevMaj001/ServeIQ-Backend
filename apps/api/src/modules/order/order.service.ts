@@ -11,6 +11,8 @@ import { Department } from '../department/entities/department.entity';
 import { ApproveOrderDto } from './dto/approve-order.dto';
 import { DeclineOrderDto } from './dto/decline-order.dto';
 import { TrackingService } from '../tracking/tracking.service';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationType } from '../notification/entities/notification.entity';
 
 @Injectable()
 export class OrderService {
@@ -28,6 +30,7 @@ export class OrderService {
     private ingredientService: IngredientService,
     private auditService: AuditService,
     private trackingService: TrackingService,
+    private notificationService: NotificationService,
   ) {}
 
   async addOrderItems(tabId: string, items: any[], userId: string) {
@@ -179,6 +182,15 @@ export class OrderService {
       });
 
       return order;
+    }).then(async (savedOrder) => {
+      await this.notificationService.create({
+        branch_id: tab.branch_id,
+        type: NotificationType.ORDER_APPROVED,
+        title: 'Order Approved',
+        message: `Order ${savedOrder.id.slice(0, 8)}… approved. Tracking: ${savedOrder.tracking_code}`,
+        data: { order_id: savedOrder.id, tab_id: savedOrder.tab_id, tracking_code: savedOrder.tracking_code },
+      });
+      return savedOrder;
     });
   }
 
