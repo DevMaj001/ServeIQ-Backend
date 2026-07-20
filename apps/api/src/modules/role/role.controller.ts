@@ -1,5 +1,5 @@
 import { Controller, Get, Put, Param, Body, UseGuards, Request, NotFoundException, BadRequestException } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -26,6 +26,8 @@ export class RoleController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Get all permission codes for the current user' })
+  @ApiResponse({ status: 200 })
+  @ApiResponse({ status: 401 })
   async getMyPermissions(@Request() req: any): Promise<{ permissions: string[] }> {
     if (req.user.role === 'superadmin' || req.user.role === 'owner') {
       const all = await this.permissionRepo.find({ select: { code: true } });
@@ -51,6 +53,8 @@ export class RoleController {
   @RequirePermissions(PERMISSIONS.ASSIGN_ROLES)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'List all roles with their permissions' })
+  @ApiResponse({ status: 200 })
+  @ApiResponse({ status: 401 })
   async listRoles(): Promise<Role[]> {
     return this.roleRepo.find({ relations: { permissions: true } });
   }
@@ -61,6 +65,8 @@ export class RoleController {
   @RequirePermissions(PERMISSIONS.ASSIGN_ROLES)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'List all available permissions grouped by category' })
+  @ApiResponse({ status: 200 })
+  @ApiResponse({ status: 401 })
   async listPermissions(): Promise<Permission[]> {
     return this.permissionRepo.find({ order: { category: 'ASC', code: 'ASC' } });
   }
@@ -71,6 +77,7 @@ export class RoleController {
   @RequirePermissions(PERMISSIONS.ASSIGN_ROLES)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Update permissions for a role (Owner only)' })
+  @ApiParam({ name: 'id', description: 'Role UUID' })
   @ApiResponse({ status: 200, description: 'Permissions updated.' })
   @ApiResponse({ status: 404, description: 'Role not found.' })
   async updateRolePermissions(

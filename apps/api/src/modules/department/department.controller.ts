@@ -4,7 +4,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../../common/shared';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiParam } from '@nestjs/swagger';
 
 @ApiTags('Departments')
 @ApiBearerAuth('access-token')
@@ -17,6 +17,8 @@ export class DepartmentController {
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERVISOR)
   @ApiOperation({ summary: 'List departments for the branch' })
   @ApiQuery({ name: 'include_inactive', required: false, type: Boolean })
+  @ApiResponse({ status: 200 })
+  @ApiResponse({ status: 401 })
   async findAll(@Request() req: any, @Query('include_inactive') includeInactive?: string) {
     return this.departmentService.findAll(req.user.branchId, includeInactive === 'true');
   }
@@ -24,6 +26,8 @@ export class DepartmentController {
   @Post()
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiOperation({ summary: 'Create a new department' })
+  @ApiResponse({ status: 200 })
+  @ApiResponse({ status: 401 })
   async create(@Request() req: any, @Body('name') name: string) {
     return this.departmentService.create(req.user.branchId, name);
   }
@@ -31,6 +35,9 @@ export class DepartmentController {
   @Patch(':id')
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiOperation({ summary: 'Update a department' })
+  @ApiParam({ name: 'id', description: 'Department UUID' })
+  @ApiResponse({ status: 200 })
+  @ApiResponse({ status: 401 })
   async update(@Param('id') id: string, @Body() data: { name?: string; is_active?: boolean }) {
     return this.departmentService.update(id, data);
   }
@@ -38,6 +45,9 @@ export class DepartmentController {
   @Delete(':id')
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiOperation({ summary: 'Delete a department' })
+  @ApiParam({ name: 'id', description: 'Department UUID' })
+  @ApiResponse({ status: 200 })
+  @ApiResponse({ status: 401 })
   async remove(@Param('id') id: string) {
     return this.departmentService.remove(id);
   }

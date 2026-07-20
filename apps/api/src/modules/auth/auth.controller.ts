@@ -74,6 +74,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 3, ttl: 3600000 } })
   @ApiOperation({ summary: 'Request a password reset token' })
+  @ApiResponse({ status: 200, description: 'OK' })
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.authService.forgotPassword(dto.email);
   }
@@ -82,6 +83,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 3, ttl: 3600000 } })
   @ApiOperation({ summary: 'Reset password using reset token' })
+  @ApiResponse({ status: 200, description: 'OK' })
   async resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto.token, dto.password);
   }
@@ -91,6 +93,7 @@ export class AuthController {
   @ApiBearerAuth('access-token')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send email verification code' })
+  @ApiResponse({ status: 200, description: 'OK' })
   async sendVerification(@Request() req: any) {
     return this.authService.sendEmailVerification(req.user.userId);
   }
@@ -100,6 +103,7 @@ export class AuthController {
   @ApiBearerAuth('access-token')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify email with OTP code' })
+  @ApiResponse({ status: 200, description: 'OK' })
   async verifyEmail(@Request() req: any, @Body() body: { otp: string }) {
     return this.authService.verifyEmail(req.user.userId, body.otp);
   }
@@ -145,6 +149,7 @@ export class AuthController {
     summary: 'Impersonate a business (super admin only)',
     description: 'Returns a JWT scoped to the given business/branch for super admin support access.',
   })
+  @ApiResponse({ status: 200, description: 'OK' })
   async impersonate(@Request() req: any, @Body() dto: { businessId: string; branchId?: string }) {
     return this.authService.impersonate(req.user, dto);
   }

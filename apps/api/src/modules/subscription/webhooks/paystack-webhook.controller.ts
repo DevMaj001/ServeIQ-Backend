@@ -1,12 +1,16 @@
 import { Controller, Post, Req, Res, HttpStatus } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { SubscriptionService } from '../subscription.service';
 
+@ApiTags('Webhooks')
 @Controller({ path: 'webhooks/paystack', version: '1' })
 export class PaystackWebhookController {
   constructor(private readonly subscriptionService: SubscriptionService) {}
 
   @Post()
+  @ApiOperation({ summary: 'Handle Paystack webhook events' })
+  @ApiResponse({ status: 200, description: 'Webhook processed' })
   async handleWebhook(@Req() req: Request, @Res() res: Response) {
     const signature = req.headers['x-paystack-signature'] as string;
     const rawBody = JSON.stringify(req.body);

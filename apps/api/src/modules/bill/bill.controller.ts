@@ -37,6 +37,8 @@ export class BillController {
   @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER)
   @ApiOperation({ summary: 'Apply a discount to a bill (Supervisor/Manager/Owner only)' })
   @ApiParam({ name: 'tabId' })
+  @ApiResponse({ status: 200, description: 'OK' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async applyDiscount(@Param('tabId') tabId: string, @Request() req: any, @Body() dto: ApplyDiscountDto) {
     return this.billService.applyDiscount(tabId, req.user.branchId, dto);
   }
@@ -59,6 +61,8 @@ export class BillController {
   @Post('tab/:tabId/split-evenly')
   @ApiOperation({ summary: 'Split the bill evenly among N ways' })
   @ApiParam({ name: 'tabId' })
+  @ApiResponse({ status: 200, description: 'OK' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async splitEvenly(@Param('tabId') tabId: string, @Request() req: any, @Body() body: { splits: number }) {
     return this.billService.splitEvenly(tabId, req.user.userId, req.user.role, body.splits);
   }
@@ -66,6 +70,8 @@ export class BillController {
   @Post('tab/:tabId/split-by-item')
   @ApiOperation({ summary: 'Split the bill by assigning items to each split' })
   @ApiParam({ name: 'tabId' })
+  @ApiResponse({ status: 200, description: 'OK' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async splitByItem(@Param('tabId') tabId: string, @Request() req: any, @Body() body: { allocations: { order_ids: string[]; label?: string }[] }) {
     return this.billService.splitByItem(tabId, req.user.userId, req.user.role, body.allocations);
   }
@@ -73,6 +79,8 @@ export class BillController {
   @Get('tab/:tabId/splits')
   @ApiOperation({ summary: 'Get all split bills for a tab' })
   @ApiParam({ name: 'tabId' })
+  @ApiResponse({ status: 200, description: 'OK' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getSplitBills(@Param('tabId') tabId: string, @Request() req: any) {
     return this.billService.getSplitBills(tabId, req.user.branchId);
   }
@@ -81,6 +89,8 @@ export class BillController {
   @ApiOperation({ summary: 'Pay an individual split bill' })
   @ApiParam({ name: 'tabId' })
   @ApiParam({ name: 'billId' })
+  @ApiResponse({ status: 200, description: 'OK' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async paySplit(@Param('tabId') tabId: string, @Param('billId') billId: string, @Request() req: any, @Body() paymentDto: ProcessPaymentDto) {
     return this.billService.processSplitPayment(tabId, billId, req.user.userId, req.user.role, paymentDto);
   }

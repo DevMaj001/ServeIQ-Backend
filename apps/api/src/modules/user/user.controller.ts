@@ -10,7 +10,7 @@ import {
   Delete,
   Query,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -19,7 +19,6 @@ import { UserService } from './user.service';
 import { CreateWaiterDto } from './dto/create-waiter.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { User } from './entities/user.entity';
-import { ApiResponse } from '@nestjs/swagger';
 import { getPaginationParams, paginate } from '../../common/pagination';
 
 @ApiTags('User')
@@ -83,6 +82,7 @@ export class UserController {
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Reset staff PIN (Owner/Manager only) — works for waiters, supervisors, managers, and chefs' })
+  @ApiParam({ name: 'id', description: 'User UUID' })
   async resetWaiterPin(
     @Request() req: { user: { businessId: string } },
     @Param('id') id: string,
@@ -95,6 +95,7 @@ export class UserController {
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Update a user/waiter profile (Owner/Manager only)' })
+  @ApiParam({ name: 'id', description: 'User UUID' })
   @ApiResponse({ status: 200, description: 'User updated.' })
   @ApiResponse({ status: 404, description: 'User not found.' })
   async update(
@@ -110,6 +111,7 @@ export class UserController {
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Deactivate a user (Owner/Manager only)' })
+  @ApiParam({ name: 'id', description: 'User UUID' })
   @ApiResponse({ status: 200, description: 'User deactivated.' })
   async deactivateUser(
     @Request() req: { user: { businessId: string } },

@@ -14,18 +14,24 @@ export class ShiftController {
 
   @Get('shifts')
   @ApiOperation({ summary: 'List all shifts for the branch' })
+  @ApiResponse({ status: 200 })
+  @ApiResponse({ status: 401 })
   async findAll(@Request() req: any) {
     return this.shiftService.findAll(req.user.branchId);
   }
 
   @Get('shifts/current')
   @ApiOperation({ summary: 'Get the currently open shift' })
+  @ApiResponse({ status: 200 })
+  @ApiResponse({ status: 401 })
   async findCurrent(@Request() req: any) {
     return this.shiftService.findCurrent(req.user.branchId);
   }
 
   @Post('shifts/open')
   @ApiOperation({ summary: 'Open a new shift with starting cash' })
+  @ApiResponse({ status: 200 })
+  @ApiResponse({ status: 401 })
   async openShift(@Request() req: any, @Body() dto: OpenShiftDto) {
     return this.shiftService.openShift(req.user.branchId, req.user.userId, dto);
   }
@@ -33,6 +39,8 @@ export class ShiftController {
   @Post('shifts/:id/close')
   @ApiOperation({ summary: 'Close a shift with actual cash counted' })
   @ApiParam({ name: 'id' })
+  @ApiResponse({ status: 200 })
+  @ApiResponse({ status: 401 })
   async closeShift(@Param('id') id: string, @Request() req: any, @Body() dto: CloseShiftDto) {
     return this.shiftService.closeShift(id, req.user.branchId, req.user.userId, dto);
   }
@@ -41,6 +49,8 @@ export class ShiftController {
   @ApiOperation({ summary: 'Shift report with date range and reconciliation summary' })
   @ApiQuery({ name: 'dateFrom', required: false })
   @ApiQuery({ name: 'dateTo', required: false })
+  @ApiResponse({ status: 200 })
+  @ApiResponse({ status: 401 })
   async getShiftSummary(
     @Request() req: any,
     @Query('dateFrom') dateFrom?: string,

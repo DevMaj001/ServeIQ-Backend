@@ -1,7 +1,7 @@
 import { Controller, Get, Param, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { Branch } from '../branch/entities/branch.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Advertisement } from '../advertisement/entities/advertisement.entity';
@@ -20,6 +20,7 @@ export class PublicMenuController {
 
   @Get('menu/:branchId')
   @ApiOperation({ summary: 'Get public menu for a branch (no auth required)' })
+  @ApiParam({ name: 'branchId', description: 'Branch UUID' })
   @ApiResponse({ status: 200, description: 'Public menu items.' })
   @ApiResponse({ status: 404, description: 'Branch not found.' })
   async getPublicMenu(@Param('branchId') branchId: string) {
@@ -56,6 +57,7 @@ export class PublicMenuController {
 
   @Get('ads/:branchId')
   @ApiOperation({ summary: 'Get public advertisements for a branch (no auth required)' })
+  @ApiParam({ name: 'branchId', description: 'Branch UUID' })
   @ApiResponse({ status: 200, description: 'Public advertisements.' })
   @ApiResponse({ status: 404, description: 'Branch not found.' })
   async getPublicAds(@Param('branchId') branchId: string) {
