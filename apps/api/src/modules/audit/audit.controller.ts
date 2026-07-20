@@ -11,7 +11,7 @@ import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse } from '@ne
 @ApiTags('Audit Logs')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER)
+@Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.WAITER, UserRole.CHEF, UserRole.CASHIER)
 @Controller('audit-logs')
 export class AuditController {
   constructor(
