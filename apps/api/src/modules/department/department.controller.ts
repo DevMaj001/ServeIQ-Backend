@@ -14,7 +14,7 @@ export class DepartmentController {
   constructor(private readonly departmentService: DepartmentService) {}
 
   @Get()
-  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERVISOR)
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.WAITER, UserRole.CHEF, UserRole.CASHIER)
   @ApiOperation({ summary: 'List departments for the branch' })
   @ApiQuery({ name: 'include_inactive', required: false, type: Boolean })
   @ApiResponse({ status: 200 })
