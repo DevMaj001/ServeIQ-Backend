@@ -188,12 +188,17 @@ export class AdminService {
     }
 
     const branchSubscriptionMap: Record<string, { status: string; plan: string | null; expires_at: string | null }> = {};
+    const branchesByBusiness: Record<string, { id: string; name: string }[]> = {};
     if (businessIds.length > 0) {
       const branches = await this.branchRepo
         .createQueryBuilder('br')
-        .select(['br.id', 'br.business_id'])
+        .select(['br.id', 'br.name', 'br.business_id'])
         .where('br.business_id IN (:...ids)', { ids: businessIds })
         .getMany();
+      for (const br of branches) {
+        if (!branchesByBusiness[br.business_id]) branchesByBusiness[br.business_id] = [];
+        branchesByBusiness[br.business_id].push({ id: br.id, name: br.name });
+      }
       const branchIds = branches.map(br => br.id);
       if (branchIds.length > 0) {
         const subscriptions = await this.subscriptionRepo
@@ -232,6 +237,7 @@ export class AdminService {
           owner_name: ownerMap[b.id]?.full_name || null,
           owner_email: ownerMap[b.id]?.email || null,
           branch_count: branchCounts[b.id] ?? 0,
+          branches: branchesByBusiness[b.id] || [],
           address: b.address,
           created_at: b.created_at,
         };

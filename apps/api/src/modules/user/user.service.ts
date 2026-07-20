@@ -194,8 +194,10 @@ export class UserService {
     return this.userRepository.find({ where: { branch_id: branchId } });
   }
 
-  async findOne(id: string, branchId: string) {
-    const user = await this.userRepository.findOne({ where: { id, branch_id: branchId } });
+  async findOne(id: string, branchId?: string) {
+    const where: any = { id };
+    if (branchId) where.branch_id = branchId;
+    const user = await this.userRepository.findOne({ where });
     if (!user) throw new NotFoundException('User not found');
     return user;
   }
