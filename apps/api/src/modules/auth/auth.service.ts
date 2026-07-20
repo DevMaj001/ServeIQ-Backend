@@ -194,13 +194,22 @@ export class AuthService {
       });
     }
 
+    let effectiveBranchId = dto.branchId;
+    if (!effectiveBranchId) {
+      const firstBranch = await this.dataSource.getRepository(Branch).findOne({
+        where: { business_id: dto.businessId },
+        order: { created_at: 'ASC' },
+      });
+      effectiveBranchId = firstBranch?.id || undefined;
+    }
+
     const payload = {
       sub: owner?.id || currentUser.userId,
       email: owner?.email || currentUser.email,
       role: 'owner',
       role_id: owner?.role_id || null,
       businessId: dto.businessId,
-      branchId: dto.branchId || business.id,
+      branchId: effectiveBranchId,
       impersonating: true,
     };
     return {
