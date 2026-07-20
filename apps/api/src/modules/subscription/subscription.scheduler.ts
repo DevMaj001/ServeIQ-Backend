@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan, IsNull } from 'typeorm';
+import { Repository, LessThan, In } from 'typeorm';
 import { Subscription, SubscriptionStatus } from './entities/subscription.entity';
 
 @Injectable()
@@ -21,7 +21,6 @@ export class SubscriptionScheduler {
       where: {
         status: SubscriptionStatus.TRIALING,
         trial_ends_at: LessThan(now),
-        plan_id: IsNull(),
       },
     });
 
