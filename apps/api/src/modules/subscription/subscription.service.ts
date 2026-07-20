@@ -197,7 +197,14 @@ export class SubscriptionService {
   }
 
   async getPlans() {
-    return this.planRepo.find({ where: { is_active: true }, order: { price: 'ASC' } });
+    const plans = await this.planRepo.find({ where: { is_active: true }, order: { price: 'ASC' } });
+    const seen = new Set<string>();
+    return plans.filter(p => {
+      const key = p.name.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }
 
   async getCurrent(branchId: string) {
