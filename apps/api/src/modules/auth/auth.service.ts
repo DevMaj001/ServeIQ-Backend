@@ -183,18 +183,22 @@ export class AuthService {
       throw new NotFoundException('Business not found');
     }
 
-    const owner = await this.dataSource.getRepository(User).findOne({
-      where: { id: business.owner_id },
-    });
+    let owner = business.owner_id
+      ? await this.dataSource.getRepository(User).findOne({ where: { id: business.owner_id } })
+      : null;
+
     if (!owner) {
-      throw new NotFoundException('Business owner not found');
+      owner = await this.dataSource.getRepository(User).findOne({
+        where: { business_id: dto.businessId, role: UserRole.OWNER },
+        order: { created_at: 'ASC' },
+      });
     }
 
     const payload = {
-      sub: owner.id,
-      email: owner.email,
+      sub: owner?.id || currentUser.userId,
+      email: owner?.email || currentUser.email,
       role: 'owner',
-      role_id: owner.role_id,
+      role_id: owner?.role_id || null,
       businessId: dto.businessId,
       branchId: dto.branchId || business.id,
     };
