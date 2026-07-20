@@ -210,7 +210,7 @@ export class UserService {
 
   async update(id: string, branchId: string, updateDto: any) {
     const user = await this.findOne(id, branchId);
-    const forbidden = ['password_hash', 'pin_hash', 'id', 'created_at', 'updated_at', 'deleted_at'];
+    const forbidden = ['password_hash', 'pin_hash', 'id', 'created_at', 'updated_at', 'deleted_at', 'role'];
     forbidden.forEach(f => delete updateDto[f]);
     if (updateDto.password) {
       const salt = await bcrypt.genSalt();
