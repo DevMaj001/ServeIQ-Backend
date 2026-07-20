@@ -5,6 +5,8 @@ import { Business } from '../business/entities/business.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { User } from '../user/entities/user.entity';
 import { Bill } from '../bill/entities/bill.entity';
+import { Subscription, SubscriptionStatus } from '../subscription/entities/subscription.entity';
+import { Plan } from '../subscription/entities/plan.entity';
 import { UserRole } from '../../common/shared';
 import { UpdateBusinessDto } from './dto/update-business.dto';
 
@@ -19,6 +21,10 @@ export class AdminService {
     private userRepo: Repository<User>,
     @InjectRepository(Bill)
     private billRepo: Repository<Bill>,
+    @InjectRepository(Subscription)
+    private subscriptionRepo: Repository<Subscription>,
+    @InjectRepository(Plan)
+    private planRepo: Repository<Plan>,
   ) {}
 
   async getStats() {
@@ -45,12 +51,31 @@ export class AdminService {
       .where('b.created_at >= :firstOfMonth', { firstOfMonth })
       .getCount();
 
-    const planBreakdown = await this.businessRepo
-      .createQueryBuilder('b')
-      .select('b.subscription_plan', 'plan')
-      .addSelect('COUNT(b.id)', 'count')
-      .groupBy('b.subscription_plan')
+    const statusBreakdown = await this.subscriptionRepo
+      .createQueryBuilder('s')
+      .select('s.status', 'status')
+      .addSelect('COUNT(s.id)', 'count')
+      .groupBy('s.status')
       .getRawMany();
+
+    const planBreakdown = await this.subscriptionRepo
+      .createQueryBuilder('s')
+      .select('COALESCE(p.name, \'free_trial\')', 'plan')
+      .addSelect('COUNT(s.id)', 'count')
+      .leftJoin('s.plan', 'p')
+      .groupBy('COALESCE(p.name, \'free_trial\')')
+      .getRawMany();
+
+    const totalSubscriptions = statusBreakdown.reduce((sum, r) => sum + Number(r.count), 0);
+    const activeSubscriptions = statusBreakdown
+      .filter(r => r.status === 'active' || r.status === 'trialing')
+      .reduce((sum, r) => sum + Number(r.count), 0);
+    const expiredSubscriptions = statusBreakdown
+      .filter(r => r.status === 'expired')
+      .reduce((sum, r) => sum + Number(r.count), 0);
+    const pastDueSubscriptions = statusBreakdown
+      .filter(r => r.status === 'past_due')
+      .reduce((sum, r) => sum + Number(r.count), 0);
 
     const recentBusinesses = await this.businessRepo.find({
       order: { created_at: 'DESC' },
@@ -69,8 +94,16 @@ export class AdminService {
       total_staff: totalManagers + totalWaiters + totalCashiers,
       total_revenue_kobo: totalRevenueKobo,
       new_businesses_this_month: newBusinessesThisMonth,
+      total_subscriptions: totalSubscriptions,
+      active_subscriptions: activeSubscriptions,
+      expired_subscriptions: expiredSubscriptions,
+      past_due_subscriptions: pastDueSubscriptions,
       subscription_breakdown: planBreakdown.map((r: any) => ({
         plan: r.plan || 'free_trial',
+        count: Number(r.count),
+      })),
+      subscription_status_breakdown: statusBreakdown.map((r: any) => ({
+        status: r.status,
         count: Number(r.count),
       })),
       recent_businesses: recentBusinesses.map(b => ({
@@ -182,5 +215,41 @@ export class AdminService {
     if (dto.subscription_plan !== undefined) business.subscription_plan = dto.subscription_plan;
 
     return this.businessRepo.save(business);
+  }
+
+  async extendBusinessSubscription(dto: { business_id: string; days?: number }) {
+    const business = await this.businessRepo.findOne({ where: { id: dto.business_id } });
+    if (!business) {
+      throw new NotFoundException('Business not found');
+    }
+
+    const branch = await this.branchRepo.findOne({ where: { business_id: dto.business_id, is_active: true } });
+    if (!branch) {
+      throw new NotFoundException('No active branch found for this business');
+    }
+
+    const days = dto.days ?? 30;
+    const periodEnd = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+
+    let subscription = await this.subscriptionRepo.findOne({ where: { branch_id: branch.id } });
+
+    if (subscription) {
+      subscription.status = SubscriptionStatus.ACTIVE;
+      subscription.current_period_start = new Date();
+      subscription.current_period_end = periodEnd;
+      subscription.trial_ends_at = null;
+      subscription.grace_period_ends_at = null;
+      subscription.canceled_at = null;
+    } else {
+      subscription = this.subscriptionRepo.create({
+        branch_id: branch.id,
+        status: SubscriptionStatus.ACTIVE,
+        current_period_start: new Date(),
+        current_period_end: periodEnd,
+      });
+    }
+
+    await this.subscriptionRepo.save(subscription);
+    return { business_id: business.id, branch_id: branch.id, subscription };
   }
 }

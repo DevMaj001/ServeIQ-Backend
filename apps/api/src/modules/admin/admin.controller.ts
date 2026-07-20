@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Param, Body, Query, UseGuards, Request, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Param, Body, Query, UseGuards, Request, NotFoundException } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -6,6 +6,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../../common/shared';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery, ApiParam, ApiResponse } from '@nestjs/swagger';
 import { UpdateBusinessDto } from './dto/update-business.dto';
+import { ExtendBusinessSubscriptionDto } from './dto/extend-business-subscription.dto';
 
 @ApiTags('Admin')
 @ApiBearerAuth('access-token')
@@ -57,5 +58,13 @@ export class AdminController {
       throw new NotFoundException('Business not found');
     }
     return updated;
+  }
+
+  @Post('businesses/extend')
+  @ApiOperation({ summary: 'Manually extend/grant a subscription for a business by ID (superadmin only)' })
+  @ApiResponse({ status: 200, description: 'Subscription extended.' })
+  @ApiResponse({ status: 404, description: 'Business or branch not found.' })
+  async extendBusinessSubscription(@Body() dto: ExtendBusinessSubscriptionDto) {
+    return this.adminService.extendBusinessSubscription(dto);
   }
 }

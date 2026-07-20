@@ -201,6 +201,7 @@ export class AuthService {
       role_id: owner?.role_id || null,
       businessId: dto.businessId,
       branchId: dto.branchId || business.id,
+      impersonating: true,
     };
     return {
       access_token: this.jwtService.sign(payload),
