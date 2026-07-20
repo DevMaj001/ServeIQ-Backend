@@ -8,7 +8,8 @@ import { AdvertisementService } from './advertisement.service';
 
 @ApiTags('Advertisements')
 @ApiBearerAuth('access-token')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.SUPERADMIN)
 @Controller('advertisements')
 export class AdvertisementController {
   constructor(private readonly adService: AdvertisementService) {}
@@ -26,25 +27,19 @@ export class AdvertisementController {
   }
 
   @Post()
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.MANAGER)
-  @ApiOperation({ summary: 'Create advertisement (Owner/Manager only)' })
+  @ApiOperation({ summary: 'Create advertisement' })
   async create(@Request() req: any, @Body() body: any) {
     return this.adService.create(req.user.branchId, body);
   }
 
   @Patch(':id')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.MANAGER)
-  @ApiOperation({ summary: 'Update advertisement (Owner/Manager only)' })
+  @ApiOperation({ summary: 'Update advertisement' })
   async update(@Param('id') id: string, @Request() req: any, @Body() body: any) {
     return this.adService.update(id, req.user.branchId, body);
   }
 
   @Delete(':id')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.MANAGER)
-  @ApiOperation({ summary: 'Delete advertisement (Owner/Manager only)' })
+  @ApiOperation({ summary: 'Delete advertisement' })
   async remove(@Param('id') id: string, @Request() req: any) {
     return this.adService.remove(id, req.user.branchId);
   }

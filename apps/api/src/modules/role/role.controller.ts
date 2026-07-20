@@ -47,8 +47,8 @@ export class RoleController {
 
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
-  @Roles(UserRole.OWNER, UserRole.MANAGER)
-  @RequirePermissions(PERMISSIONS.VIEW_STAFF)
+  @Roles(UserRole.OWNER)
+  @RequirePermissions(PERMISSIONS.ASSIGN_ROLES)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'List all roles with their permissions' })
   async listRoles(): Promise<Role[]> {
@@ -57,8 +57,8 @@ export class RoleController {
 
   @Get('permissions')
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
-  @Roles(UserRole.OWNER, UserRole.MANAGER)
-  @RequirePermissions(PERMISSIONS.VIEW_STAFF)
+  @Roles(UserRole.OWNER)
+  @RequirePermissions(PERMISSIONS.ASSIGN_ROLES)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'List all available permissions grouped by category' })
   async listPermissions(): Promise<Permission[]> {
