@@ -175,12 +175,28 @@ export class AuthService {
     if (!dto.businessId) {
       throw new BadRequestException('businessId is required');
     }
+
+    const business = await this.dataSource.getRepository(Business).findOne({
+      where: { id: dto.businessId },
+    });
+    if (!business) {
+      throw new NotFoundException('Business not found');
+    }
+
+    const owner = await this.dataSource.getRepository(User).findOne({
+      where: { id: business.owner_id },
+    });
+    if (!owner) {
+      throw new NotFoundException('Business owner not found');
+    }
+
     const payload = {
-      sub: currentUser.userId,
-      email: currentUser.email,
-      role: 'super_admin',
+      sub: owner.id,
+      email: owner.email,
+      role: 'owner',
+      role_id: owner.role_id,
       businessId: dto.businessId,
-      branchId: dto.branchId || dto.businessId,
+      branchId: dto.branchId || business.id,
     };
     return {
       access_token: this.jwtService.sign(payload),

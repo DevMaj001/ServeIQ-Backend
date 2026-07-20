@@ -59,7 +59,7 @@ export class SubscriptionGuard implements CanActivate {
     }
 
     // Super admins bypass the subscription check entirely
-    if (user?.role === 'superadmin') {
+    if (user?.role === 'superadmin' || user?.role === 'super_admin') {
       return true;
     }
 
