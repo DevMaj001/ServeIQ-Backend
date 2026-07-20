@@ -20,7 +20,7 @@ const EXCLUDED_MATCHES = [
   '/api/v1/webhooks/paystack',
 ];
 
-const EXCLUDED_PREFIXES = ['/api/v1/auth/', '/api/v1/subscriptions/', '/api/v1/webhooks/paystack', '/api/v1/public/', '/api/v1/tracking/'];
+const EXCLUDED_PREFIXES = ['/api/v1/auth/', '/api/v1/subscriptions/', '/api/v1/webhooks/paystack', '/api/v1/public/', '/api/v1/tracking/', '/api/v1/user/me', '/api/v1/notifications'];
 
 @Injectable()
 export class SubscriptionGuard implements CanActivate {
@@ -44,29 +44,26 @@ export class SubscriptionGuard implements CanActivate {
       }
     }
 
-    // Super admins bypass the subscription check entirely
-    if (request.user?.role === 'superadmin') {
-      return true;
-    }
-
-    let branchId: string | undefined;
-
-    if (request.user?.branchId) {
-      branchId = request.user.branchId;
-    } else {
+    // Decode user from JWT (global guard runs before JwtAuthGuard, so request.user may not be set)
+    let user: any = request.user;
+    if (!user || !user.role) {
       const authHeader = request.headers?.authorization;
       if (authHeader && authHeader.startsWith('Bearer ')) {
         try {
           const token = authHeader.slice(7);
-          const payload = this.jwtService.verify(token);
-          branchId = payload.branchId;
+          user = this.jwtService.verify(token);
         } catch {
           return true;
         }
-      } else {
-        return true;
       }
     }
+
+    // Super admins bypass the subscription check entirely
+    if (user?.role === 'superadmin') {
+      return true;
+    }
+
+    const branchId = user?.branchId || user?.branch_id;
 
     if (!branchId) {
       return true;
