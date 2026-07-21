@@ -135,6 +135,7 @@ export class AuthService {
 
     const users = await this.dataSource.getRepository(User).find({
       where: whereClause,
+      order: { created_at: 'DESC' },
     });
 
     for (const user of users) {
