@@ -13,44 +13,49 @@ This project contains the **backend** (the "brain" — an API that powers everyt
 Here is everything the system can do, explained simply:
 
 ### For Customers (what guests see)
-- A **digital menu** they can view on their phone by scanning a QR code at their table
-- They can see **advertisements** while browsing the menu
+- **Digital menu** — view on phone by scanning QR code (`GET /api/v1/menus/public/:branchId`)
+- **Advertisements** — displayed while browsing the menu (`GET /api/v1/advertisements`)
+- **Order tracking** — enter tracking code to see order status (`GET /api/v1/tracking/:code`) — no login needed
 
 ### For Waiters & Staff
-- **Take orders** from customers at any table
-- **Send orders** to the kitchen (printer or digital display)
-- **Track order status** — pending, preparing, ready, delivered
-- **Split bills** evenly or by item when customers want to pay separately
-- **Process payments** (cash or card via Paystack)
-- **Print receipts** for customers
+- **Take orders** at any table (`POST /api/v1/orders/tab/:tabId`)
+- **Send orders** to the kitchen (`POST /api/v1/orders/:id/approve` by supervisor)
+- **Track order status** — pending, approved, preparing, ready, delivered (`GET /api/v1/orders/tab/:tabId`)
+- **View pending/preparing orders** (`GET /api/v1/orders/pending`, `GET /api/v1/orders/preparing`)
+- **Mark orders as delivered** when serving the customer (`POST /api/v1/orders/:id/deliver`)
+- **Split bills** evenly or by item (`POST /api/v1/bills/:tabId/split`)
+- **Process payments** — cash or card via Paystack (`POST /api/v1/bills/:tabId/pay`)
+- **Print receipts** for customers (`GET /api/v1/bills/:tabId/receipt`)
+- **View notifications** with order updates and tracking codes (`GET /api/v1/notifications`)
+- **View staff roster** — see who's on shift (`GET /api/v1/user/waiters`)
 
 ### For Managers & Owners
-- **Dashboard** showing real-time sales, active tables, open tabs, and staff performance
-- **Menu management** — add, edit, remove food/drink items with photos and prices
-- **Table management** — set up tables, mark them as occupied or free
-- **Staff management** — add waiters, supervisors, chefs with different access levels
-- **Department management** — organize the kitchen into sections (Kitchen, Bar, Grill, etc.)
-- **Reports** — see sales history, popular items, peak hours, table turnover
-- **Inventory tracking** — track ingredient stock, get low-stock alerts, reconcile counts
-- **Supplier management** — keep a list of suppliers for ingredients
-- **Role & permissions** — control exactly what each staff member can do
-- **Shift management** — open and close daily shifts, track who worked when
-- **Audit logs** — see a complete history of every action taken in the system
-- **Notifications** — get alerts for important events
-- **Subscription & billing** — manage plans, trials, payments, and expiry dates
-- **Multiple branches** — a single business can run multiple locations
-- **Printers & KDS** — connect to thermal printers or kitchen display screens
-- **POS terminals** — register and manage point-of-sale devices
-- **Menu modifiers** — add customizations like "extra cheese" or "no ice"
-- **AI features** — generate logic rules, analyze API usage, get restock insights
+- **Dashboard** — real-time sales, active tables, open tabs, staff performance (`GET /api/v1/dashboard`)
+- **Menu management** — add, edit, remove items with photos/prices (`CRUD /api/v1/menu-items`)
+- **Table management** — set up tables, mark occupied/free (`CRUD /api/v1/tables`)
+- **Staff management** — add waiters, supervisors, chefs with roles (`POST /api/v1/user/waiters`)
+- **Department management** — organize kitchen sections (`CRUD /api/v1/departments`)
+- **Reports** — sales history, popular items, peak hours, table turnover (`GET /api/v1/reports`)
+- **Inventory tracking** — stock, low-stock alerts, reconciliations (`CRUD /api/v1/inventory`)
+- **Supplier management** — vendor list (`CRUD /api/v1/suppliers`)
+- **Role & permissions** — control staff access (`CRUD /api/v1/roles`)
+- **Shift management** — open/close daily shifts (`CRUD /api/v1/shifts`)
+- **Audit logs** — full action history (`GET /api/v1/audit-logs`)
+- **Notifications** — in-app alerts (`GET /api/v1/notifications`)
+- **Subscription & billing** — plans, trials, payments (`GET /api/v1/subscriptions`)
+- **Multiple branches** — run multiple locations (`CRUD /api/v1/branches`)
+- **Printers & KDS** — thermal printers, kitchen displays (`CRUD /api/v1/printers`)
+- **POS terminals** — manage point-of-sale devices (`CRUD /api/v1/pos-terminals`)
+- **Menu modifiers** — customizations like "extra cheese" (`CRUD /api/v1/menu-modifiers`)
+- **AI features** — logic rules, API insights, restock suggestions (`POST /api/v1/ai/*`)
 
 ### For Super Admin (platform owner)
-- **Overview dashboard** — see all businesses, total revenue, active users
-- **Business management** — view all registered businesses, their status, subscription info
-- **Impersonation** — log in as any business owner to help them troubleshoot issues
-- **Extend subscriptions** — manually grant or extend subscription periods
-- **Full audit visibility** — see all activity across the entire platform
-- **Ads management** — create and manage advertisements shown on digital menus
+- **Overview dashboard** — all businesses, total revenue, active users (`GET /api/v1/admin/stats`)
+- **Business management** — view/update all registered businesses (`GET /api/v1/admin/businesses`)
+- **Impersonation** — log in as any business owner to troubleshoot (`POST /api/v1/auth/impersonate`)
+- **Extend subscriptions** — grant extra time (`POST /api/v1/admin/businesses/extend`)
+- **Full audit visibility** — all activity across the platform (`GET /api/v1/audit-logs`)
+- **Ads management** — create/manage digital menu ads (`CRUD /api/v1/advertisements`)
 
 ---
 
@@ -158,36 +163,36 @@ To use authenticated endpoints, click the "Authorize" button at the top and past
 
 ## What each API module does
 
-| Module | Purpose |
-|---|---|
-| Auth | Login, register, password reset, email verification, impersonation |
-| User | Staff management, profile updates, waiter creation |
-| Business | Business profile, settings |
-| Branch | Multi-location management, QR code generation |
-| Menu | Food/drink items, categories, import |
-| Menu Modifier | Customizations (extra toppings, size options, etc.) |
-| Table | Table setup, status tracking, assignment |
-| Tab | Customer tabs (open/close/transfer/void) |
-| Order | Order taking, approval workflow, kitchen display |
-| Bill | Payment processing, split bills, receipts, discounts |
-| Department | Kitchen sections for order routing |
-| Subscription | Plans, trials, payments via Paystack |
-| Inventory | Stock tracking, alerts, reconciliations, recipes |
-| Supplier | Vendor management |
-| Shift | Daily shift open/close, reports |
-| Role | Permissions and access control |
-| Notification | In-app alerts |
-| Printer/KDS | Thermal printers and kitchen display screens |
-| POS Terminal | Point-of-sale device management |
-| Report | Sales analytics, peak hours, popular items |
-| Dashboard | Real-time business overview |
-| Audit Log | Complete action history |
-| Advertisement | Digital menu ads |
-| AI | Logic generation, insights, waste analysis |
-| Tracking | Order tracking by code |
-| Upload | File uploads (images) |
-| Sync | Offline data synchronization |
-| Admin | Super admin panel, business overview, impersonation |
+| Module | Prefix | Purpose |
+|---|---|---|---|
+| Auth | `/api/v1/auth` | Login, register, password reset, email verification, impersonation |
+| User | `/api/v1/user` | Staff management, profile updates, waiter creation |
+| Business | `/api/v1/businesses` | Business profile, settings |
+| Branch | `/api/v1/branches` | Multi-location management, QR code generation |
+| Menu | `/api/v1/menu-items` | Food/drink items, categories, import |
+| Menu Modifier | `/api/v1/menu-modifiers` | Customizations (extra toppings, size options, etc.) |
+| Table | `/api/v1/tables` | Table setup, status tracking, assignment |
+| Tab | `/api/v1/tabs` | Customer tabs (open/close/transfer/void) |
+| Order | `/api/v1/orders` | Order taking, approval workflow, kitchen display |
+| Bill | `/api/v1/bills` | Payment processing, split bills, receipts, discounts |
+| Department | `/api/v1/departments` | Kitchen sections for order routing |
+| Subscription | `/api/v1/subscriptions` | Plans, trials, payments via Paystack |
+| Inventory | `/api/v1/inventory` | Stock tracking, alerts, reconciliations, recipes |
+| Supplier | `/api/v1/suppliers` | Vendor management |
+| Shift | `/api/v1/shifts` | Daily shift open/close, reports |
+| Role | `/api/v1/roles` | Permissions and access control |
+| Notification | `/api/v1/notifications` | In-app alerts |
+| Printer/KDS | `/api/v1/printers` | Thermal printers and kitchen display screens |
+| POS Terminal | `/api/v1/pos-terminals` | Point-of-sale device management |
+| Report | `/api/v1/reports` | Sales analytics, peak hours, popular items |
+| Dashboard | `/api/v1/dashboard` | Real-time business overview |
+| Audit Log | `/api/v1/audit-logs` | Complete action history |
+| Advertisement | `/api/v1/advertisements` | Digital menu ads |
+| AI | `/api/v1/ai` | Logic generation, insights, waste analysis |
+| Tracking | `/api/v1/tracking` | Order tracking by code (public, no auth) |
+| Upload | `/api/v1/upload` | File uploads (images) |
+| Sync | `/api/v1/sync` | Offline data synchronization |
+| Admin | `/api/v1/admin` | Super admin panel, business overview, impersonation |
 
 ---
 
