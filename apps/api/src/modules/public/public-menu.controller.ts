@@ -51,6 +51,8 @@ export class PublicMenuController {
       business_name: branch.business.name,
       branch_name: branch.name,
       logo_url: branch.business.logo_url || null,
+      brand_primary_color: branch.business.brand_primary_color || null,
+      brand_accent_color: branch.business.brand_accent_color || null,
       items: mapped,
     };
   }
