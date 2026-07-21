@@ -127,6 +127,18 @@ export class OrderController {
     return this.orderService.decline(id, req.user.userId, dto);
   }
 
+  @Post(':id/confirm-pickup')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERVISOR)
+  @ApiOperation({ summary: 'Confirm waiter has picked up the order (Owner/Manager/Supervisor)' })
+  @ApiParam({ name: 'id', description: 'Order item UUID' })
+  @ApiResponse({ status: 200, description: 'Order marked as out for delivery.' })
+  @ApiResponse({ status: 400, description: 'Order is not ready for pickup.' })
+  @ApiResponse({ status: 404, description: 'Order not found.' })
+  async confirmPickup(@Param('id') id: string, @Request() req: any) {
+    return this.orderService.confirmPickup(id, req.user.userId);
+  }
+
   @Post(':id/deliver')
   @UseGuards(RolesGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.WAITER)

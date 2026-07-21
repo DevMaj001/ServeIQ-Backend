@@ -14,6 +14,7 @@ export enum OrderStatus {
   ASSIGNED_TO_DEPARTMENT = 'assigned_to_department',
   PREPARING = 'preparing',
   READY_FOR_PICKUP = 'ready_for_pickup',
+  OUT_FOR_DELIVERY = 'out_for_delivery',
   DELIVERED = 'delivered',
   COMPLETED = 'completed',
   DECLINED = 'declined',

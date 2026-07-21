@@ -227,7 +227,7 @@ export class OrderService {
     });
   }
 
-  async deliver(id: string, userId: string) {
+  async confirmPickup(id: string, userId: string) {
     const { tab } = await this.getTabForOrder(id);
     const alphaIds = [id].sort();
     return this.dataSource.transaction(async (manager) => {
@@ -237,6 +237,35 @@ export class OrderService {
       });
       if (!order) throw new NotFoundException('Order not found');
       if (order.order_status !== OrderStatus.READY_FOR_PICKUP) {
+        throw new BadRequestException('Order is not ready for pickup');
+      }
+
+      order.order_status = OrderStatus.OUT_FOR_DELIVERY;
+
+      await manager.getRepository(Order).save(order);
+
+      await this.auditService.log({
+        branchId: tab.branch_id,
+        userId,
+        action: 'order.confirm_pickup',
+        entityId: id,
+        entityType: 'order',
+      });
+
+      return order;
+    });
+  }
+
+  async deliver(id: string, userId: string) {
+    const { tab } = await this.getTabForOrder(id);
+    const alphaIds = [id].sort();
+    return this.dataSource.transaction(async (manager) => {
+      const order = await manager.getRepository(Order).findOne({
+        where: { id: alphaIds[0] },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!order) throw new NotFoundException('Order not found');
+      if (order.order_status !== OrderStatus.READY_FOR_PICKUP && order.order_status !== OrderStatus.OUT_FOR_DELIVERY) {
         throw new BadRequestException('Order is not ready for pickup');
       }
 
