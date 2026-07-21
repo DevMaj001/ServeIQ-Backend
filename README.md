@@ -20,8 +20,8 @@ Here is everything the system can do, explained simply:
 ### For Waiters & Staff
 - **Take orders** at any table (`POST /api/v1/orders/tab/:tabId`)
 - **Send orders** to the kitchen (`POST /api/v1/orders/:id/approve` by supervisor)
-- **Track order status** — pending, approved, preparing, ready, delivered (`GET /api/v1/orders/tab/:tabId`)
-- **View pending/preparing orders** (`GET /api/v1/orders/pending`, `GET /api/v1/orders/preparing`)
+- **Track order status** — pending, approved, preparing, ready, out for delivery, delivered (`GET /api/v1/orders/tab/:tabId`)
+- **View pending/preparing/ready orders** (`GET /api/v1/orders/pending`, `GET /api/v1/orders/preparing`, `GET /api/v1/orders/ready-for-pickup`)
 - **Mark orders as delivered** when serving the customer (`POST /api/v1/orders/:id/deliver`)
 - **Split bills** evenly or by item (`POST /api/v1/bills/:tabId/split`)
 - **Process payments** — cash or card via Paystack (`POST /api/v1/bills/:tabId/pay`)
