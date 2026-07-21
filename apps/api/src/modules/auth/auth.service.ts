@@ -154,8 +154,8 @@ export class AuthService {
       throw new NotFoundException('Invalid business code');
     }
     return {
-      business_id: business.id,
-      business_name: business.name,
+      businessId: business.id,
+      businessName: business.name,
     };
   }
 
