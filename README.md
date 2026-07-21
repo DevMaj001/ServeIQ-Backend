@@ -202,6 +202,26 @@ Current focus areas:
 
 ---
 
+## Recent Changes
+
+### Role-Based Access Improvements
+- **Departments**: Waiters, Chefs, and Cashiers can now list departments (previously Owner/Manager only)
+- **Audit Logs**: All staff roles (Owner, Manager, Supervisor, Waiter, Chef, Cashier) can now view audit logs
+- **Order Delivery**: Waiters can now mark orders as delivered, enabling a streamlined table-service workflow
+
+### Notifications
+- **ORDER_APPROVED** notification type added
+- Notifications are now sent when an order is approved, including the tracking code
+
+### Bug Fixes & Enhancements
+- **Impersonation fix**: Returns `branchId` from the database instead of incorrect default values
+- **Business list**: Now returns a `branches` array for each business, providing complete branch visibility
+- **User role protected**: The user `role` field is now protected from overwrite on PATCH requests
+- **Terminal activation**: Fixed the POS terminal activation flow
+- **Table mismatch**: Resolved a race condition that caused table mismatch errors
+
+---
+
 ## Common tasks
 
 ### How to add a new API endpoint

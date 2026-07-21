@@ -130,7 +130,7 @@ export class OrderController {
   @Post(':id/deliver')
   @UseGuards(RolesGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.WAITER)
-  @ApiOperation({ summary: 'Confirm delivery of a ready order' })
+  @ApiOperation({ summary: 'Confirm delivery (Owner/Manager/Supervisor/Waiter)' })
   @ApiParam({ name: 'id', description: 'Order item UUID' })
   @ApiResponse({ status: 200, description: 'Order marked as delivered.' })
   @ApiResponse({ status: 400, description: 'Order is not ready for pickup.' })

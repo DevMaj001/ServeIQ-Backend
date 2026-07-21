@@ -15,7 +15,7 @@ export class DepartmentController {
 
   @Get()
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.WAITER, UserRole.CHEF, UserRole.CASHIER)
-  @ApiOperation({ summary: 'List departments for the branch' })
+  @ApiOperation({ summary: 'List departments (Owner/Manager/Supervisor/Waiter/Chef/Cashier)' })
   @ApiQuery({ name: 'include_inactive', required: false, type: Boolean })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })

@@ -20,7 +20,7 @@ export class AuditController {
   ) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get audit logs with filters and pagination' })
+  @ApiOperation({ summary: 'Get audit logs with filters and pagination (all staff roles)' })
   @ApiQuery({ name: 'action', required: false, description: 'Filter by action type (e.g. order.approve)' })
   @ApiQuery({ name: 'user_id', required: false, description: 'Filter by user UUID' })
   @ApiQuery({ name: 'entity_type', required: false, description: 'Filter by entity type (e.g. order, User)' })
@@ -76,7 +76,7 @@ export class AuditController {
   }
 
   @Get('recent')
-  @ApiOperation({ summary: 'Get recent audit logs for the current branch (last 20)' })
+  @ApiOperation({ summary: 'Get recent audit logs (last 20) — all staff roles' })
   @ApiResponse({ status: 200, description: 'Recent audit log entries.' })
   async findRecent(@Request() req: any) {
     return this.auditRepo.find({
