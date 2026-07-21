@@ -5,6 +5,8 @@ import helmet from 'helmet';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { AppDataSource } from './database/data-source';
 import { ensureTables } from './database/ensure-tables';
 async function bootstrap() {
@@ -64,7 +66,7 @@ async function bootstrap() {
   const config = new DocumentBuilder()
     .setTitle('ServeIQ API')
     .setDescription(
-      'Multi-tenant hospitality platform API — manage businesses, branches, menus, tables, tabs, orders, and bills.',
+      readFileSync(join(__dirname, '..', '..', '..', 'README.md'), 'utf-8'),
     )
     .setVersion('1.0')
     .addBearerAuth(
