@@ -1,4 +1,5 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Request, BadRequestException } from '@nestjs/common';
+import { validate } from 'class-validator';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RegisterDto } from './dto/register.dto';
@@ -140,6 +141,10 @@ export class AuthController {
     dto.pin = payload.pin || payload.passCode || payload.code || '';
     dto.branchId = payload.branchId || payload.branch_id || undefined;
     dto.businessId = payload.businessId || payload.business_id || undefined;
+    const errors = await validate(dto);
+    if (errors.length > 0) {
+      throw new BadRequestException('Invalid request: branchId and businessId must be valid UUIDs');
+    }
     return this.authService.waiterLogin(dto);
   }
 
