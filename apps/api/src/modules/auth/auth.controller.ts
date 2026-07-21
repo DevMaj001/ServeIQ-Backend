@@ -149,6 +149,7 @@ export class AuthController {
     summary: 'Resolve a business code',
     description: 'Takes a business code and returns the business ID and name. Used by waiter app to get business_id before PIN login.',
   })
+  @ApiBody({ type: ResolveBusinessCodeDto })
   @ApiResponse({ status: 200, description: 'Business resolved successfully.' })
   @ApiResponse({ status: 404, description: 'Invalid business code.' })
   async resolveBusinessCode(@Body() dto: ResolveBusinessCodeDto) {
