@@ -9,6 +9,7 @@ import { RefreshDto } from './dto/refresh.dto';
 import { LogoutDto } from './dto/logout.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ResolveBusinessCodeDto } from './dto/resolve-business-code.dto';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 
@@ -139,6 +140,19 @@ export class AuthController {
     dto.pin = payload.pin || payload.passCode || payload.code || '';
     dto.branchId = payload.branchId || payload.branch_id || payload.business_id || '';
     return this.authService.waiterLogin(dto);
+  }
+
+  @Post('resolve-business')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({
+    summary: 'Resolve a business code',
+    description: 'Takes a business code and returns the business ID and name. Used by waiter app to get business_id before PIN login.',
+  })
+  @ApiResponse({ status: 200, description: 'Business resolved successfully.' })
+  @ApiResponse({ status: 404, description: 'Invalid business code.' })
+  async resolveBusinessCode(@Body() dto: ResolveBusinessCodeDto) {
+    return this.authService.resolveBusinessCode(dto.business_code);
   }
 
   @Post('impersonate')

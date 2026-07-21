@@ -20,6 +20,9 @@ export class Business {
   @Column({ unique: true })
   slug: string;
 
+  @Column({ unique: true, length: 12, nullable: true })
+  business_code: string;
+
   @Column({ type: 'enum', enum: ['bar', 'lounge', 'restaurant', 'club', 'cafe'] })
   type: string;
 

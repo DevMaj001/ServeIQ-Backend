@@ -33,11 +33,13 @@ export class AuthService {
 
     try {
       // 1. Create Business
+      const businessCode = crypto.randomBytes(6).toString('base64url').toUpperCase().slice(0, 8);
       const business = queryRunner.manager.create(Business, {
         name: dto.businessName,
         slug: dto.businessName.toLowerCase().replace(/ /g, '-'),
         type: dto.businessType,
         email: dto.email,
+        business_code: businessCode,
         logo_url: dto.logoUrl ?? null,
         cac_document_url: dto.cacDocumentUrl ?? null,
       } as Partial<Business>);
@@ -140,6 +142,19 @@ export class AuthService {
     }
 
     throw new UnauthorizedException('Invalid PIN');
+  }
+
+  async resolveBusinessCode(businessCode: string) {
+    const business = await this.dataSource.getRepository(Business).findOne({
+      where: { business_code: businessCode },
+    });
+    if (!business) {
+      throw new NotFoundException('Invalid business code');
+    }
+    return {
+      business_id: business.id,
+      business_name: business.name,
+    };
   }
 
   async activate(dto: { email: string; password: string }) {
