@@ -138,7 +138,8 @@ export class AuthController {
   async waiterLogin(@Body() payload: any) {
     const dto = new WaiterLoginDto();
     dto.pin = payload.pin || payload.passCode || payload.code || '';
-    dto.branchId = payload.branchId || payload.branch_id || payload.business_id || '';
+    dto.branchId = payload.branchId || payload.branch_id || undefined;
+    dto.businessId = payload.businessId || payload.business_id || undefined;
     return this.authService.waiterLogin(dto);
   }
 

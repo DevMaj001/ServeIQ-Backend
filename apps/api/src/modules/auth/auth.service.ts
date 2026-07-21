@@ -127,8 +127,10 @@ export class AuthService {
       is_active: true,
     };
 
-    if (dto.branchId && dto.branchId.length === 36) {
+    if (dto.branchId) {
       whereClause.branch_id = dto.branchId;
+    } else if (dto.businessId) {
+      whereClause.business_id = dto.businessId;
     }
 
     const users = await this.dataSource.getRepository(User).find({

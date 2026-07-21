@@ -1,5 +1,5 @@
-import { IsNotEmpty, IsString, IsUUID } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsNotEmpty, IsString, IsUUID, IsOptional } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class WaiterLoginDto {
   @ApiProperty({ example: '1234', description: '4-digit PIN assigned to the waiter by admin' })
@@ -7,8 +7,13 @@ export class WaiterLoginDto {
   @IsString()
   pin: string;
 
-  @ApiProperty({ example: 'uuid-of-branch', description: 'Branch ID the waiter belongs to' })
-  @IsNotEmpty()
+  @ApiPropertyOptional({ example: 'uuid-of-branch', description: 'Branch ID the waiter belongs to (optional if businessId is provided)' })
+  @IsOptional()
   @IsUUID()
-  branchId: string;
+  branchId?: string;
+
+  @ApiPropertyOptional({ example: 'uuid-of-business', description: 'Business ID (used when resolving from business code)' })
+  @IsOptional()
+  @IsUUID()
+  businessId?: string;
 }
