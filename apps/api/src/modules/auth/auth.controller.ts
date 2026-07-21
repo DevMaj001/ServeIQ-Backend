@@ -123,7 +123,7 @@ export class AuthController {
   @ApiOperation({
     summary: 'Waiter PIN login',
     description:
-      'Authenticates a waiter using their 4-digit PIN and branch ID. Returns a JWT scoped to the WAITER role.',
+      'Authenticates a staff member using their 4-digit PIN and branch ID or business ID. Returns a JWT scoped to their role (waiter, supervisor, chef, manager).',
   })
   @ApiBody({ type: WaiterLoginDto })
   @ApiResponse({

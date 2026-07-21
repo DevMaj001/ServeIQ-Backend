@@ -18,7 +18,7 @@ Here is everything the system can do, explained simply:
 - **Order tracking** — enter tracking code to see order status (`GET /api/v1/tracking/:code`) — no login needed
 
 ### For Waiters & Staff
-- **Sign in** — enter business code to get business ID (`POST /api/v1/auth/resolve-business`), then enter PIN to get JWT (`POST /api/v1/auth/waiter-login`)
+- **Sign in** — enter business code to get business ID (`POST /api/v1/auth/resolve-business`), then enter PIN to get JWT (`POST /api/v1/auth/waiter-login` with `{ pin, business_id }`)
 - **Take orders** at any table (`POST /api/v1/orders/tab/:tabId`)
 - **Send orders** to the kitchen (`POST /api/v1/orders/:id/approve` by supervisor)
 - **Track order status** — pending, approved, preparing, ready, out for delivery, delivered (`GET /api/v1/orders/tab/:tabId`)
