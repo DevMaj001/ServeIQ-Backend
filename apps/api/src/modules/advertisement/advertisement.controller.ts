@@ -15,7 +15,7 @@ export class AdvertisementController {
   constructor(private readonly adService: AdvertisementService) {}
 
   @Get()
-  @ApiOperation({ summary: 'List all advertisements for the branch' })
+  @ApiOperation({ summary: 'List all advertisements' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
   async findAll(@Request() req: any, @Query('branch_id') branchId?: string) {
@@ -27,8 +27,8 @@ export class AdvertisementController {
   @ApiParam({ name: 'id', description: 'Advertisement UUID' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
-  async findOne(@Param('id') id: string, @Request() req: any) {
-    return this.adService.findOne(id, req.user.branchId);
+  async findOne(@Param('id') id: string) {
+    return this.adService.findOne(id);
   }
 
   @Post()
@@ -36,8 +36,7 @@ export class AdvertisementController {
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
   async create(@Request() req: any, @Body() body: any) {
-    const branchId = body.branch_id || req.user.branchId;
-    return this.adService.create(branchId, body);
+    return this.adService.create(body);
   }
 
   @Patch(':id')
@@ -45,8 +44,8 @@ export class AdvertisementController {
   @ApiParam({ name: 'id', description: 'Advertisement UUID' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
-  async update(@Param('id') id: string, @Request() req: any, @Body() body: any) {
-    return this.adService.update(id, req.user.branchId, body);
+  async update(@Param('id') id: string, @Body() body: any) {
+    return this.adService.update(id, body);
   }
 
   @Delete(':id')
@@ -54,7 +53,7 @@ export class AdvertisementController {
   @ApiParam({ name: 'id', description: 'Advertisement UUID' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
-  async remove(@Param('id') id: string, @Request() req: any) {
-    return this.adService.remove(id, req.user.branchId);
+  async remove(@Param('id') id: string) {
+    return this.adService.remove(id);
   }
 }

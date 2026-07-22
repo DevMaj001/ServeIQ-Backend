@@ -19,31 +19,34 @@ export class AdvertisementService {
 
   async findPublic(branchId: string) {
     return this.adRepo.find({
-      where: { branch_id: branchId, is_active: true },
+      where: [
+        { branch_id: branchId, is_active: true },
+        { branch_id: null as any, is_active: true },
+      ],
       order: { sort_order: 'ASC', created_at: 'DESC' },
       select: { id: true, image_url: true, link_url: true, title: true, sort_order: true },
     });
   }
 
-  async findOne(id: string, branchId: string) {
-    const ad = await this.adRepo.findOne({ where: { id, branch_id: branchId } });
+  async findOne(id: string) {
+    const ad = await this.adRepo.findOne({ where: { id } });
     if (!ad) throw new NotFoundException('Advertisement not found');
     return ad;
   }
 
-  async create(branchId: string, data: Partial<Advertisement>) {
-    const ad = this.adRepo.create({ ...data, branch_id: branchId });
+  async create(data: Partial<Advertisement>) {
+    const ad = this.adRepo.create(data);
     return this.adRepo.save(ad);
   }
 
-  async update(id: string, branchId: string, data: Partial<Advertisement>) {
-    const ad = await this.findOne(id, branchId);
+  async update(id: string, data: Partial<Advertisement>) {
+    const ad = await this.findOne(id);
     Object.assign(ad, data);
     return this.adRepo.save(ad);
   }
 
-  async remove(id: string, branchId: string) {
-    const ad = await this.findOne(id, branchId);
+  async remove(id: string) {
+    const ad = await this.findOne(id);
     await this.adRepo.remove(ad);
     return { deleted: true };
   }

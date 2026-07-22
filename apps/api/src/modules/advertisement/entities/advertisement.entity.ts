@@ -6,8 +6,8 @@ export class Advertisement {
   id: string;
 
   @Index()
-  @Column({ type: 'uuid' })
-  branch_id: string;
+  @Column({ type: 'uuid', nullable: true })
+  branch_id: string | null;
 
   @Column({ type: 'text' })
   image_url: string;

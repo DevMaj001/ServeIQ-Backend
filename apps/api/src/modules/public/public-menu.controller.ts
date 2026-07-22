@@ -67,7 +67,10 @@ export class PublicMenuController {
     if (!branch) throw new NotFoundException('Branch not found');
 
     const ads = await this.adRepo.find({
-      where: { branch_id: branchId, is_active: true },
+      where: [
+        { branch_id: branchId, is_active: true },
+        { branch_id: null as any, is_active: true },
+      ],
       order: { sort_order: 'ASC', created_at: 'DESC' },
       select: { id: true, image_url: true, link_url: true, title: true, sort_order: true },
     });
