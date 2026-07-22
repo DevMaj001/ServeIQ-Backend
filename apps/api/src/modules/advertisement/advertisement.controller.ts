@@ -19,7 +19,7 @@ export class AdvertisementController {
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
   async findAll(@Request() req: any, @Query('branch_id') branchId?: string) {
-    return this.adService.findAll(branchId || req.user.branchId);
+    return this.adService.findAll(branchId);
   }
 
   @Get(':id')

@@ -10,9 +10,9 @@ export class AdvertisementService {
     private adRepo: Repository<Advertisement>,
   ) {}
 
-  async findAll(branchId: string) {
+  async findAll(branchId?: string) {
     return this.adRepo.find({
-      where: { branch_id: branchId },
+      where: branchId ? { branch_id: branchId } : undefined,
       order: { sort_order: 'ASC', created_at: 'DESC' },
     });
   }
