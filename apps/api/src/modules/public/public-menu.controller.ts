@@ -1,6 +1,6 @@
 import { Controller, Get, Param, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, IsNull } from 'typeorm';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { Branch } from '../branch/entities/branch.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
@@ -69,7 +69,7 @@ export class PublicMenuController {
     const ads = await this.adRepo.find({
       where: [
         { branch_id: branchId, is_active: true },
-        { branch_id: null as any, is_active: true },
+        { branch_id: IsNull(), is_active: true },
       ],
       order: { sort_order: 'ASC', created_at: 'DESC' },
       select: { id: true, image_url: true, link_url: true, title: true, sort_order: true },

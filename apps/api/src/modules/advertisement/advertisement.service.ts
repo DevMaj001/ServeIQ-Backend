@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, IsNull } from 'typeorm';
 import { Advertisement } from './entities/advertisement.entity';
 
 @Injectable()
@@ -21,7 +21,7 @@ export class AdvertisementService {
     return this.adRepo.find({
       where: [
         { branch_id: branchId, is_active: true },
-        { branch_id: null as any, is_active: true },
+        { branch_id: IsNull(), is_active: true },
       ],
       order: { sort_order: 'ASC', created_at: 'DESC' },
       select: { id: true, image_url: true, link_url: true, title: true, sort_order: true },
