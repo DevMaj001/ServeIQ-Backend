@@ -48,6 +48,7 @@ import { AddBusinessCodeToBusinesses1796000000000 } from './database/migrations/
 import { BackfillBusinessCodes1796000000001 } from './database/migrations/1796000000001-BackfillBusinessCodes';
 import { AddTokenVersionFields1797000000000 } from './database/migrations/1797000000000-AddTokenVersionFields';
 import { MakeAdBranchIdNullable1798000000000 } from './database/migrations/1798000000000-MakeAdBranchIdNullable';
+import { MakeExistingAdsUniversal1798000000001 } from './database/migrations/1798000000001-MakeExistingAdsUniversal';
 
 import { AuthModule } from './modules/auth/auth.module';
 import { BusinessModule } from './modules/business/business.module';
@@ -112,7 +113,7 @@ import { RoleModule } from './modules/role/role.module';
         Permission,
         Role,
       ],
-      migrations: [CreateBaseTables1782000000000, CreatePlansAndSubscriptions1784000000000, AddTrackingAndTimestampsToOrders1792000000000, CreateAdvertisementsTable1793000000000, CreatePermissionsAndRoles1794000000000, CreateNotificationsTable1784000000003, CreateDepartmentsTable1790000000000, CreateStockMovementsTable1795000000000, AddBusinessCodeToBusinesses1796000000000, BackfillBusinessCodes1796000000001, AddTokenVersionFields1797000000000, MakeAdBranchIdNullable1798000000000],
+      migrations: [CreateBaseTables1782000000000, CreatePlansAndSubscriptions1784000000000, AddTrackingAndTimestampsToOrders1792000000000, CreateAdvertisementsTable1793000000000, CreatePermissionsAndRoles1794000000000, CreateNotificationsTable1784000000003, CreateDepartmentsTable1790000000000, CreateStockMovementsTable1795000000000, AddBusinessCodeToBusinesses1796000000000, BackfillBusinessCodes1796000000001, AddTokenVersionFields1797000000000, MakeAdBranchIdNullable1798000000000, MakeExistingAdsUniversal1798000000001],
       migrationsRun: true,
       synchronize: false,
       logging: false,
