@@ -256,6 +256,7 @@ export class AuthService {
   }
 
   private async generateTokens(user: User) {
+    const branch = await this.dataSource.getRepository(Branch).findOne({ where: { id: user.branch_id } });
     const payload = {
       sub: user.id,
       email: user.email,
@@ -263,6 +264,8 @@ export class AuthService {
       role_id: user.role_id,
       businessId: user.business_id,
       branchId: user.branch_id,
+      pin_token_version: user.pin_token_version,
+      staff_token_version: branch?.staff_token_version ?? 0,
     };
 
     const refreshToken = await this.generateRefreshToken(user.id);

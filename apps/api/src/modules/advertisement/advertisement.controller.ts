@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -18,8 +18,8 @@ export class AdvertisementController {
   @ApiOperation({ summary: 'List all advertisements for the branch' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
-  async findAll(@Request() req: any) {
-    return this.adService.findAll(req.user.branchId);
+  async findAll(@Request() req: any, @Query('branch_id') branchId?: string) {
+    return this.adService.findAll(branchId || req.user.branchId);
   }
 
   @Get(':id')
@@ -36,7 +36,8 @@ export class AdvertisementController {
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
   async create(@Request() req: any, @Body() body: any) {
-    return this.adService.create(req.user.branchId, body);
+    const branchId = body.branch_id || req.user.branchId;
+    return this.adService.create(branchId, body);
   }
 
   @Patch(':id')

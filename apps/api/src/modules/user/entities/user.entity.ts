@@ -76,6 +76,9 @@ export class User {
   @Column({ type: 'varchar', nullable: true })
   invited_by: string;
 
+  @Column({ type: 'int', default: 0 })
+  pin_token_version: number;
+
   @CreateDateColumn()
   created_at: Date;
 

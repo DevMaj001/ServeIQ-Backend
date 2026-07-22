@@ -176,6 +176,7 @@ export class UserService {
     const pin = String(Math.floor(1000 + Math.random() * 9000));
     const salt = await bcrypt.genSalt();
     user.pin_hash = await bcrypt.hash(pin, salt);
+    user.pin_token_version += 1;
     await this.userRepository.save(user);
 
     await this.auditService.log({

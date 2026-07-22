@@ -4,6 +4,7 @@ import { Repository, Between } from 'typeorm';
 import { Shift } from './entities/shift.entity';
 import { Bill } from '../bill/entities/bill.entity';
 import { Tab } from '../tab/entities/tab.entity';
+import { Branch } from '../branch/entities/branch.entity';
 
 @Injectable()
 export class ShiftService {
@@ -14,6 +15,8 @@ export class ShiftService {
     private billRepository: Repository<Bill>,
     @InjectRepository(Tab)
     private tabRepository: Repository<Tab>,
+    @InjectRepository(Branch)
+    private branchRepository: Repository<Branch>,
   ) {}
 
   async findAll(branchId: string) {
@@ -75,6 +78,8 @@ export class ShiftService {
     const cashSales = cashBills.reduce((sum, b) => sum + b.total_kobo, 0);
     shift.expected_cash_kobo = shift.starting_cash_kobo + cashSales;
     shift.variance_kobo = dto.actual_cash_kobo - shift.expected_cash_kobo;
+
+    await this.branchRepository.increment({ id: branchId }, 'staff_token_version', 1);
 
     const saved = await this.shiftRepository.save(shift);
     const varianceExplanation = this.buildVarianceExplanation(

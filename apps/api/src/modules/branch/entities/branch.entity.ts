@@ -44,6 +44,9 @@ export class Branch {
   @Column({ default: true })
   is_active: boolean;
 
+  @Column({ type: 'int', default: 0 })
+  staff_token_version: number;
+
   @CreateDateColumn()
   created_at: Date;
 
