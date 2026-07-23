@@ -11,6 +11,10 @@ export class MenuCategoryService {
   ) {}
 
   async create(data: Partial<MenuCategory>) {
+    const existing = await this.categoryRepo.findOne({
+      where: { branch_id: data.branch_id, name: data.name },
+    });
+    if (existing) return existing;
     const category = this.categoryRepo.create(data);
     return this.categoryRepo.save(category);
   }

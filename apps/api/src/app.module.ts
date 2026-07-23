@@ -37,7 +37,9 @@ import { Advertisement } from './modules/advertisement/entities/advertisement.en
 import { Permission } from './modules/role/entities/permission.entity';
 import { Role } from './modules/role/entities/role.entity';
 import { MenuCategory } from './modules/menu-category/entities/menu-category.entity';
+import { Unit } from './modules/unit/entities/unit.entity';
 import { CreateMenuCategoriesTable1799000000000 } from './database/migrations/1799000000000-CreateMenuCategoriesTable';
+import { CreateUnitsTable1799000000001 } from './database/migrations/1799000000001-CreateUnitsTable';
 import { CreateBaseTables1782000000000 } from './database/migrations/1782000000000-CreateBaseTables';
 import { AddTrackingAndTimestampsToOrders1792000000000 } from './database/migrations/1792000000000-AddTrackingAndTimestampsToOrders';
 import { CreateAdvertisementsTable1793000000000 } from './database/migrations/1793000000000-CreateAdvertisementsTable';
@@ -78,6 +80,7 @@ import { TrackingModule } from './modules/tracking/tracking.module';
 import { AdvertisementModule } from './modules/advertisement/advertisement.module';
 import { RoleModule } from './modules/role/role.module';
 import { MenuCategoryModule } from './modules/menu-category/menu-category.module';
+import { UnitModule } from './modules/unit/unit.module';
 
 @Module({
   imports: [
@@ -116,8 +119,9 @@ import { MenuCategoryModule } from './modules/menu-category/menu-category.module
         Permission,
         Role,
         MenuCategory,
+        Unit,
       ],
-      migrations: [CreateBaseTables1782000000000, CreatePlansAndSubscriptions1784000000000, AddTrackingAndTimestampsToOrders1792000000000, CreateAdvertisementsTable1793000000000, CreatePermissionsAndRoles1794000000000, CreateNotificationsTable1784000000003, CreateDepartmentsTable1790000000000, CreateStockMovementsTable1795000000000, AddBusinessCodeToBusinesses1796000000000, BackfillBusinessCodes1796000000001, AddTokenVersionFields1797000000000, MakeAdBranchIdNullable1798000000000, MakeExistingAdsUniversal1798000000001, CreateMenuCategoriesTable1799000000000],
+      migrations: [CreateBaseTables1782000000000, CreatePlansAndSubscriptions1784000000000, AddTrackingAndTimestampsToOrders1792000000000, CreateAdvertisementsTable1793000000000, CreatePermissionsAndRoles1794000000000, CreateNotificationsTable1784000000003, CreateDepartmentsTable1790000000000, CreateStockMovementsTable1795000000000, AddBusinessCodeToBusinesses1796000000000, BackfillBusinessCodes1796000000001, AddTokenVersionFields1797000000000, MakeAdBranchIdNullable1798000000000, MakeExistingAdsUniversal1798000000001, CreateMenuCategoriesTable1799000000000, CreateUnitsTable1799000000001],
       migrationsRun: true,
       synchronize: false,
       logging: false,
@@ -160,6 +164,7 @@ import { MenuCategoryModule } from './modules/menu-category/menu-category.module
     AdvertisementModule,
     RoleModule,
     MenuCategoryModule,
+    UnitModule,
   ],
   controllers: [AppController],
   providers: [
