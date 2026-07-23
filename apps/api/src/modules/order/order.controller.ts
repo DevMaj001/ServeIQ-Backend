@@ -34,10 +34,10 @@ export class OrderController {
   @Get('pending')
   @UseGuards(RolesGuard)
   @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER, UserRole.WAITER)
-  @ApiOperation({ summary: 'Get pending approval orders (paginated)' })
+  @ApiOperation({ summary: 'Get pending approval orders (paginated). Waiters see only their own; supervisors/managers/owners see all.' })
   @ApiQuery({ name: 'page', required: false, example: '1' })
   @ApiQuery({ name: 'per_page', required: false, example: '20' })
-  @ApiResponse({ status: 200, description: 'Paginated pending orders list.' })
+  @ApiResponse({ status: 200, description: 'Paginated pending orders list (waiter-scoped for waiter role).' })
   async findPending(
     @Request() req: any,
     @Query('page') page?: string,
