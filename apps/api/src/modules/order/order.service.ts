@@ -318,7 +318,7 @@ export class OrderService {
     `;
 
     const countSql = `SELECT COUNT(DISTINCT o.tab_id) AS total ${baseQuery}`;
-    const countResult = await this.dataSource.query(countSql, [branchId, statuses]);
+    const countResult = await this.dataSource.query(countSql, params);
     const total = parseInt(countResult[0]?.total || '0', 10);
 
     let paginationClause = '';
@@ -362,7 +362,7 @@ export class OrderService {
       ${paginationClause}
     `;
 
-    const rows = await this.dataSource.query(dataSql, [branchId, statuses]);
+    const rows = await this.dataSource.query(dataSql, params);
     return { data: rows, total };
   }
 
