@@ -289,14 +289,36 @@ export class OrderService {
 
   private async findGroupedOrdersByBranch(
     branchId: string,
-    statuses: OrderStatus[],
-    orderBy: 'created_at' | 'timer_ends_at',
-  ): Promise<any[]> {
-    const orderClause = orderBy === 'timer_ends_at'
-      ? 'MIN(o.timer_ends_at) ASC NULLS LAST'
-      : 'MIN(o.created_at) ASC';
+    statuses: string[],
+    orderField: string,
+    pagination?: { page: number; per_page: number },
+  ) {
+    const orderClause = orderField === 'created_at'
+      ? 'o.created_at DESC'
+      : 'o.timer_ends_at ASC NULLS LAST';
 
-    const sql = `
+    const baseQuery = `
+      FROM orders o
+      JOIN tabs t ON t.id = o.tab_id
+      LEFT JOIN tables tbl ON tbl.id = t.table_id
+      LEFT JOIN users w ON w.id = t.waiter_id
+      LEFT JOIN menu_items mi ON mi.id = o.menu_item_id
+      LEFT JOIN departments d ON d.id = o.assigned_department
+      WHERE t.branch_id = $1
+        AND o.order_status = ANY($2::text[])
+    `;
+
+    const countSql = `SELECT COUNT(DISTINCT o.tab_id) AS total ${baseQuery}`;
+    const countResult = await this.dataSource.query(countSql, [branchId, statuses]);
+    const total = parseInt(countResult[0]?.total || '0', 10);
+
+    let paginationClause = '';
+    if (pagination) {
+      const offset = (pagination.page - 1) * pagination.per_page;
+      paginationClause = `LIMIT ${pagination.per_page} OFFSET ${offset}`;
+    }
+
+    const dataSql = `
       SELECT
         o.tab_id::text AS "tabId",
         o.created_at AS "createdAt",
@@ -325,44 +347,41 @@ export class OrderService {
             'createdAt', o.created_at
           ) ORDER BY o.created_at
         ) AS items
-      FROM orders o
-      JOIN tabs t ON t.id = o.tab_id
-      LEFT JOIN tables tbl ON tbl.id = t.table_id
-      LEFT JOIN users w ON w.id = t.waiter_id
-      LEFT JOIN menu_items mi ON mi.id = o.menu_item_id
-      LEFT JOIN departments d ON d.id = o.assigned_department
-      WHERE t.branch_id = $1
-        AND o.order_status = ANY($2::text[])
+      ${baseQuery}
       GROUP BY o.tab_id, o.created_at, t.table_id, tbl.table_number, t.waiter_id, w.full_name
       ORDER BY ${orderClause}
+      ${paginationClause}
     `;
 
-    const rows = await this.dataSource.query(sql, [branchId, statuses]);
-    return rows;
+    const rows = await this.dataSource.query(dataSql, [branchId, statuses]);
+    return { data: rows, total };
   }
 
-  async findPendingByBranch(branchId: string) {
+  async findPendingByBranch(branchId: string, pagination?: { page: number; per_page: number }) {
     return this.findGroupedOrdersByBranch(
       branchId,
       [OrderStatus.PENDING_SUPERVISOR_APPROVAL],
       'created_at',
+      pagination,
     );
   }
 
   async findPreparingByBranch(branchId: string) {
-    return this.findGroupedOrdersByBranch(
+    const { data } = await this.findGroupedOrdersByBranch(
       branchId,
       [OrderStatus.APPROVED, OrderStatus.ASSIGNED_TO_DEPARTMENT, OrderStatus.PREPARING],
       'timer_ends_at',
     );
+    return data;
   }
 
   async findReadyForPickupByBranch(branchId: string) {
-    return this.findGroupedOrdersByBranch(
+    const { data } = await this.findGroupedOrdersByBranch(
       branchId,
       [OrderStatus.READY_FOR_PICKUP],
       'timer_ends_at',
     );
+    return data;
   }
 
   async expireTimers() {

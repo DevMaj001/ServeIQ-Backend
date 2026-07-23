@@ -1,15 +1,16 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Request, Query } from '@nestjs/common';
 import { OrderService } from './order.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../../common/shared';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiBody, ApiQuery } from '@nestjs/swagger';
 import { CreateOrderItemDto } from './dto/create-order-item.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { ApproveOrderDto } from './dto/approve-order.dto';
 import { DeclineOrderDto } from './dto/decline-order.dto';
 import { Order } from './entities/order.entity';
+import { getPaginationParams, paginate } from '../../common/pagination';
 
 @ApiTags('Orders')
 @ApiBearerAuth('access-token')
@@ -33,10 +34,18 @@ export class OrderController {
   @Get('pending')
   @UseGuards(RolesGuard)
   @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER, UserRole.WAITER)
-  @ApiOperation({ summary: 'Get pending approval orders' })
-  @ApiResponse({ status: 200, description: 'Pending orders list.' })
-  async findPending(@Request() req: any) {
-    return this.orderService.findPendingByBranch(req.user.branchId);
+  @ApiOperation({ summary: 'Get pending approval orders (paginated)' })
+  @ApiQuery({ name: 'page', required: false, example: '1' })
+  @ApiQuery({ name: 'per_page', required: false, example: '20' })
+  @ApiResponse({ status: 200, description: 'Paginated pending orders list.' })
+  async findPending(
+    @Request() req: any,
+    @Query('page') page?: string,
+    @Query('per_page') per_page?: string,
+  ) {
+    const pagination = getPaginationParams({ page, per_page });
+    const { data, total } = await this.orderService.findPendingByBranch(req.user.branchId, pagination);
+    return paginate(data, total, pagination);
   }
 
   @Get('preparing')
