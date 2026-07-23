@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { Table, TableStatus } from './entities/table.entity';
 import { Tab } from '../tab/entities/tab.entity';
 
@@ -11,6 +11,8 @@ export class TableService {
     private tableRepository: Repository<Table>,
     @InjectRepository(Tab)
     private tabRepository: Repository<Tab>,
+    @Inject(DataSource)
+    private dataSource: DataSource,
   ) {}
 
   async create(createDto: any) {
@@ -73,15 +75,27 @@ export class TableService {
       where: { table_id: id, status: 'open' },
     });
 
-    if (openTab) {
-      await this.tabRepository.update(openTab.id, {
-        status: 'voided',
-        closed_at: new Date(),
-        notes: `RELEASED by ${currentUserRole} (${currentUserId})`,
-      });
-    }
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    table.status = TableStatus.AVAILABLE;
-    return this.tableRepository.save(table);
+    try {
+      if (openTab) {
+        await queryRunner.manager.update(Tab, openTab.id, {
+          status: 'voided',
+          closed_at: new Date(),
+          notes: `RELEASED by ${currentUserRole} (${currentUserId})`,
+        });
+      }
+
+      await queryRunner.manager.update(Table, id, { status: TableStatus.AVAILABLE });
+      await queryRunner.commitTransaction();
+      return { success: true, message: 'Table released' };
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
   }
 }
