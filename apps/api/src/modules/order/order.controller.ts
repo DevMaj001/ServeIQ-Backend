@@ -44,7 +44,9 @@ export class OrderController {
     @Query('per_page') per_page?: string,
   ) {
     const pagination = getPaginationParams({ page, per_page });
-    const { data, total } = await this.orderService.findPendingByBranch(req.user.branchId, pagination);
+    const { data, total } = await this.orderService.findPendingByBranch(
+      req.user.branchId, req.user.userId, req.user.role, pagination,
+    );
     return paginate(data, total, pagination);
   }
 

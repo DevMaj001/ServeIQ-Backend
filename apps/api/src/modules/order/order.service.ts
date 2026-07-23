@@ -5,7 +5,7 @@ import { Order } from './entities/order.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Tab } from '../tab/entities/tab.entity';
 import { IngredientService } from '../ingredient/ingredient.service';
-import { OrderStatus } from '../../common/shared';
+import { OrderStatus, UserRole } from '../../common/shared';
 import { AuditService } from '../../common/services/audit.service';
 import { Department } from '../department/entities/department.entity';
 import { ApproveOrderDto } from './dto/approve-order.dto';
@@ -292,10 +292,18 @@ export class OrderService {
     statuses: string[],
     orderField: string,
     pagination?: { page: number; per_page: number },
+    waiterId?: string,
   ) {
     const orderClause = orderField === 'created_at'
       ? 'o.created_at DESC'
       : 'o.timer_ends_at ASC NULLS LAST';
+
+    const params: any[] = [branchId, statuses];
+    let waiterClause = '';
+    if (waiterId) {
+      params.push(waiterId);
+      waiterClause = ` AND t.waiter_id = $${params.length}`;
+    }
 
     const baseQuery = `
       FROM orders o
@@ -306,6 +314,7 @@ export class OrderService {
       LEFT JOIN departments d ON d.id = o.assigned_department
       WHERE t.branch_id = $1
         AND o.order_status = ANY($2::text[])
+        ${waiterClause}
     `;
 
     const countSql = `SELECT COUNT(DISTINCT o.tab_id) AS total ${baseQuery}`;
@@ -357,12 +366,18 @@ export class OrderService {
     return { data: rows, total };
   }
 
-  async findPendingByBranch(branchId: string, pagination?: { page: number; per_page: number }) {
+  async findPendingByBranch(
+    branchId: string,
+    userId?: string,
+    role?: string,
+    pagination?: { page: number; per_page: number },
+  ) {
     return this.findGroupedOrdersByBranch(
       branchId,
       [OrderStatus.PENDING_SUPERVISOR_APPROVAL],
       'created_at',
       pagination,
+      role === UserRole.WAITER ? userId : undefined,
     );
   }
 
