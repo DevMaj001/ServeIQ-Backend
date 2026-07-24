@@ -4,7 +4,10 @@ import { memoryStorage } from 'multer';
 import { MenuService } from './menu.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { PERMISSIONS } from '../role/permission-codes';
 import { UserRole } from '../../common/shared';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiConsumes } from '@nestjs/swagger';
 import { CreateMenuItemDto } from './dto/create-menu-item.dto';
@@ -119,6 +122,8 @@ export class MenuController {
   }
 
   @Patch(':id/toggle')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.MARK_UNAVAILABLE)
   @ApiOperation({ summary: 'Toggle menu item availability (on/off)' })
   @ApiParam({ name: 'id', description: 'Menu item UUID' })
   @ApiResponse({ status: 200, description: 'Menu item availability toggled.' })

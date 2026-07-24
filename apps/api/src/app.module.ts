@@ -75,6 +75,7 @@ import { SyncModule } from './modules/sync/sync.module';
 import { MenuModifierModule } from './modules/menu-modifier/menu-modifier.module';
 import { PublicModule } from './modules/public/public.module';
 import { DepartmentModule } from './modules/department/department.module';
+import { HealthModule } from './modules/health/health.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { TrackingModule } from './modules/tracking/tracking.module';
 import { AdvertisementModule } from './modules/advertisement/advertisement.module';
@@ -163,6 +164,7 @@ import { UnitModule } from './modules/unit/unit.module';
     TrackingModule,
     AdvertisementModule,
     RoleModule,
+    HealthModule,
     MenuCategoryModule,
     UnitModule,
   ],

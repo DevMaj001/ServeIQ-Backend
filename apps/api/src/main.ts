@@ -4,11 +4,15 @@ import { ValidationPipe, VersioningType } from '@nestjs/common';
 import helmet from 'helmet';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { SentryExceptionFilter } from './common/filters/sentry-exception.filter';
+import { StructuredLogger } from './common/services/logger.service';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { HttpAdapterHost } from '@nestjs/core';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { AppDataSource } from './database/data-source';
 import { ensureTables } from './database/ensure-tables';
+import * as Sentry from '@sentry/node';
 async function bootstrap() {
   let ds;
   try {
@@ -19,7 +23,14 @@ async function bootstrap() {
     console.error('[bootstrap] DataSource init error (non-fatal):', e);
   }
 
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    logger: new StructuredLogger('ServeIQ'),
+  });
+
+  if (process.env.SENTRY_DSN) {
+    Sentry.init({ dsn: process.env.SENTRY_DSN, environment: process.env.NODE_ENV || 'development' });
+    app.useGlobalFilters(new SentryExceptionFilter(app.get(HttpAdapterHost)));
+  }
 
   // Security headers
   app.use(helmet());
