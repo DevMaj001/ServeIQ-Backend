@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsBoolean, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsString, IsBoolean, IsOptional, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreatePosTerminalDto {
@@ -11,4 +11,10 @@ export class CreatePosTerminalDto {
   @IsOptional()
   @IsBoolean()
   is_active?: boolean;
+
+  @ApiProperty({ example: '0123456789', description: 'Account number for payment', required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  account_number?: string;
 }

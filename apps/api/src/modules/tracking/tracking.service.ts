@@ -6,6 +6,8 @@ import { Order } from '../order/entities/order.entity';
 import { Tab } from '../tab/entities/tab.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
+import { Bill } from '../bill/entities/bill.entity';
+import { PosTerminal } from '../pos/entities/pos-terminal.entity';
 import { OrderStatus } from '../../common/shared';
 
 const CODE_PREFIX = 'SVQ';
@@ -25,6 +27,10 @@ export class TrackingService {
     private branchRepo: Repository<Branch>,
     @InjectRepository(MenuItem)
     private menuItemRepo: Repository<MenuItem>,
+    @InjectRepository(Bill)
+    private billRepo: Repository<Bill>,
+    @InjectRepository(PosTerminal)
+    private posTerminalRepo: Repository<PosTerminal>,
   ) {}
 
   generateCode(): string {
@@ -80,12 +86,24 @@ export class TrackingService {
       }
     }
 
+    let paymentAccountNumber = '';
+    try {
+      if (tab) {
+        const bill = await this.billRepo.findOne({ where: { tab_id: tab.id } });
+        if (bill?.terminal_id) {
+          const terminal = await this.posTerminalRepo.findOne({ where: { id: bill.terminal_id } });
+          paymentAccountNumber = terminal?.account_number || '';
+        }
+      }
+    } catch {}
+
     if (order.order_status === OrderStatus.DECLINED) {
       return {
         businessName,
         branchName,
         logoUrl,
         branchId,
+        paymentAccountNumber,
         order: {
           status: 'DECLINED',
           createdAt: order.created_at,
@@ -111,6 +129,7 @@ export class TrackingService {
       branchName,
       logoUrl,
       branchId,
+      paymentAccountNumber,
       order: {
         status: order.order_status.toUpperCase(),
         createdAt: order.created_at,

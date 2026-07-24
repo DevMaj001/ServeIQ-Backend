@@ -22,6 +22,9 @@ export class PosTerminal {
   @Column({ default: true })
   is_active: boolean;
 
+  @Column({ nullable: true })
+  account_number: string;
+
   @CreateDateColumn()
   created_at: Date;
 
