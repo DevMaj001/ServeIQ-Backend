@@ -347,13 +347,29 @@ export class OrderService {
             'quantity', o.quantity,
             'unitPriceKobo', o.unit_price_kobo,
             'subtotalKobo', o.subtotal_kobo,
+            'roundNumber', o.round_number,
             'notes', o.notes,
             'modifiers', o.modifiers,
             'orderStatus', o.order_status,
-            'timerEndsAt', o.timer_ends_at,
-            'trackingCode', o.tracking_code,
+            'voiceTranscription', o.voice_transcription,
+            'createdBy', o.created_by,
+            'approvedBy', o.approved_by,
+            'approvedAt', o.approved_at,
+            'declinedBy', o.declined_by,
+            'declinedAt', o.declined_at,
             'declineReason', o.decline_reason,
-            'createdAt', o.created_at
+            'assignedDepartment', o.assigned_department,
+            'estimatedPreparationTimeSeconds', o.estimated_preparation_time_seconds,
+            'timerStartedAt', o.timer_started_at,
+            'timerEndsAt', o.timer_ends_at,
+            'actualReadyTime', o.actual_ready_time,
+            'deliveredBySupervisor', o.delivered_by_supervisor,
+            'deliveredAt', o.delivered_at,
+            'trackingCode', o.tracking_code,
+            'trackingGeneratedAt', o.tracking_generated_at,
+            'preparingAt', o.preparing_at,
+            'createdAt', o.created_at,
+            'updatedAt', o.updated_at
           ) ORDER BY o.created_at
         ) AS items
       ${baseQuery}
