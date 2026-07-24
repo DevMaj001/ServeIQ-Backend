@@ -10,10 +10,8 @@ import { Bill } from '../bill/entities/bill.entity';
 import { PosTerminal } from '../pos/entities/pos-terminal.entity';
 import { OrderStatus } from '../../common/shared';
 
-const CODE_PREFIX = 'SVQ';
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-const FIRST_GROUP_LENGTH = 4;
-const SECOND_GROUP_LENGTH = 3;
+const CODE_LENGTH = 5;
 const MAX_RETRIES = 5;
 
 @Injectable()
@@ -34,16 +32,12 @@ export class TrackingService {
   ) {}
 
   generateCode(): string {
-    const randomPart = (len: number): string => {
-      const bytes = randomBytes(len);
-      let result = '';
-      for (let i = 0; i < len; i++) {
-        result += CODE_CHARS[bytes[i] % CODE_CHARS.length];
-      }
-      return result;
-    };
-
-    return `${CODE_PREFIX}-${randomPart(FIRST_GROUP_LENGTH)}-${randomPart(SECOND_GROUP_LENGTH)}`;
+    const bytes = randomBytes(CODE_LENGTH);
+    let result = '';
+    for (let i = 0; i < CODE_LENGTH; i++) {
+      result += CODE_CHARS[bytes[i] % CODE_CHARS.length];
+    }
+    return result;
   }
 
   async generateUniqueCode(): Promise<string> {
@@ -56,7 +50,7 @@ export class TrackingService {
   }
 
   async getTrackingByCode(code: string) {
-    const codeRegex = /^SVQ-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{3}$/;
+    const codeRegex = /^(?:SVQ-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{3}|[A-HJ-NP-Z2-9]{5})$/i;
     if (!codeRegex.test(code)) {
       throw new NotFoundException('Tracking code not found');
     }
