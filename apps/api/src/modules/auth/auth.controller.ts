@@ -1,5 +1,4 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Request, BadRequestException } from '@nestjs/common';
-import { validate } from 'class-validator';
+import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Request } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RegisterDto } from './dto/register.dto';
@@ -136,15 +135,7 @@ export class AuthController {
   })
   @ApiResponse({ status: 400, description: 'Validation error.' })
   @ApiResponse({ status: 401, description: 'Invalid PIN.' })
-  async waiterLogin(@Body() payload: any) {
-    const dto = new WaiterLoginDto();
-    dto.pin = payload.pin || payload.passCode || payload.code || '';
-    dto.branchId = payload.branchId || payload.branch_id || undefined;
-    dto.businessId = payload.businessId || payload.business_id || undefined;
-    const errors = await validate(dto);
-    if (errors.length > 0) {
-      throw new BadRequestException('Invalid request: branchId and businessId must be valid UUIDs');
-    }
+  async waiterLogin(@Body() dto: WaiterLoginDto) {
     return this.authService.waiterLogin(dto);
   }
 

@@ -51,12 +51,12 @@ export class TableController {
   @ApiResponse({ status: 201, description: 'Table created.', type: Table })
   @ApiResponse({ status: 400, description: 'Validation error.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async create(@Request() req: any, @Body() createDto: any) {
+  async create(@Request() req: any, @Body() createDto: CreateTableDto) {
     const data = { ...createDto };
     
     // Defensive mapping for Waiter app or other clients that might send different field names
     if (!data.table_number) {
-      data.table_number = data.tableName || data.name || data.tableNumber || `T-${Math.floor(Math.random() * 1000)}`;
+      data.table_number = data.table_number || `T-${Math.floor(Math.random() * 1000)}`;
     }
     
     return this.tableService.create({
@@ -76,7 +76,7 @@ export class TableController {
   async update(
     @Param('id') id: string,
     @Request() req: any,
-    @Body() updateDto: any,
+    @Body() updateDto: UpdateTableDto,
   ) {
     return this.tableService.update(id, req.user.branchId, updateDto);
   }

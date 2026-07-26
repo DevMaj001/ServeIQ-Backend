@@ -18,6 +18,7 @@ import { UserRole } from '../../common/shared';
 import { UserService } from './user.service';
 import { CreateWaiterDto } from './dto/create-waiter.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 import { User } from './entities/user.entity';
 import { getPaginationParams, paginate } from '../../common/pagination';
 
@@ -101,7 +102,7 @@ export class UserController {
   async update(
     @Request() req: { user: { branchId: string } },
     @Param('id') id: string,
-    @Body() updateDto: any,
+    @Body() updateDto: UpdateUserDto,
   ) {
     return this.userService.update(id, req.user.branchId, updateDto);
   }

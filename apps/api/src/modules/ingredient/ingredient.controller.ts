@@ -5,6 +5,8 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../../common/shared';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
+import { CreateInventoryItemDto } from './dto/create-inventory-item.dto';
+import { UpdateInventoryItemDto } from './dto/update-inventory-item.dto';
 
 @ApiTags('Inventory')
 @ApiBearerAuth('access-token')
@@ -78,8 +80,8 @@ export class IngredientController {
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiOperation({ summary: 'Create inventory item (Owner/Manager only)' })
   @ApiResponse({ status: 201, description: 'Item created.' })
-  async create(@Request() req: any, @Body() body: any) {
-    return this.ingredientService.create(req.user.branchId, { ...body, created_by: req.user.userId });
+  async create(@Request() req: any, @Body() dto: CreateInventoryItemDto) {
+    return this.ingredientService.create(req.user.branchId, { ...dto, created_by: req.user.userId });
   }
 
   @Patch('inventory/:id')
@@ -89,7 +91,7 @@ export class IngredientController {
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async update(@Param('id') id: string, @Request() req: any, @Body() body: any) {
+  async update(@Param('id') id: string, @Request() req: any, @Body() dto: UpdateInventoryItemDto) {
     return this.ingredientService.update(id, req.user.branchId, body);
   }
 

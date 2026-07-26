@@ -65,7 +65,7 @@ export class MenuController {
   @ApiResponse({ status: 201, description: 'Menu item created.', type: MenuItem })
   @ApiResponse({ status: 400, description: 'Validation error.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async create(@Request() req: any, @Body() createDto: any) {
+  async create(@Request() req: any, @Body() createDto: CreateMenuItemDto) {
     const data = { ...createDto };
     if (data.price && !data.price_kobo) {
       data.price_kobo = Math.round(data.price * 100);
@@ -88,7 +88,7 @@ export class MenuController {
   async update(
     @Param('id') id: string,
     @Request() req: any,
-    @Body() updateDto: any,
+    @Body() updateDto: UpdateMenuItemDto,
   ) {
     const data = { ...updateDto };
     if (data.price && !data.price_kobo) {

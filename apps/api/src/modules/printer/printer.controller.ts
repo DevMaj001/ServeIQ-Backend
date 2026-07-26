@@ -6,6 +6,8 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../../common/shared';
+import { CreatePrinterDto } from './dto/create-printer.dto';
+import { UpdatePrinterDto } from './dto/update-printer.dto';
 
 @ApiTags('Printers & KDS')
 @ApiBearerAuth('access-token')
@@ -37,8 +39,8 @@ export class PrinterController {
   @ApiOperation({ summary: 'Register a printer (Owner/Manager only)' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async create(@Request() req: any, @Body() body: any) {
-    return this.printerService.create(req.user.branchId, body);
+  async create(@Request() req: any, @Body() dto: CreatePrinterDto) {
+    return this.printerService.create(req.user.branchId, dto);
   }
 
   @Patch('printers/:id')
@@ -48,7 +50,7 @@ export class PrinterController {
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async update(@Param('id') id: string, @Request() req: any, @Body() body: any) {
+  async update(@Param('id') id: string, @Request() req: any, @Body() dto: UpdatePrinterDto) {
     return this.printerService.update(id, req.user.branchId, body);
   }
 

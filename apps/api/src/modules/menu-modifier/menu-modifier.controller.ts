@@ -2,6 +2,10 @@ import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Request }
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
 import { MenuModifierService } from './menu-modifier.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CreateModifierGroupDto } from './dto/create-modifier-group.dto';
+import { UpdateModifierGroupDto } from './dto/update-modifier-group.dto';
+import { CreateModifierOptionDto } from './dto/create-modifier-option.dto';
+import { UpdateModifierOptionDto } from './dto/update-modifier-option.dto';
 
 @ApiTags('Menu Modifiers')
 @ApiBearerAuth('access-token')
@@ -33,8 +37,8 @@ export class MenuModifierController {
   @ApiOperation({ summary: 'Create a modifier group' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async createGroup(@Request() req: any, @Body() body: any) {
-    return this.modifierService.createGroup(req.user.branchId, body);
+  async createGroup(@Request() req: any, @Body() dto: CreateModifierGroupDto) {
+    return this.modifierService.createGroup(req.user.branchId, dto);
   }
 
   @Patch('modifier-groups/:id')
@@ -42,7 +46,7 @@ export class MenuModifierController {
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async updateGroup(@Param('id') id: string, @Request() req: any, @Body() body: any) {
+  async updateGroup(@Param('id') id: string, @Request() req: any, @Body() dto: UpdateModifierGroupDto) {
     return this.modifierService.updateGroup(id, req.user.branchId, body);
   }
 
@@ -69,8 +73,8 @@ export class MenuModifierController {
   @ApiParam({ name: 'groupId' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async createOption(@Param('groupId') groupId: string, @Body() body: any) {
-    return this.modifierService.createOption(groupId, body);
+  async createOption(@Param('groupId') groupId: string, @Body() dto: CreateModifierOptionDto) {
+    return this.modifierService.createOption(groupId, dto);
   }
 
   @Patch('modifier-options/:id')
@@ -78,7 +82,7 @@ export class MenuModifierController {
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async updateOption(@Param('id') id: string, @Body() body: any) {
+  async updateOption(@Param('id') id: string, @Body() dto: UpdateModifierOptionDto) {
     return this.modifierService.updateOption(id, body);
   }
 

@@ -5,6 +5,8 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../../common/shared';
 import { AdvertisementService } from './advertisement.service';
+import { CreateAdvertisementDto } from './dto/create-advertisement.dto';
+import { UpdateAdvertisementDto } from './dto/update-advertisement.dto';
 
 @ApiTags('Advertisements')
 @ApiBearerAuth('access-token')
@@ -35,8 +37,8 @@ export class AdvertisementController {
   @ApiOperation({ summary: 'Create advertisement' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
-  async create(@Request() req: any, @Body() body: any) {
-    return this.adService.create(body);
+  async create(@Request() req: any, @Body() dto: CreateAdvertisementDto) {
+    return this.adService.create(dto);
   }
 
   @Patch(':id')
@@ -44,7 +46,7 @@ export class AdvertisementController {
   @ApiParam({ name: 'id', description: 'Advertisement UUID' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
-  async update(@Param('id') id: string, @Body() body: any) {
+  async update(@Param('id') id: string, @Body() dto: UpdateAdvertisementDto) {
     return this.adService.update(id, body);
   }
 
