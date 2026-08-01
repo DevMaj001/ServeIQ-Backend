@@ -133,7 +133,7 @@ export class TabService {
     }
 
     const table = await this.tableRepository.findOne({ where: { id: tab.table_id } });
-    const waiter = await this.userRepository.findOne({ where: { id: tab.waiter_id } });
+    const waiter = tab.waiter_id ? await this.userRepository.findOne({ where: { id: tab.waiter_id } }) : null;
     const orders = await this.orderRepository.find({ where: { tab_id: tab.id } });
     const totalKobo = orders.reduce((sum, order) => sum + order.subtotal_kobo, 0);
 
@@ -168,7 +168,7 @@ export class TabService {
     const tabsWithDetails = [];
     for (const tab of tabs) {
       const table = await this.tableRepository.findOne({ where: { id: tab.table_id } });
-      const waiter = await this.userRepository.findOne({ where: { id: tab.waiter_id } });
+      const waiter = tab.waiter_id ? await this.userRepository.findOne({ where: { id: tab.waiter_id } }) : null;
       const orders = await this.orderRepository.find({ where: { tab_id: tab.id } });
       const totalKobo = orders.reduce((sum, order) => sum + order.subtotal_kobo, 0);
       

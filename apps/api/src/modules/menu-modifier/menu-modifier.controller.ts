@@ -47,7 +47,7 @@ export class MenuModifierController {
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async updateGroup(@Param('id') id: string, @Request() req: any, @Body() dto: UpdateModifierGroupDto) {
-    return this.modifierService.updateGroup(id, req.user.branchId, body);
+    return this.modifierService.updateGroup(id, req.user.branchId, dto);
   }
 
   @Delete('modifier-groups/:id')
@@ -83,7 +83,7 @@ export class MenuModifierController {
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async updateOption(@Param('id') id: string, @Body() dto: UpdateModifierOptionDto) {
-    return this.modifierService.updateOption(id, body);
+    return this.modifierService.updateOption(id, dto);
   }
 
   @Delete('modifier-options/:id')

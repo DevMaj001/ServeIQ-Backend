@@ -47,7 +47,7 @@ export class AdvertisementController {
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
   async update(@Param('id') id: string, @Body() dto: UpdateAdvertisementDto) {
-    return this.adService.update(id, body);
+    return this.adService.update(id, dto);
   }
 
   @Delete(':id')

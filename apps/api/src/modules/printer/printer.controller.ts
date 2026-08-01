@@ -51,7 +51,7 @@ export class PrinterController {
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async update(@Param('id') id: string, @Request() req: any, @Body() dto: UpdatePrinterDto) {
-    return this.printerService.update(id, req.user.branchId, body);
+    return this.printerService.update(id, req.user.branchId, dto);
   }
 
   @Delete('printers/:id')

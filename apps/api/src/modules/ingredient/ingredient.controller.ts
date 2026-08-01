@@ -92,7 +92,7 @@ export class IngredientController {
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async update(@Param('id') id: string, @Request() req: any, @Body() dto: UpdateInventoryItemDto) {
-    return this.ingredientService.update(id, req.user.branchId, body);
+    return this.ingredientService.update(id, req.user.branchId, dto);
   }
 
   @Delete('inventory/:id')

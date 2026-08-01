@@ -223,7 +223,7 @@ export class BillService {
     }
 
     const table = await this.tableRepository.findOne({ where: { id: tab.table_id } });
-    const waiter = await this.userRepository.findOne({ where: { id: tab.waiter_id } });
+    const waiter = tab.waiter_id ? await this.userRepository.findOne({ where: { id: tab.waiter_id } }) : null;
     const branch = await this.branchRepository.findOne({ where: { id: tab.branch_id } });
     const business = branch ? await this.businessRepository.findOne({ where: { id: branch.business_id } }) : null;
 

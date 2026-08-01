@@ -114,9 +114,9 @@ export class CustomerService {
     }
 
     const orders = await this.dataSource.transaction(async (manager) => {
-      const savedOrders = [];
+      const savedOrders: Order[] = [];
       for (const item of items) {
-        const menuItem = menuMap.get(item.menu_item_id);
+        const menuItem = menuMap.get(item.menu_item_id)!;
         const modifierTotal = (item.modifiers || []).reduce((sum: number, m: any) => sum + (m.price_kobo * m.qty), 0);
         const order = manager.getRepository(Order).create({
           tab_id: tabId,
@@ -126,8 +126,8 @@ export class CustomerService {
           subtotal_kobo: (item.quantity * menuItem.price_kobo) + modifierTotal,
           round_number: 1,
           created_by: 'self-service',
-          notes: item.notes || null,
-          modifiers: item.modifiers || null,
+          notes: item.notes,
+          modifiers: item.modifiers,
           fulfillment_type: tab.tab_type === TabType.TAKEAWAY ? 'takeaway' : 'serve',
           order_status: 'pending_supervisor_approval',
         });
@@ -149,6 +149,7 @@ export class CustomerService {
 
   private async getTabResponse(tabId: string) {
     const tab = await this.tabRepo.findOne({ where: { id: tabId } });
+    if (!tab) throw new NotFoundException('Tab not found');
     const orders = await this.orderRepo.find({
       where: { tab_id: tabId },
       order: { created_at: 'ASC' },
