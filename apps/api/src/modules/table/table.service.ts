@@ -16,6 +16,9 @@ export class TableService {
   ) {}
 
   async create(createDto: any) {
+    // Strip is_virtual if somehow passed — only TableSystemService.ensureSystemTables may set it
+    delete createDto.is_virtual;
+
     if (createDto.table_number) {
       const existing = await this.tableRepository.findOne({
         where: { table_number: createDto.table_number, branch_id: createDto.branch_id },
@@ -49,18 +52,27 @@ export class TableService {
 
   async updateStatus(id: string, branchId: string, status: TableStatus) {
     const table = await this.findOne(id, branchId);
+    if (table.is_virtual) {
+      throw new BadRequestException('System-managed table cannot be modified');
+    }
     table.status = status;
     return this.tableRepository.save(table);
   }
 
   async update(id: string, branchId: string, updateDto: any) {
     const table = await this.findOne(id, branchId);
+    if (table.is_virtual) {
+      throw new BadRequestException('System-managed table cannot be modified');
+    }
     Object.assign(table, updateDto);
     return this.tableRepository.save(table);
   }
 
   async remove(id: string, branchId: string) {
     const table = await this.findOne(id, branchId);
+    if (table.is_virtual) {
+      throw new BadRequestException('System-managed table cannot be modified');
+    }
     return this.tableRepository.remove(table);
   }
 
@@ -70,6 +82,9 @@ export class TableService {
     }
 
     const table = await this.findOne(id, branchId);
+    if (table.is_virtual) {
+      throw new BadRequestException('System-managed table cannot be modified');
+    }
 
     const openTab = await this.tabRepository.findOne({
       where: { table_id: id, status: 'open' },

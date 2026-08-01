@@ -107,7 +107,8 @@ export class UserService {
       const auditAction =
         targetRole === UserRole.SUPERVISOR ? 'SUPERVISOR_CREATED' :
         targetRole === UserRole.MANAGER ? 'MANAGER_CREATED' :
-        targetRole === UserRole.CHEF ? 'CHEF_CREATED' : 'WAITER_CREATED';
+        targetRole === UserRole.CHEF ? 'CHEF_CREATED' :
+        targetRole === UserRole.CASHIER ? 'CASHIER_CREATED' : 'WAITER_CREATED';
       await this.auditService.log({
         branchId: dto.branchId,
         userId: savedUser.id,
@@ -144,14 +145,14 @@ export class UserService {
       }
       
       // For any other DB error, wrap it in a BadRequestException or re-throw
-      throw new BadRequestException(`Failed to create user: ${err.message || 'Unknown database error'}`);
+      throw new BadRequestException('Failed to create user');
     }
   }
 
   async findAllWaiters(branchId: string, pagination?: { page: number; per_page: number }, roleFilter?: string) {
     const where: any = { branch_id: branchId };
     if (roleFilter === 'all') {
-      where.role = In([UserRole.WAITER, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.CHEF]);
+      where.role = In([UserRole.WAITER, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.CHEF, UserRole.CASHIER]);
     } else {
       where.role = UserRole.WAITER;
     }
@@ -169,7 +170,7 @@ export class UserService {
 
   async resetWaiterPin(userId: string, businessId: string): Promise<{ pin: string }> {
     const user = await this.userRepository.findOne({
-      where: { id: userId, business_id: businessId, role: In([UserRole.WAITER, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.CHEF]) },
+      where: { id: userId, business_id: businessId, role: In([UserRole.WAITER, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.CHEF, UserRole.CASHIER]) },
     });
     if (!user) throw new NotFoundException('Staff member not found');
 
@@ -211,14 +212,16 @@ export class UserService {
 
   async update(id: string, branchId: string, updateDto: any) {
     const user = await this.findOne(id, branchId);
-    const forbidden = ['password_hash', 'pin_hash', 'id', 'created_at', 'updated_at', 'deleted_at', 'role'];
-    forbidden.forEach(f => delete updateDto[f]);
+    const allowed = ['full_name', 'phone', 'email', 'is_active'];
+    for (const key of Object.keys(updateDto)) {
+      if (allowed.includes(key)) {
+        (user as any)[key] = updateDto[key];
+      }
+    }
     if (updateDto.password) {
       const salt = await bcrypt.genSalt();
       user.password_hash = await bcrypt.hash(updateDto.password, salt);
-      delete updateDto.password;
     }
-    Object.assign(user, updateDto);
     return this.userRepository.save(user);
   }
 

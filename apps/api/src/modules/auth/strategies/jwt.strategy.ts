@@ -15,9 +15,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private dataSource: DataSource,
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+        (req: any) => req?.cookies?.access_token || null,
+      ]),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_SECRET') || 'serveiq-secret-2024',
+      secretOrKey: configService.get<string>('JWT_SECRET')!,
     });
   }
 

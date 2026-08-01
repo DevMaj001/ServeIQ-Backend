@@ -164,7 +164,8 @@ export class PrinterService {
 
     for (const item of items || []) {
       escpos.bold(true);
-      escpos.println(`${item.qty}x ${item.name}`);
+      const ft = item.fulfillment_type === 'pack' ? '[PACK] ' : '';
+      escpos.println(`${ft}${item.qty}x ${item.name}`);
       escpos.bold(false);
       if (item.notes) escpos.println(`  [${item.notes}]`);
     }
@@ -202,6 +203,7 @@ export class PrinterService {
         qty: order.quantity,
         notes: order.notes,
         status: 'pending',
+        fulfillment_type: order.fulfillment_type,
       });
     }
 

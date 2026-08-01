@@ -13,6 +13,7 @@ import { join } from 'path';
 import { AppDataSource } from './database/data-source';
 import { ensureTables } from './database/ensure-tables';
 import * as Sentry from '@sentry/node';
+import cookieParser from 'cookie-parser';
 async function bootstrap() {
   let ds;
   try {
@@ -34,6 +35,7 @@ async function bootstrap() {
 
   // Security headers
   app.use(helmet());
+  app.use(cookieParser());
 
   // Global Prefix
   app.setGlobalPrefix('api');

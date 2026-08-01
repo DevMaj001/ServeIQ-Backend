@@ -17,7 +17,7 @@ export class StructuredLogger implements LoggerService {
       ...(optionalParams.length > 0 && { params: optionalParams }),
     };
     if (process.env.NODE_ENV === 'production') {
-      console[level](JSON.stringify(entry));
+      (console as any)[level](JSON.stringify(entry));
     } else {
       const prefix = this.context ? `[${this.context}]` : '';
       console.log(`${level.toUpperCase()} ${prefix} ${entry.message}`);

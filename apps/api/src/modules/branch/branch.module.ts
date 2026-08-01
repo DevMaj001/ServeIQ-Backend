@@ -11,9 +11,10 @@ import { User } from '../user/entities/user.entity';
 import { AuditLog } from '../../entities/audit-log.entity';
 import { AuditService } from '../../common/services/audit.service';
 import { SubscriptionModule } from '../subscription/subscription.module';
+import { TableModule } from '../table/table.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Branch, Table, Tab, Bill, Order, User, AuditLog]), SubscriptionModule],
+  imports: [TypeOrmModule.forFeature([Branch, Table, Tab, Bill, Order, User, AuditLog]), SubscriptionModule, TableModule],
   providers: [BranchService, AuditService],
   controllers: [BranchController],
   exports: [BranchService],

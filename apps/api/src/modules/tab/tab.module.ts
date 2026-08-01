@@ -9,9 +9,10 @@ import { Order } from '../order/entities/order.entity';
 import { StockMovement } from '../ingredient/entities/stock-movement.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Shift } from '../shift/entities/shift.entity';
+import { TrackingModule } from '../tracking/tracking.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Tab, Table, User, Order, StockMovement, MenuItem, Shift])],
+  imports: [TypeOrmModule.forFeature([Tab, Table, User, Order, StockMovement, MenuItem, Shift]), TrackingModule],
   providers: [TabService],
   controllers: [TabController],
   exports: [TabService],

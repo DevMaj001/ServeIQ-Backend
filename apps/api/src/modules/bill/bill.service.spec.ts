@@ -46,6 +46,7 @@ describe('BillService', () => {
     dataSource = {
       transaction: jest.fn(async (cb) => cb({
         getRepository: jest.fn(() => ({
+          findOne: jest.fn(),
           find: jest.fn().mockResolvedValue([]),
           update: jest.fn(),
           save: jest.fn(async (e) => e),

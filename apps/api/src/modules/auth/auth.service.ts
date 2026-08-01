@@ -123,7 +123,7 @@ export class AuthService {
     }
 
     const whereClause: any = {
-      role: In([UserRole.WAITER, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.CHEF]),
+      role: In([UserRole.WAITER, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.CHEF, UserRole.CASHIER]),
       is_active: true,
     };
 
@@ -459,7 +459,7 @@ export class AuthService {
       expires_at: new Date(Date.now() + 10 * 60 * 1000),
     }));
 
-    return { message: 'Verification code sent', otp };
+    return { message: 'Verification code sent' };
   }
 
   async verifyEmail(userId: string, otp: string) {

@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   Index,
 } from 'typeorm';
+import { TabType } from '../../../common/shared';
 
 @Entity('tabs')
 export class Tab {
@@ -21,8 +22,8 @@ export class Tab {
   table_id: string;
 
   @Index()
-  @Column({ type: 'uuid' })
-  waiter_id: string;
+  @Column({ type: 'uuid', nullable: true })
+  waiter_id: string | null;
 
   @Column({ type: 'uuid', nullable: true })
   shift_id: string;
@@ -41,6 +42,13 @@ export class Tab {
 
   @Column({
     type: 'enum',
+    enum: TabType,
+    default: TabType.DINE_IN,
+  })
+  tab_type: TabType;
+
+  @Column({
+    type: 'enum',
     enum: ['open', 'billed', 'paid', 'voided'],
     default: 'open',
   })
@@ -48,6 +56,13 @@ export class Tab {
 
   @Column({ type: 'text', nullable: true })
   notes: string;
+
+  @Index({ unique: true })
+  @Column({ type: 'varchar', length: 12, nullable: true })
+  tracking_code: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  tracking_generated_at: Date | null;
 
   @CreateDateColumn()
   opened_at: Date;

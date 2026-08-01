@@ -73,8 +73,8 @@ export class OrderController {
   @ApiParam({ name: 'tabId', description: 'Tab UUID', example: 'tab-uuid-here' })
   @ApiResponse({ status: 200, description: 'List of order items for the tab.', type: [Order] })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async findByTab(@Param('tabId') tabId: string) {
-    return this.orderService.findByTab(tabId);
+  async findByTab(@Param('tabId') tabId: string, @Request() req: any) {
+    return this.orderService.findByTab(tabId, req.user.branchId);
   }
 
   // ── :id routes ──
@@ -84,8 +84,8 @@ export class OrderController {
   @ApiResponse({ status: 200, description: 'Order item details.' })
   @ApiResponse({ status: 404, description: 'Order item not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async findOne(@Param('id') id: string) {
-    return this.orderService.findOne(id);
+  async findOne(@Param('id') id: string, @Request() req: any) {
+    return this.orderService.findOne(id, req.user.branchId);
   }
 
   @Patch(':id')
@@ -97,7 +97,7 @@ export class OrderController {
   @ApiResponse({ status: 404, description: 'Order item not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async update(@Param('id') id: string, @Request() req: any, @Body() updateDto: UpdateOrderDto) {
-    return this.orderService.updateOrder(id, updateDto);
+    return this.orderService.updateOrder(id, updateDto, req.user.branchId);
   }
 
   @Delete(':id')
@@ -108,8 +108,8 @@ export class OrderController {
   @ApiResponse({ status: 200, description: 'Order item removed.' })
   @ApiResponse({ status: 404, description: 'Order item not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async remove(@Param('id') id: string) {
-    return this.orderService.removeOrder(id);
+  async remove(@Param('id') id: string, @Request() req: any) {
+    return this.orderService.removeOrder(id, req.user.branchId);
   }
 
   @Post(':id/approve')
@@ -122,7 +122,7 @@ export class OrderController {
   @ApiResponse({ status: 400, description: 'Preparation time is required.' })
   @ApiResponse({ status: 404, description: 'Order not found.' })
   async approve(@Param('id') id: string, @Request() req: any, @Body() dto: ApproveOrderDto) {
-    return this.orderService.approve(id, req.user.userId, dto);
+    return this.orderService.approve(id, req.user.userId, dto, req.user.branchId);
   }
 
   @Post(':id/decline')
@@ -135,7 +135,7 @@ export class OrderController {
   @ApiResponse({ status: 400, description: 'Decline reason is required.' })
   @ApiResponse({ status: 404, description: 'Order not found.' })
   async decline(@Param('id') id: string, @Request() req: any, @Body() dto: DeclineOrderDto) {
-    return this.orderService.decline(id, req.user.userId, dto);
+    return this.orderService.decline(id, req.user.userId, dto, req.user.branchId);
   }
 
   @Post(':id/confirm-pickup')
@@ -147,7 +147,7 @@ export class OrderController {
   @ApiResponse({ status: 400, description: 'Order is not ready for pickup.' })
   @ApiResponse({ status: 404, description: 'Order not found.' })
   async confirmPickup(@Param('id') id: string, @Request() req: any) {
-    return this.orderService.confirmPickup(id, req.user.userId);
+    return this.orderService.confirmPickup(id, req.user.userId, req.user.branchId);
   }
 
   @Post(':id/deliver')
@@ -159,6 +159,6 @@ export class OrderController {
   @ApiResponse({ status: 400, description: 'Order is not ready for pickup.' })
   @ApiResponse({ status: 404, description: 'Order not found.' })
   async deliver(@Param('id') id: string, @Request() req: any) {
-    return this.orderService.deliver(id, req.user.userId);
+    return this.orderService.deliver(id, req.user.userId, req.user.branchId);
   }
 }

@@ -18,6 +18,25 @@ import { Throttle } from '@nestjs/throttler';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  private setAuthCookies(res: any, tokens: { access_token: string; refresh_token: string | null }) {
+    res.cookie('access_token', tokens.access_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/',
+      maxAge: 15 * 60 * 1000,
+    });
+    if (tokens.refresh_token) {
+      res.cookie('refresh_token', tokens.refresh_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        path: '/api/v1/auth',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+    }
+  }
+
   @Post('register')
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({
@@ -49,8 +68,10 @@ export class AuthController {
   })
   @ApiResponse({ status: 400, description: 'Validation error.' })
   @ApiResponse({ status: 401, description: 'Invalid credentials.' })
-  async login(@Body() loginDto: LoginDto) {
-    return this.authService.login(loginDto);
+  async login(@Body() loginDto: LoginDto, @Response({ passthrough: true }) res: any) {
+    const tokens = await this.authService.login(loginDto);
+    this.setAuthCookies(res, tokens);
+    return tokens;
   }
 
   @Post('refresh')
@@ -59,15 +80,19 @@ export class AuthController {
   @ApiOperation({ summary: 'Refresh access token using a refresh token' })
   @ApiResponse({ status: 200, description: 'New access token and refresh token issued.' })
   @ApiResponse({ status: 401, description: 'Invalid or expired refresh token.' })
-  async refresh(@Body() refreshDto: RefreshDto) {
-    return this.authService.refreshToken(refreshDto.refresh_token);
+  async refresh(@Body() refreshDto: RefreshDto, @Response({ passthrough: true }) res: any) {
+    const tokens = await this.authService.refreshToken(refreshDto.refresh_token);
+    this.setAuthCookies(res, tokens);
+    return tokens;
   }
 
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Logout and invalidate refresh token' })
   @ApiResponse({ status: 200, description: 'Logged out successfully.' })
-  async logout(@Body() logoutDto: LogoutDto) {
+  async logout(@Body() logoutDto: LogoutDto, @Response({ passthrough: true }) res: any) {
+    res.clearCookie('access_token', { path: '/' });
+    res.clearCookie('refresh_token', { path: '/api/v1/auth' });
     return this.authService.logout(logoutDto.refresh_token);
   }
 
@@ -111,6 +136,7 @@ export class AuthController {
 
   @Post('setup-super-admin')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 3, ttl: 3600000 } })
   @ApiOperation({ summary: 'One-time setup to create super admin account' })
   @ApiResponse({ status: 200, description: 'Super admin created or already exists' })
   async setupSuperAdmin(@Body() dto: { email: string; password: string; full_name?: string }) {

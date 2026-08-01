@@ -37,10 +37,6 @@ describe('OrderService', () => {
     log: jest.fn().mockResolvedValue(undefined),
   });
 
-  const mockTrackingService = () => ({
-    generateUniqueCode: jest.fn().mockResolvedValue('SVQ-ABCD-123'),
-  });
-
   const mockNotificationService = () => ({
     create: jest.fn().mockResolvedValue(undefined),
   });
@@ -65,7 +61,6 @@ describe('OrderService', () => {
     const dataSource = overrides.dataSource ?? mockDataSource();
     const ingredientService = overrides.ingredientService ?? mockIngredientService();
     const auditService = overrides.auditService ?? mockAuditService();
-    const trackingService = overrides.trackingService ?? mockTrackingService();
     const notificationService = overrides.notificationService ?? mockNotificationService();
 
     return new OrderService(
@@ -76,7 +71,6 @@ describe('OrderService', () => {
       dataSource as any,
       ingredientService as any,
       auditService as any,
-      trackingService as any,
       notificationService as any,
     );
   };
@@ -226,9 +220,6 @@ describe('OrderService', () => {
 
   describe('approve', () => {
     it('approves a pending order and creates notification', async () => {
-      const tabRepo = mockTabRepository();
-      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
-
       const deptRepo = mockDepartmentRepo();
       deptRepo.findOne.mockResolvedValue({ id: 'dept-1', name: 'Kitchen', branch_id: 'branch-1' });
 
@@ -240,8 +231,10 @@ describe('OrderService', () => {
       });
 
       const auditService = mockAuditService();
-      const trackingService = mockTrackingService();
       const notificationService = mockNotificationService();
+
+      const tabRepo = mockTabRepository();
+      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1', tracking_code: 'SVQ-ABCD-123' });
 
       const dataSource: any = {
         transaction: jest.fn(async (cb) => {
@@ -252,18 +245,10 @@ describe('OrderService', () => {
                 tab_id: 'tab-1',
                 order_status: OrderStatus.PENDING_SUPERVISOR_APPROVAL,
               }),
-              save: jest.fn(async (order) => ({ ...order, id: 'o1', tracking_code: 'SVQ-ABCD-123' })),
+              save: jest.fn(async (order) => ({ ...order, id: 'o1' })),
             }),
           };
-          const saved = await cb(m);
-          await notificationService.create({
-            branch_id: 'branch-1',
-            type: 'order_approved',
-            title: 'Order Approved',
-            message: `Order ${saved.id.slice(0, 8)}… approved. Tracking: ${saved.tracking_code}`,
-            data: { order_id: saved.id, tab_id: saved.tab_id, tracking_code: saved.tracking_code },
-          });
-          return saved;
+          return cb(m);
         }),
       };
 
@@ -273,7 +258,6 @@ describe('OrderService', () => {
         orderRepository: orderRepo,
         dataSource,
         auditService,
-        trackingService,
         notificationService,
       });
 
@@ -281,9 +265,10 @@ describe('OrderService', () => {
 
       expect(result.order_status).toBe(OrderStatus.APPROVED);
       expect(result.approved_by).toBe('user-1');
-      expect(result.tracking_code).toBe('SVQ-ABCD-123');
       expect(auditService.log).toHaveBeenCalled();
-      expect(notificationService.create).toHaveBeenCalled();
+      expect(notificationService.create).toHaveBeenCalledWith(expect.objectContaining({
+        message: expect.stringContaining('Tracking: SVQ-ABCD-123'),
+      }));
     });
   });
 

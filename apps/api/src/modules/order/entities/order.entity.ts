@@ -6,7 +6,7 @@ import {
   UpdateDateColumn,
   Index,
 } from 'typeorm';
-import { OrderStatus } from '../../../common/shared';
+import { OrderStatus, FulfillmentType } from '../../../common/shared';
 
 @Entity('orders')
 export class Order {
@@ -44,6 +44,13 @@ export class Order {
 
   @Column()
   created_by: string;
+
+  @Column({
+    type: 'varchar',
+    length: 20,
+    default: FulfillmentType.SERVE,
+  })
+  fulfillment_type: string;
 
   @Column({ type: 'varchar', length: 40, default: OrderStatus.PENDING_SUPERVISOR_APPROVAL })
   order_status: string;
@@ -83,13 +90,6 @@ export class Order {
 
   @Column({ type: 'timestamp', nullable: true })
   delivered_at: Date | null;
-
-  @Index({ unique: true })
-  @Column({ type: 'varchar', length: 12, nullable: true })
-  tracking_code: string | null;
-
-  @Column({ type: 'timestamp', nullable: true })
-  tracking_generated_at: Date | null;
 
   @Column({ type: 'timestamp', nullable: true })
   preparing_at: Date | null;

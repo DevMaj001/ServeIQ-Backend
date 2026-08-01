@@ -1,6 +1,7 @@
-import { IsNotEmpty, IsString, IsNumber, IsOptional, IsArray, ValidateNested } from 'class-validator';
+import { IsNotEmpty, IsString, IsNumber, IsOptional, IsArray, IsEnum, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
+import { FulfillmentType } from '../../../common/shared';
 
 export class ModifierSelectionDto {
   @ApiProperty({ example: 'modifier-option-uuid' })
@@ -44,4 +45,9 @@ export class CreateOrderItemDto {
   @ValidateNested({ each: true })
   @Type(() => ModifierSelectionDto)
   modifiers?: ModifierSelectionDto[];
+
+  @ApiProperty({ example: 'pack', enum: FulfillmentType, required: false, description: 'Override fulfillment type per item. Defaults based on tab type (pack for takeaway, serve for dine-in).' })
+  @IsOptional()
+  @IsEnum(FulfillmentType)
+  fulfillment_type?: FulfillmentType;
 }

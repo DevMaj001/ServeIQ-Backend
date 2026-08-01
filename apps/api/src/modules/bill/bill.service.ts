@@ -56,7 +56,8 @@ export class BillService {
       userId &&
       tab.waiter_id !== userId &&
       userRole !== 'owner' &&
-      userRole !== 'manager'
+      userRole !== 'manager' &&
+      userRole !== 'cashier'
     ) {
       throw new ForbiddenException('This tab belongs to another waiter');
     }
@@ -123,7 +124,8 @@ export class BillService {
       userId &&
       tab.waiter_id !== userId &&
       userRole !== 'owner' &&
-      userRole !== 'manager'
+      userRole !== 'manager' &&
+      userRole !== 'cashier'
     ) {
       throw new ForbiddenException('This tab belongs to another waiter');
     }
@@ -172,8 +174,13 @@ export class BillService {
 
       await manager.getRepository(Bill).save(bill);
 
-      await manager.getRepository(Tab).update(tabId, { status: 'paid', closed_at: new Date() });
-      await manager.getRepository(Table).update(tab.table_id, { status: TableStatus.AVAILABLE });
+      await manager.getRepository(Tab).update(tabId, { status: 'paid', closed_at: new Date(), cashier_id: userId });
+
+      // Virtual tables never participate in occupancy logic — they are system records, not seatable tables.
+      const payTable = await manager.getRepository(Table).findOne({ where: { id: tab.table_id } });
+      if (payTable && !payTable.is_virtual) {
+        await manager.getRepository(Table).update(tab.table_id, { status: TableStatus.AVAILABLE });
+      }
     });
 
     // Generate PDF receipt and upload to Cloudinary
@@ -338,9 +345,12 @@ export class BillService {
     if (allPaid) {
       const tab = await this.tabRepository.findOne({ where: { id: tabId } });
       if (tab) {
-        await this.tabRepository.update(tabId, { status: 'paid', closed_at: new Date() });
+        await this.tabRepository.update(tabId, { status: 'paid', closed_at: new Date(), cashier_id: userId });
         if (tab.table_id) {
-          await this.tableRepository.update(tab.table_id, { status: TableStatus.AVAILABLE });
+          const splitTable = await this.tableRepository.findOne({ where: { id: tab.table_id } });
+          if (splitTable && !splitTable.is_virtual) {
+            await this.tableRepository.update(tab.table_id, { status: TableStatus.AVAILABLE });
+          }
         }
       }
     } else if (!anyPaid) {

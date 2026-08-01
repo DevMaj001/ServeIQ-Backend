@@ -31,8 +31,9 @@ export class DashboardService {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const totalTables = await this.tableRepository.count({ where: { branch_id: branchId } });
-    const occupiedTables = await this.tableRepository.count({ where: { branch_id: branchId, status: TableStatus.OCCUPIED } });
+    // Exclude virtual (system) tables from occupancy reporting
+    const totalTables = await this.tableRepository.count({ where: { branch_id: branchId, is_virtual: false } });
+    const occupiedTables = await this.tableRepository.count({ where: { branch_id: branchId, status: TableStatus.OCCUPIED, is_virtual: false } });
     const openTabs = await this.tabRepository.count({ where: { branch_id: branchId, status: 'open' } });
 
     const todayBills = await this.billRepository
@@ -226,7 +227,7 @@ export class DashboardService {
         AVG(EXTRACT(EPOCH FROM (t.closed_at - t.opened_at)) / 60)::int AS avg_duration_minutes,
         COUNT(t.id) AS total_covers
       FROM tabs t
-      LEFT JOIN tables tbl ON tbl.id::varchar = t.table_id::varchar
+      INNER JOIN tables tbl ON tbl.id::varchar = t.table_id::varchar AND tbl.is_virtual = false
       WHERE t.branch_id = $1
         AND t.status = 'paid'
         AND t.opened_at IS NOT NULL

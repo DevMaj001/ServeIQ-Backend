@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { TabController } from './tab.controller';
+import { TabService } from './tab.service';
 
 describe('TabController', () => {
   let controller: TabController;
@@ -7,6 +8,7 @@ describe('TabController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [TabController],
+      providers: [{ provide: TabService, useValue: {} }],
     }).compile();
 
     controller = module.get<TabController>(TabController);

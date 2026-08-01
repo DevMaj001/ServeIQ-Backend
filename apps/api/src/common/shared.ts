@@ -33,6 +33,16 @@ export enum TableStatus {
   RESERVED = 'reserved',
 }
 
+export enum TabType {
+  DINE_IN = 'dine_in',
+  TAKEAWAY = 'takeaway',
+}
+
+export enum FulfillmentType {
+  SERVE = 'serve',
+  PACK = 'pack',
+}
+
 export enum PaymentMethod {
   CASH = 'cash',
   TRANSFER = 'transfer',
