@@ -1,6 +1,7 @@
 import { Controller, Get, Query, UseGuards, Request } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
 
 @ApiTags('Dashboard')
@@ -25,6 +26,7 @@ export class DashboardController {
   }
 
   @Get('reports/sales')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({ summary: 'Sales report with optional date range and payment method breakdown' })
   @ApiQuery({ name: 'dateFrom', required: false, example: '2026-06-01', description: 'Start date (inclusive). Omit for all-time.' })
   @ApiQuery({ name: 'dateTo', required: false, example: '2026-06-28', description: 'End date (inclusive). Omit for all-time.' })
@@ -45,6 +47,7 @@ export class DashboardController {
   }
 
   @Get('reports/peak-hours')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({ summary: 'Orders and revenue grouped by hour of day' })
   @ApiQuery({ name: 'dateFrom', required: false, example: '2026-06-01' })
   @ApiQuery({ name: 'dateTo', required: false, example: '2026-06-28' })
@@ -58,6 +61,7 @@ export class DashboardController {
   }
 
   @Get('reports/items')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({ summary: 'Top selling items report with date range filter' })
   @ApiQuery({ name: 'dateFrom', required: false, example: '2026-06-01' })
   @ApiQuery({ name: 'dateTo', required: false, example: '2026-06-28' })
@@ -71,6 +75,7 @@ export class DashboardController {
   }
 
   @Get('reports/table-velocity')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({ summary: 'Average time between open and close per table (table velocity)' })
   @ApiResponse({ status: 200, description: 'Table velocity list sorted by shortest avg duration.' })
   async getTableVelocity(@Request() req: any) {
@@ -78,6 +83,7 @@ export class DashboardController {
   }
 
   @Get('reports/peak-efficiency')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({ summary: 'Covers and avg duration grouped by hour of day' })
   @ApiQuery({ name: 'dateFrom', required: false, example: '2026-06-01' })
   @ApiQuery({ name: 'dateTo', required: false, example: '2026-06-28' })
@@ -90,3 +96,4 @@ export class DashboardController {
     return this.dashboardService.getPeakEfficiency(req.user.branchId, dateFrom, dateTo);
   }
 }
+

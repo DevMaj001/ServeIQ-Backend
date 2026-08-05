@@ -34,7 +34,12 @@ describe('AuthService', () => {
   };
 
   beforeEach(async () => {
-    bcryptMock = require('bcrypt');
+    bcryptMock = require('bcrypt') as {
+      compare: jest.Mock;
+      genSalt: jest.Mock;
+      hash: jest.Mock;
+    };
+    bcryptMock.compare.mockClear();
 
     repoMock = {
       findOne: jest.fn(),
@@ -62,7 +67,11 @@ describe('AuthService', () => {
 
     dataSource = {
       getRepository: jest.fn().mockImplementation((entity?: any) => {
-        if (entity && typeof entity === 'function' && entity.name === 'Branch') {
+        if (
+          entity &&
+          typeof entity === 'function' &&
+          entity.name === 'Branch'
+        ) {
           return branchRepoMock;
         }
         return repoMock;
@@ -83,7 +92,9 @@ describe('AuthService', () => {
 
     auditService = { log: jest.fn().mockResolvedValue(undefined) };
 
-    const subService = { createTrialSubscription: jest.fn().mockResolvedValue(undefined) };
+    const subService = {
+      createTrialSubscription: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -107,7 +118,10 @@ describe('AuthService', () => {
       repoMock.findOne.mockResolvedValue(mockUser);
       bcryptMock.compare.mockResolvedValue(true);
 
-      const result = await service.login({ email: 'test@example.com', password: 'password' });
+      const result = await service.login({
+        email: 'test@example.com',
+        password: 'password',
+      });
 
       expect(result.access_token).toBe('jwt-token');
       expect(result.user.email).toBe('test@example.com');
@@ -130,14 +144,80 @@ describe('AuthService', () => {
         service.login({ email: 'test@example.com', password: 'wrong' }),
       ).rejects.toThrow('Invalid credentials');
     });
+
+    it('locks the account after 5 failed attempts', async () => {
+      const lockedUser = {
+        ...mockUser,
+        failed_login_attempts: 0,
+        locked_until: null,
+      };
+      repoMock.findOne.mockResolvedValue(lockedUser);
+      bcryptMock.compare.mockResolvedValue(false);
+
+      for (let i = 0; i < 4; i++) {
+        await expect(
+          service.login({ email: 'test@example.com', password: 'wrong' }),
+        ).rejects.toThrow('Invalid credentials');
+      }
+
+      await expect(
+        service.login({ email: 'test@example.com', password: 'wrong' }),
+      ).rejects.toThrow('Too many failed attempts');
+
+      expect(lockedUser.failed_login_attempts).toBe(0);
+      expect(lockedUser.locked_until).toBeInstanceOf(Date);
+      expect(auditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'ACCOUNT_LOCKED',
+          entityId: 'user-1',
+        }),
+      );
+    });
+
+    it('rejects login while the account is locked', async () => {
+      repoMock.findOne.mockResolvedValue({
+        ...mockUser,
+        locked_until: new Date(Date.now() + 10 * 60 * 1000),
+      });
+
+      await expect(
+        service.login({ email: 'test@example.com', password: 'password' }),
+      ).rejects.toThrow('Account temporarily locked');
+
+      expect(bcryptMock.compare).not.toHaveBeenCalled();
+    });
+
+    it('clears lockout on a successful login after it expires', async () => {
+      const unlockedUser = {
+        ...mockUser,
+        failed_login_attempts: 2,
+        locked_until: new Date(Date.now() - 1000),
+      };
+      repoMock.findOne.mockResolvedValue(unlockedUser);
+      bcryptMock.compare.mockResolvedValue(true);
+
+      const result = await service.login({
+        email: 'test@example.com',
+        password: 'password',
+      });
+
+      expect(result.access_token).toBe('jwt-token');
+      expect(unlockedUser.failed_login_attempts).toBe(0);
+      expect(unlockedUser.locked_until).toBeNull();
+    });
   });
 
   describe('waiterLogin', () => {
     it('returns tokens for valid PIN', async () => {
       repoMock.find.mockResolvedValue([mockUser]);
-      bcryptMock.compare.mockImplementation(async (pin: string) => pin === '1234');
+      bcryptMock.compare.mockImplementation(
+        async (pin: string) => pin === '1234',
+      );
 
-      const result = await service.waiterLogin({ pin: '1234', branchId: 'branch-1' });
+      const result = await service.waiterLogin({
+        pin: '1234',
+        branchId: 'branch-1',
+      });
 
       expect(result.access_token).toBe('jwt-token');
     });
@@ -173,7 +253,9 @@ describe('AuthService', () => {
     it('throws for invalid code', async () => {
       repoMock.findOne.mockResolvedValue(null);
 
-      await expect(service.resolveBusinessCode('INVALID')).rejects.toThrow('Invalid business code');
+      await expect(service.resolveBusinessCode('INVALID')).rejects.toThrow(
+        'Invalid business code',
+      );
     });
   });
 

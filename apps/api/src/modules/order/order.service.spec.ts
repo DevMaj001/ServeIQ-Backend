@@ -327,4 +327,121 @@ describe('OrderService', () => {
       expect(orderRepo.save).toHaveBeenCalled();
     });
   });
+
+  describe('Order Round Logic', () => {
+    it('ROUND-01: First order on tab gets round_number = 1 (default)', async () => {
+      const tabRepo = mockTabRepository();
+      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1', tab_type: 'dine_in' });
+
+      const menuRepo = mockMenuRepository();
+      menuRepo.find.mockResolvedValue([
+        { id: 'menu-1', name: 'Beer', price_kobo: 5000, track_stock: false, quantity_in_stock: 0 },
+      ]);
+
+      const service = buildService({ tabRepository: tabRepo, menuRepository: menuRepo });
+
+      const result = await service.addOrderItems(
+        'tab-1',
+        [{ menu_item_id: 'menu-1', quantity: 2, round_number: 1 }],
+        'waiter-1',
+      );
+
+      expect(result[0].round_number).toBe(1);
+      expect(result[0].subtotal_kobo).toBe(10000);
+    });
+
+    it('ROUND-02: Orders without explicit round_number default to 1', async () => {
+      const tabRepo = mockTabRepository();
+      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1', tab_type: 'dine_in' });
+
+      const menuRepo = mockMenuRepository();
+      menuRepo.find.mockResolvedValue([
+        { id: 'menu-1', name: 'Beer', price_kobo: 5000, track_stock: false, quantity_in_stock: 0 },
+      ]);
+
+      const service = buildService({ tabRepository: tabRepo, menuRepository: menuRepo });
+
+      const result = await service.addOrderItems('tab-1', [{ menu_item_id: 'menu-1', quantity: 1 }], 'waiter-1');
+
+      expect(result[0].round_number).toBe(1);
+    });
+
+    it('ROUND-03: Orders with explicit round_number are preserved', async () => {
+      const tabRepo = mockTabRepository();
+      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1', tab_type: 'dine_in' });
+
+      const menuRepo = mockMenuRepository();
+      menuRepo.find.mockResolvedValue([
+        { id: 'menu-1', name: 'Beer', price_kobo: 5000, track_stock: false, quantity_in_stock: 0 },
+      ]);
+
+      const service = buildService({ tabRepository: tabRepo, menuRepository: menuRepo });
+
+      const result = await service.addOrderItems('tab-1', [{ menu_item_id: 'menu-1', quantity: 1, round_number: 3 }], 'waiter-1');
+
+      expect(result[0].round_number).toBe(3);
+    });
+
+    it('ROUND-04: Subtotal equals quantity × unit_price_kobo + modifier total', async () => {
+      const tabRepo = mockTabRepository();
+      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1', tab_type: 'dine_in' });
+
+      const menuRepo = mockMenuRepository();
+      menuRepo.find.mockResolvedValue([
+        { id: 'menu-1', name: 'Pizza', price_kobo: 10000, track_stock: false, quantity_in_stock: 0 },
+      ]);
+
+      const service = buildService({ tabRepository: tabRepo, menuRepository: menuRepo });
+
+      const result = await service.addOrderItems('tab-1', [
+        {
+          menu_item_id: 'menu-1',
+          quantity: 2,
+          round_number: 1,
+          modifiers: [{ name: 'Extra Cheese', price_kobo: 1500, qty: 1 }],
+        },
+      ], 'waiter-1');
+
+      expect(result[0].subtotal_kobo).toBe(21500);
+      expect(result[0].modifiers).toEqual([{ name: 'Extra Cheese', price_kobo: 1500, qty: 1 }]);
+    });
+
+    it('ROUND-05: Price snapshot is taken from menu at order creation, not re-fetched', async () => {
+      const tabRepo = mockTabRepository();
+      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1', tab_type: 'dine_in' });
+
+      const menuRepo = mockMenuRepository();
+      menuRepo.find.mockResolvedValue([
+        { id: 'menu-1', name: 'Beer', price_kobo: 5000, track_stock: false, quantity_in_stock: 0 },
+      ]);
+
+      const service = buildService({ tabRepository: tabRepo, menuRepository: menuRepo });
+
+      const result = await service.addOrderItems('tab-1', [{ menu_item_id: 'menu-1', quantity: 3 }], 'waiter-1');
+
+      expect(result[0].unit_price_kobo).toBe(5000);
+      expect(result[0].subtotal_kobo).toBe(15000);
+    });
+
+    it('ROUND-06: Multiple items in same round get same round_number', async () => {
+      const tabRepo = mockTabRepository();
+      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1', tab_type: 'dine_in' });
+
+      const menuRepo = mockMenuRepository();
+      menuRepo.find.mockResolvedValue([
+        { id: 'menu-1', name: 'Beer', price_kobo: 5000, track_stock: false, quantity_in_stock: 0 },
+        { id: 'menu-2', name: 'Wine', price_kobo: 8000, track_stock: false, quantity_in_stock: 0 },
+      ]);
+
+      const service = buildService({ tabRepository: tabRepo, menuRepository: menuRepo });
+
+      const result = await service.addOrderItems('tab-1', [
+        { menu_item_id: 'menu-1', quantity: 2, round_number: 1 },
+        { menu_item_id: 'menu-2', quantity: 1, round_number: 1 },
+      ], 'waiter-1');
+
+      expect(result[0].round_number).toBe(1);
+      expect(result[1].round_number).toBe(1);
+    });
+  });
 });

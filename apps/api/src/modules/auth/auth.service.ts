@@ -1,4 +1,12 @@
-import { Inject, Injectable, UnauthorizedException, ConflictException, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+  BadRequestException,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
@@ -18,6 +26,9 @@ import { AuditService } from '../../common/services/audit.service';
 
 @Injectable()
 export class AuthService {
+  private static readonly MAX_LOGIN_ATTEMPTS = 5;
+  private static readonly LOCKOUT_MS = 15 * 60 * 1000;
+
   constructor(
     private jwtService: JwtService,
     @Inject(DataSource)
@@ -33,7 +44,11 @@ export class AuthService {
 
     try {
       // 1. Create Business
-      const businessCode = crypto.randomBytes(6).toString('base64url').toUpperCase().slice(0, 8);
+      const businessCode = crypto
+        .randomBytes(6)
+        .toString('base64url')
+        .toUpperCase()
+        .slice(0, 8);
       const business = queryRunner.manager.create(Business, {
         name: dto.businessName,
         slug: dto.businessName.toLowerCase().replace(/ /g, '-'),
@@ -54,7 +69,10 @@ export class AuthService {
       const savedBranch = await queryRunner.manager.save(branch);
 
       // 2b. Create Trial Subscription
-      await this.subscriptionService.createTrialSubscription(savedBranch.id, queryRunner.manager);
+      await this.subscriptionService.createTrialSubscription(
+        savedBranch.id,
+        queryRunner.manager,
+      );
 
       // 3. Create Owner User
       const salt = await bcrypt.genSalt();
@@ -99,21 +117,63 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    const user = await this.dataSource.getRepository(User).findOne({
+    const repo = this.dataSource.getRepository(User);
+    const user = await repo.findOne({
       where: { email: dto.email },
     });
 
-    if (user && (await bcrypt.compare(dto.password, user.password_hash))) {
+    const now = new Date();
+    if (user?.locked_until && user.locked_until > now) {
+      throw new UnauthorizedException(
+        'Too many failed attempts. Account temporarily locked — try again in a few minutes.',
+      );
+    }
+
+    const valid = user
+      ? await bcrypt.compare(dto.password, user.password_hash)
+      : false;
+
+    if (user && !valid) {
+      user.failed_login_attempts = (user.failed_login_attempts ?? 0) + 1;
+      if (user.failed_login_attempts >= AuthService.MAX_LOGIN_ATTEMPTS) {
+        user.locked_until = new Date(now.getTime() + AuthService.LOCKOUT_MS);
+        user.failed_login_attempts = 0;
+        await this.auditService.log({
+          branchId: user.branch_id,
+          userId: user.id,
+          action: 'ACCOUNT_LOCKED',
+          entityType: 'User',
+          entityId: user.id,
+          payload: {
+            email: user.email,
+            lockoutMinutes: 15,
+            reason: 'max_login_attempts',
+          },
+        });
+        await repo.save(user);
+        throw new UnauthorizedException(
+          'Too many failed attempts. Account locked for 15 minutes.',
+        );
+      }
+      await repo.save(user);
+    }
+
+    if (valid) {
+      user!.failed_login_attempts = 0;
+      user!.locked_until = null;
+      user!.last_login_at = new Date();
+      await repo.save(user!);
       await this.auditService.log({
-        branchId: user.branch_id,
-        userId: user.id,
+        branchId: user!.branch_id,
+        userId: user!.id,
         action: 'LOGIN',
         entityType: 'User',
-        entityId: user.id,
-        payload: { email: user.email, role: user.role },
+        entityId: user!.id,
+        payload: { email: user!.email, role: user!.role },
       });
-      return this.generateTokens(user);
+      return this.generateTokens(user!);
     }
+
     throw new UnauthorizedException('Invalid credentials');
   }
 
@@ -123,7 +183,13 @@ export class AuthService {
     }
 
     const whereClause: any = {
-      role: In([UserRole.WAITER, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.CHEF, UserRole.CASHIER]),
+      role: In([
+        UserRole.WAITER,
+        UserRole.SUPERVISOR,
+        UserRole.MANAGER,
+        UserRole.CHEF,
+        UserRole.CASHIER,
+      ]),
       is_active: true,
     };
 
@@ -170,7 +236,9 @@ export class AuthService {
     }
 
     if (!user.password_hash) {
-      throw new BadRequestException('Account has no password set. Contact your admin.');
+      throw new BadRequestException(
+        'Account has no password set. Contact your admin.',
+      );
     }
 
     const valid = await bcrypt.compare(dto.password, user.password_hash);
@@ -186,9 +254,17 @@ export class AuthService {
     return this.generateTokens(user);
   }
 
-  async impersonate(currentUser: any, dto: { businessId: string; branchId?: string }) {
-    if (currentUser.role !== 'super_admin' && currentUser.role !== 'superadmin') {
-      throw new ForbiddenException('Only super administrators can impersonate businesses');
+  async impersonate(
+    currentUser: any,
+    dto: { businessId: string; branchId?: string },
+  ) {
+    if (
+      currentUser.role !== 'super_admin' &&
+      currentUser.role !== 'superadmin'
+    ) {
+      throw new ForbiddenException(
+        'Only super administrators can impersonate businesses',
+      );
     }
     if (!dto.businessId) {
       throw new BadRequestException('businessId is required');
@@ -202,7 +278,9 @@ export class AuthService {
     }
 
     let owner = business.owner_id
-      ? await this.dataSource.getRepository(User).findOne({ where: { id: business.owner_id } })
+      ? await this.dataSource
+          .getRepository(User)
+          .findOne({ where: { id: business.owner_id } })
       : null;
 
     if (!owner) {
@@ -256,7 +334,9 @@ export class AuthService {
   }
 
   private async generateTokens(user: User) {
-    const branch = await this.dataSource.getRepository(Branch).findOne({ where: { id: user.branch_id } });
+    const branch = await this.dataSource
+      .getRepository(Branch)
+      .findOne({ where: { id: user.branch_id } });
     const payload = {
       sub: user.id,
       email: user.email,
@@ -287,12 +367,19 @@ export class AuthService {
 
   async refreshToken(refreshTokenStr: string) {
     const repo = this.dataSource.getRepository(RefreshToken);
-    const tokenHash = crypto.createHash('sha256').update(refreshTokenStr).digest('hex');
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(refreshTokenStr)
+      .digest('hex');
 
     let stored: RefreshToken | null = null;
     try {
       stored = await repo.findOne({
-        where: { token_hash: tokenHash, is_revoked: false, expires_at: MoreThan(new Date()) },
+        where: {
+          token_hash: tokenHash,
+          is_revoked: false,
+          expires_at: MoreThan(new Date()),
+        },
       });
     } catch {
       throw new BadRequestException('Refresh tokens not available');
@@ -302,7 +389,9 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
-    const user = await this.dataSource.getRepository(User).findOne({ where: { id: stored.user_id } });
+    const user = await this.dataSource
+      .getRepository(User)
+      .findOne({ where: { id: stored.user_id } });
     if (!user || !user.is_active) {
       throw new UnauthorizedException('User not found or inactive');
     }
@@ -315,7 +404,10 @@ export class AuthService {
 
   async logout(refreshTokenStr: string) {
     try {
-      const tokenHash = crypto.createHash('sha256').update(refreshTokenStr).digest('hex');
+      const tokenHash = crypto
+        .createHash('sha256')
+        .update(refreshTokenStr)
+        .digest('hex');
       const repo = this.dataSource.getRepository(RefreshToken);
       await repo.update({ token_hash: tokenHash }, { is_revoked: true });
     } catch {
@@ -325,7 +417,9 @@ export class AuthService {
   }
 
   async forgotPassword(email: string) {
-    const user = await this.dataSource.getRepository(User).findOne({ where: { email } });
+    const user = await this.dataSource
+      .getRepository(User)
+      .findOne({ where: { email } });
     if (!user) {
       return { message: 'If that email exists, a reset link has been sent.' };
     }
@@ -334,14 +428,19 @@ export class AuthService {
     const token = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
-    await repo.save(repo.create({
-      user_id: user.id,
-      token: tokenHash,
-      type: 'password_reset',
-      expires_at: new Date(Date.now() + 60 * 60 * 1000),
-    }));
+    await repo.save(
+      repo.create({
+        user_id: user.id,
+        token: tokenHash,
+        type: 'password_reset',
+        expires_at: new Date(Date.now() + 60 * 60 * 1000),
+      }),
+    );
 
-    return { message: 'If that email exists, a reset link has been sent.', reset_token: token };
+    return {
+      message: 'If that email exists, a reset link has been sent.',
+      reset_token: token,
+    };
   }
 
   async resetPassword(token: string, newPassword: string) {
@@ -349,19 +448,28 @@ export class AuthService {
     const repo = this.dataSource.getRepository(VerificationToken);
 
     const stored = await repo.findOne({
-      where: { token: tokenHash, type: 'password_reset', is_used: false, expires_at: MoreThan(new Date()) },
+      where: {
+        token: tokenHash,
+        type: 'password_reset',
+        is_used: false,
+        expires_at: MoreThan(new Date()),
+      },
     });
     if (!stored) {
       throw new BadRequestException('Invalid or expired reset token');
     }
 
-    const user = await this.dataSource.getRepository(User).findOne({ where: { id: stored.user_id } });
+    const user = await this.dataSource
+      .getRepository(User)
+      .findOne({ where: { id: stored.user_id } });
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
     const salt = await bcrypt.genSalt();
     user.password_hash = await bcrypt.hash(newPassword, salt);
+    user.failed_login_attempts = 0;
+    user.locked_until = null;
     await this.dataSource.getRepository(User).save(user);
 
     stored.is_used = true;
@@ -379,7 +487,11 @@ export class AuthService {
     return { message: 'Password reset successfully' };
   }
 
-  async setupSuperAdmin(dto: { email: string; password: string; full_name?: string }) {
+  async setupSuperAdmin(dto: {
+    email: string;
+    password: string;
+    full_name?: string;
+  }) {
     const existing = await this.dataSource.getRepository(User).findOne({
       where: { email: dto.email },
     });
@@ -414,16 +526,20 @@ export class AuthService {
       });
     }
 
-    let subscription = await this.dataSource.getRepository(Subscription).findOne({
-      where: { branch_id: branch.id },
-    });
+    let subscription = await this.dataSource
+      .getRepository(Subscription)
+      .findOne({
+        where: { branch_id: branch.id },
+      });
 
     if (!subscription) {
       await this.subscriptionService.createTrialSubscription(branch.id);
     }
 
     try {
-      await this.dataSource.query(`ALTER TYPE "users_role_enum" ADD VALUE IF NOT EXISTS 'superadmin'`);
+      await this.dataSource.query(
+        `ALTER TYPE "users_role_enum" ADD VALUE IF NOT EXISTS 'superadmin'`,
+      );
     } catch {
       // column might already be varchar, ignore
     }
@@ -452,12 +568,14 @@ export class AuthService {
     const otp = String(Math.floor(100000 + Math.random() * 900000));
     const tokenHash = crypto.createHash('sha256').update(otp).digest('hex');
 
-    await repo.save(repo.create({
-      user_id: userId,
-      token: tokenHash,
-      type: 'email_verify',
-      expires_at: new Date(Date.now() + 10 * 60 * 1000),
-    }));
+    await repo.save(
+      repo.create({
+        user_id: userId,
+        token: tokenHash,
+        type: 'email_verify',
+        expires_at: new Date(Date.now() + 10 * 60 * 1000),
+      }),
+    );
 
     return { message: 'Verification code sent' };
   }
@@ -467,13 +585,20 @@ export class AuthService {
     const repo = this.dataSource.getRepository(VerificationToken);
 
     const stored = await repo.findOne({
-      where: { token: tokenHash, type: 'email_verify', is_used: false, expires_at: MoreThan(new Date()) },
+      where: {
+        token: tokenHash,
+        type: 'email_verify',
+        is_used: false,
+        expires_at: MoreThan(new Date()),
+      },
     });
     if (!stored) {
       throw new BadRequestException('Invalid or expired verification code');
     }
 
-    const user = await this.dataSource.getRepository(User).findOne({ where: { id: userId } });
+    const user = await this.dataSource
+      .getRepository(User)
+      .findOne({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException('User not found');
     }

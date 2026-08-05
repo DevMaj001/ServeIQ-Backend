@@ -58,6 +58,8 @@ import { AddTabType1800000000001 } from './database/migrations/1800000000001-Add
 import { AddFulfillmentType1800000000002 } from './database/migrations/1800000000002-AddFulfillmentType';
 import { RelocateTrackingToTabs1800000000003 } from './database/migrations/1800000000003-RelocateTrackingToTabs';
 import { MakeWaiterIdNullable1800000000004 } from './database/migrations/1800000000004-MakeWaiterIdNullable';
+import { ConsolidateEnsureTables1800000000005 } from './database/migrations/1800000000005-ConsolidateEnsureTables';
+import { AddLoginLockout1800000000006 } from './database/migrations/1800000000006-AddLoginLockout';
 import { BackfillUserRoleId1752892800000 } from './database/migrations/1752892800000-BackfillUserRoleId';
 import { MakeUserRoleIdNotNull1752892800001 } from './database/migrations/1752892800001-MakeUserRoleIdNotNull';
 
@@ -130,7 +132,7 @@ import { UnitModule } from './modules/unit/unit.module';
         MenuCategory,
         Unit,
       ],
-      migrations: [BackfillUserRoleId1752892800000, MakeUserRoleIdNotNull1752892800001, CreateBaseTables1782000000000, CreatePlansAndSubscriptions1784000000000, AddTrackingAndTimestampsToOrders1792000000000, CreateAdvertisementsTable1793000000000, CreatePermissionsAndRoles1794000000000, CreateNotificationsTable1784000000003, CreateDepartmentsTable1790000000000, CreateStockMovementsTable1795000000000, AddBusinessCodeToBusinesses1796000000000, BackfillBusinessCodes1796000000001, AddTokenVersionFields1797000000000, MakeAdBranchIdNullable1798000000000, MakeExistingAdsUniversal1798000000001, CreateMenuCategoriesTable1799000000000, CreateUnitsTable1799000000001, AddVirtualCounterTable1800000000000, AddTabType1800000000001, AddFulfillmentType1800000000002, RelocateTrackingToTabs1800000000003, MakeWaiterIdNullable1800000000004],
+      migrations: [BackfillUserRoleId1752892800000, MakeUserRoleIdNotNull1752892800001, CreateBaseTables1782000000000, CreatePlansAndSubscriptions1784000000000, AddTrackingAndTimestampsToOrders1792000000000, CreateAdvertisementsTable1793000000000, CreatePermissionsAndRoles1794000000000, CreateNotificationsTable1784000000003, CreateDepartmentsTable1790000000000, CreateStockMovementsTable1795000000000, AddBusinessCodeToBusinesses1796000000000, BackfillBusinessCodes1796000000001, AddTokenVersionFields1797000000000, MakeAdBranchIdNullable1798000000000, MakeExistingAdsUniversal1798000000001, CreateMenuCategoriesTable1799000000000, CreateUnitsTable1799000000001, AddVirtualCounterTable1800000000000, AddTabType1800000000001, AddFulfillmentType1800000000002, RelocateTrackingToTabs1800000000003, MakeWaiterIdNullable1800000000004, ConsolidateEnsureTables1800000000005, AddLoginLockout1800000000006],
       migrationsRun: true,
       synchronize: false,
       logging: false,

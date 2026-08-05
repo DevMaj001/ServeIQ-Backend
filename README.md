@@ -60,6 +60,21 @@ Here is everything the system can do, explained simply:
 
 ---
 
+## Legal & Data Protection
+
+ServeIQ maintains a complete set of legal and data-protection documents. These are standalone files in the repository that the wider ServeIQ frontend and marketing site can link to (a privacy policy and terms page should be exposed in the app footer).
+
+| Document | Purpose | Audience |
+|---|---|---|
+| [Privacy Policy](PRIVACY.md) | What personal data we collect, why, how it is stored, shared, and your rights. | End users, business owners, staff, customers |
+| [Terms of Service](TERMS_OF_SERVICE.md) | The binding agreement between ServeIQ and its users/businesses, including IP, liability, and dispute resolution. | Business owners, staff |
+| [Cookie Policy](COOKIE_POLICY.md) | How cookies and local storage are used (authentication, offline sync). | All website users |
+| [Data Processing Agreement](DATA_PROCESSING_AGREEMENT.md) | Processor/controller obligations between ServeIQ and its business customers (GDPR, NDPR, POPIA-aligned). | Business customers |
+
+> **Production note:** Legal documents are finalized with entity name (ServeIQ Technologies Ltd), registered address (Plot 12, Admiralty Road, Lekki Phase 1, Lagos 100001, Nigeria), jurisdiction (Federal Republic of Nigeria), and effective dates confirmed. Sections referencing features not yet shipped (Paystack V2+, AI/NVIDIA V4, Google Analytics, cross-border) should still be verified against the actual production stack before publishing.
+
+---
+
 ## How the system is organized
 
 The project has two main parts:
@@ -238,7 +253,7 @@ Current focus areas:
 5. Rebuild with `npm run build -w apps/api`
 
 ### How to run database migrations
-The database is managed via TypeORM synchronize in development. In production, migrations are auto-synced on deploy.
+Schema changes are managed exclusively through TypeORM migrations (`synchronize: false`). On startup the app runs pending migrations automatically (`migrationsRun: true`) when you build and start. To generate a new migration from entity changes: `npm run migration:generate -w apps/api`, then run with `npm run migration:run -w apps/api`.
 
 ### How to check logs
 - **Local:** Terminal output shows all logs
