@@ -6,13 +6,19 @@ import {
   Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, In } from 'typeorm';
 import { Tab } from '../tab/entities/tab.entity';
 import { Order } from '../order/entities/order.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Table } from '../table/entities/table.entity';
 import { TrackingService } from '../tracking/tracking.service';
-import { TabType } from '../../common/shared';
+import { ModifierSelectionDto } from '../order/dto/create-order-item.dto';
+import {
+  TabType,
+  FulfillmentType,
+  OrderStatus,
+  TableStatus,
+} from '../../common/shared';
 
 @Injectable()
 export class CustomerService {
@@ -35,7 +41,7 @@ export class CustomerService {
     table_id?: string;
     customer_name?: string;
     party_size?: number;
-    tab_type?: string;
+    tab_type?: TabType;
   }) {
     const tabType = dto.tab_type || TabType.DINE_IN;
 
@@ -77,7 +83,9 @@ export class CustomerService {
       });
 
       const savedTab = await this.tabRepo.save(newTab);
-      await this.tableRepo.update(dto.table_id, { status: 'occupied' as any });
+      await this.tableRepo.update(dto.table_id, {
+        status: TableStatus.OCCUPIED,
+      });
       return this.getTabResponse(savedTab.id);
     }
 
@@ -115,7 +123,7 @@ export class CustomerService {
       menu_item_id: string;
       quantity: number;
       notes?: string;
-      modifiers?: any[];
+      modifiers?: ModifierSelectionDto[];
     }[],
   ) {
     const tab = await this.tabRepo.findOne({ where: { id: tabId } });
@@ -128,7 +136,7 @@ export class CustomerService {
 
     const menuItemIds = items.map((i) => i.menu_item_id);
     const menuItems = await this.menuItemRepo.find({
-      where: { id: menuItemIds as any },
+      where: { id: In(menuItemIds) },
     });
     const menuMap = new Map(menuItems.map((m) => [m.id, m]));
 
@@ -145,7 +153,7 @@ export class CustomerService {
       for (const item of items) {
         const menuItem = menuMap.get(item.menu_item_id)!;
         const modifierTotal = (item.modifiers || []).reduce(
-          (sum: number, m: any) => sum + m.price_kobo * m.qty,
+          (sum: number, m: ModifierSelectionDto) => sum + m.price_kobo * m.qty,
           0,
         );
         const order = manager.getRepository(Order).create({
@@ -158,9 +166,10 @@ export class CustomerService {
           created_by: 'self-service',
           notes: item.notes,
           modifiers: item.modifiers,
-          fulfillment_type:
-            tab.tab_type === TabType.TAKEAWAY ? 'takeaway' : 'serve',
-          order_status: 'pending_supervisor_approval',
+          fulfillment_type: (tab.tab_type === TabType.TAKEAWAY
+            ? 'takeaway'
+            : 'serve') as FulfillmentType,
+          order_status: OrderStatus.PENDING_SUPERVISOR_APPROVAL,
         });
         savedOrders.push(await manager.getRepository(Order).save(order));
       }

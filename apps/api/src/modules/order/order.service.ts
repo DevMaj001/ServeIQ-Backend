@@ -20,6 +20,11 @@ import { AuditService } from '../../common/services/audit.service';
 import { Department } from '../department/entities/department.entity';
 import { ApproveOrderDto } from './dto/approve-order.dto';
 import { DeclineOrderDto } from './dto/decline-order.dto';
+import { UpdateOrderDto } from './dto/update-order.dto';
+import {
+  CreateOrderItemDto,
+  ModifierSelectionDto,
+} from './dto/create-order-item.dto';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationType } from '../notification/entities/notification.entity';
 
@@ -41,7 +46,11 @@ export class OrderService {
     private notificationService: NotificationService,
   ) {}
 
-  async addOrderItems(tabId: string, items: any[], userId: string) {
+  async addOrderItems(
+    tabId: string,
+    items: CreateOrderItemDto[],
+    userId: string,
+  ) {
     const ids = items.map((i) => i.menu_item_id);
     const menuItems = await this.menuRepository.find({
       where: { id: In(ids) },
@@ -83,7 +92,7 @@ export class OrderService {
         }
 
         const modifierTotal = (item.modifiers || []).reduce(
-          (sum: number, m: any) => sum + m.price_kobo * m.qty,
+          (sum: number, m: ModifierSelectionDto) => sum + m.price_kobo * m.qty,
           0,
         );
         const order = manager.getRepository(Order).create({
@@ -95,7 +104,7 @@ export class OrderService {
           round_number: item.round_number || 1,
           created_by: userId,
           notes: item.notes,
-          modifiers: item.modifiers || null,
+          modifiers: item.modifiers,
           fulfillment_type: item.fulfillment_type || tabDefault,
           order_status: OrderStatus.PENDING_SUPERVISOR_APPROVAL,
         });
@@ -141,7 +150,7 @@ export class OrderService {
     return order;
   }
 
-  async updateOrder(id: string, updateDto: any, branchId?: string) {
+  async updateOrder(id: string, updateDto: UpdateOrderDto, branchId?: string) {
     const order = await this.findOne(id, branchId);
 
     if (updateDto.quantity !== undefined) {
@@ -387,7 +396,7 @@ export class OrderService {
     orderField: string,
     pagination?: { page: number; per_page: number },
     waiterId?: string,
-  ) {
+  ): Promise<{ data: Array<Record<string, unknown>>; total: number }> {
     const orderClause =
       orderField === 'created_at'
         ? 'o.created_at DESC'
@@ -413,7 +422,10 @@ export class OrderService {
     `;
 
     const countSql = `SELECT COUNT(DISTINCT o.tab_id) AS total ${baseQuery}`;
-    const countResult = await this.dataSource.query(countSql, params);
+    const countResult = await this.dataSource.query<Array<{ total: string }>>(
+      countSql,
+      params,
+    );
     const total = parseInt(countResult[0]?.total || '0', 10);
 
     let paginationClause = '';
@@ -475,7 +487,10 @@ export class OrderService {
       ${paginationClause}
     `;
 
-    const rows = await this.dataSource.query(dataSql, params);
+    const rows = await this.dataSource.query<Array<Record<string, unknown>>>(
+      dataSql,
+      params,
+    );
     return { data: rows, total };
   }
 
