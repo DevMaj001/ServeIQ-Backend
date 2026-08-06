@@ -4,6 +4,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { JwtModuleOptions } from '@nestjs/jwt';
 import { SubscriptionController } from './subscription.controller';
 import { SubscriptionService } from './subscription.service';
 import { SubscriptionScheduler } from './subscription.scheduler';
@@ -24,7 +25,8 @@ import { SubscriptionGuard } from '../../common/guards/subscription.guard';
       useFactory: (config: ConfigService) => ({
         secret: config.get<string>('JWT_SECRET'),
         signOptions: {
-          expiresIn: config.get<string>('JWT_EXPIRES_IN', '24h') as any,
+          expiresIn: config.get<string>('JWT_EXPIRES_IN', '24h') as
+            NonNullable<JwtModuleOptions['signOptions']>['expiresIn'],
         },
       }),
     }),

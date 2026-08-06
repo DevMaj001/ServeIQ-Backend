@@ -9,11 +9,12 @@ import { Bill } from '../bill/entities/bill.entity';
 import { Order } from '../order/entities/order.entity';
 import { Tab } from '../tab/entities/tab.entity';
 import { User } from '../user/entities/user.entity';
+import type OpenAI from 'openai';
 
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
-  private openai: any = null;
+  private openai: OpenAI | null = null;
   private initPromise: Promise<void> | null = null;
 
   constructor(
@@ -32,7 +33,7 @@ export class AiService {
     private userRepo: Repository<User>,
   ) {}
 
-  private async getClient(): Promise<any> {
+  private async getClient(): Promise<OpenAI | null> {
     if (!this.openai) {
       if (!this.initPromise) {
         this.initPromise = this.initialize();
@@ -48,8 +49,8 @@ export class AiService {
 
     if (apiKey) {
       try {
-        const { default: OpenAI } = await import('openai');
-        this.openai = new OpenAI({ apiKey, baseURL });
+        const { default: OpenAIClient } = await import('openai');
+        this.openai = new OpenAIClient({ apiKey, baseURL });
       } catch (err) {
         this.logger.error('Failed to initialize OpenAI client', err);
       }
@@ -326,7 +327,7 @@ It serves two apps: Admin (web) and Waiter (mobile/tablet).`;
       {
         tracked_item_count: trackedItems.length,
         wastage_adjustments_last_30_days: Object.values(wastageByItem).sort(
-          (a: any, b: any) => b.total_lost - a.total_lost,
+          (a, b) => b.total_lost - a.total_lost,
         ),
         low_stock_items: lowStockItems,
       },

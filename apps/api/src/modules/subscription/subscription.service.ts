@@ -14,12 +14,19 @@ import {
 import { Plan } from './entities/plan.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { Business } from '../business/entities/business.entity';
+import Paystack from 'paystack';
 
-const Paystack = require('paystack');
+interface PaystackWebhookData {
+  customer?: { email?: string; customer_code?: string };
+  subscription?: { next_payment_date?: string; subscription_code?: string };
+  subscription_code?: string;
+  created_at?: string | number | Date;
+  [key: string]: unknown;
+}
 
 @Injectable()
 export class SubscriptionService {
-  private paystack: any;
+  private paystack: Paystack | null = null;
 
   constructor(
     @InjectRepository(Subscription)
@@ -85,14 +92,16 @@ export class SubscriptionService {
     let customerCode = subscription?.paystack_customer_code ?? null;
 
     if (!customerCode) {
-      let customerResp;
+      let customerResp: Awaited<ReturnType<Paystack['customer']['create']>>;
       try {
         customerResp = await this.paystack.customer.create({
           email: customerEmail,
         });
       } catch (e) {
         throw new BadRequestException(
-          `Paystack customer creation failed: ${e.message}`,
+          `Paystack customer creation failed: ${
+            e instanceof Error ? e.message : String(e)
+          }`,
         );
       }
       if (!customerResp?.status) {
@@ -100,7 +109,7 @@ export class SubscriptionService {
           customerResp?.message || 'Failed to create Paystack customer',
         );
       }
-      customerCode = customerResp.data?.customer_code;
+      customerCode = customerResp.data?.customer_code ?? null;
       if (!customerCode) {
         throw new BadRequestException('Failed to create Paystack customer');
       }
@@ -113,7 +122,9 @@ export class SubscriptionService {
       );
     }
 
-    let initializeResp;
+    let initializeResp: Awaited<
+      ReturnType<Paystack['transaction']['initialize']>
+    >;
     try {
       initializeResp = await this.paystack.transaction.initialize({
         amount: plan.price,
@@ -130,7 +141,9 @@ export class SubscriptionService {
       });
     } catch (e) {
       throw new BadRequestException(
-        `Paystack transaction initialization failed: ${e.message}`,
+        `Paystack transaction initialization failed: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
       );
     }
 
@@ -156,6 +169,12 @@ export class SubscriptionService {
       await this.subscriptionRepo.save(subscription);
     }
 
+    if (!initializeResp.data) {
+      throw new BadRequestException(
+        'Failed to initialize Paystack transaction: missing data',
+      );
+    }
+
     return {
       authorization_url: initializeResp.data.authorization_url,
       access_code: initializeResp.data.access_code,
@@ -163,7 +182,7 @@ export class SubscriptionService {
     };
   }
 
-  async handleChargeSuccess(data: any) {
+  async handleChargeSuccess(data: PaystackWebhookData) {
     const customerEmail = data.customer?.email;
     if (!customerEmail) return;
 
@@ -183,7 +202,9 @@ export class SubscriptionService {
     if (!subscription) return;
 
     subscription.status = SubscriptionStatus.ACTIVE;
-    subscription.current_period_start = new Date(data.created_at);
+    subscription.current_period_start = new Date(
+      data.created_at as string | number,
+    );
     subscription.current_period_end = new Date(
       data.subscription?.next_payment_date ||
         Date.now() + 30 * 24 * 60 * 60 * 1000,
@@ -198,7 +219,7 @@ export class SubscriptionService {
     await this.subscriptionRepo.save(subscription);
   }
 
-  async handleSubscriptionCreate(data: any) {
+  async handleSubscriptionCreate(data: PaystackWebhookData) {
     const customerCode = data.customer?.customer_code;
     if (!customerCode) return;
 
@@ -207,12 +228,13 @@ export class SubscriptionService {
     });
     if (!subscription) return;
 
-    subscription.paystack_subscription_code = data.subscription_code;
+    subscription.paystack_subscription_code =
+      data.subscription_code ?? subscription.paystack_subscription_code;
 
     await this.subscriptionRepo.save(subscription);
   }
 
-  async handleInvoicePaymentFailed(data: any) {
+  async handleInvoicePaymentFailed(data: PaystackWebhookData) {
     const customerEmail = data.customer?.email;
     if (!customerEmail) return;
 
@@ -239,7 +261,7 @@ export class SubscriptionService {
     await this.subscriptionRepo.save(subscription);
   }
 
-  async handleSubscriptionDisable(data: any) {
+  async handleSubscriptionDisable(data: PaystackWebhookData) {
     const subscriptionCode = data.subscription_code;
     if (!subscriptionCode) return;
 
@@ -298,14 +320,15 @@ export class SubscriptionService {
     subscription.canceled_at = new Date();
     await this.subscriptionRepo.save(subscription);
 
-    if (subscription.paystack_subscription_code) {
+    const paystack = this.paystack;
+    if (paystack && subscription.paystack_subscription_code) {
       try {
-        const sub = await this.paystack.subscription.get(
+        const sub = await paystack.subscription.get(
           subscription.paystack_subscription_code,
         );
         const token = sub?.data?.email_token;
         if (token) {
-          await this.paystack.subscription.disable({
+          await paystack.subscription.disable({
             code: subscription.paystack_subscription_code,
             token,
           });
@@ -391,9 +414,9 @@ export class SubscriptionService {
     body: string,
   ): Promise<boolean> {
     const secret = this.configService.get<string>('PAYSTACK_SECRET_KEY');
-    if (!secret) return false;
+    if (!secret) return Promise.resolve(false);
 
     const hash = crypto.createHmac('sha512', secret).update(body).digest('hex');
-    return hash === signature;
+    return Promise.resolve(hash === signature);
   }
 }
