@@ -7,9 +7,9 @@ export class MakeUserRoleIdNotNull1752892800001 implements MigrationInterface {
     console.log('Enforcing NOT NULL constraint on users.role_id...');
 
     // Verify no NULLs remain before applying constraint
-    const nullCount = await queryRunner.query(
+    const nullCount = (await queryRunner.query(
       `SELECT COUNT(*) as count FROM users WHERE role_id IS NULL`,
-    );
+    )) as Array<{ count: string }>;
 
     const count = parseInt(nullCount[0]?.count || '0', 10);
     if (count > 0) {

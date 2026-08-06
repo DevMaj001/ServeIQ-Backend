@@ -6,7 +6,6 @@ import {
   UpdateDateColumn,
   Index,
   ManyToMany,
-  JoinTable,
 } from 'typeorm';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 

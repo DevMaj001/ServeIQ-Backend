@@ -9,5 +9,7 @@ export class MakeExistingAdsUniversal1798000000001 implements MigrationInterface
     );
   }
 
-  public async down(queryRunner: QueryRunner): Promise<void> {}
+  public down(): Promise<void> {
+    return Promise.resolve();
+  }
 }

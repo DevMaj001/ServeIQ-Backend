@@ -16,7 +16,7 @@ export class AuditService {
     action: string;
     entityId?: string;
     entityType?: string;
-    payload?: any;
+    payload?: Record<string, unknown>;
   }) {
     const entry = this.auditRepository.create({
       branch_id: params.branchId,

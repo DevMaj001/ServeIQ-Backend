@@ -1,5 +1,5 @@
 import { IsInt, Min, IsOptional, IsNumber, Max } from 'class-validator';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class ApplyDiscountDto {
   @ApiPropertyOptional({

@@ -10,7 +10,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
-import { DataSource, MoreThan, In } from 'typeorm';
+import { DataSource, MoreThan, In, FindOptionsWhere } from 'typeorm';
 import { User } from '../user/entities/user.entity';
 import { Business } from '../business/entities/business.entity';
 import { Branch } from '../branch/entities/branch.entity';
@@ -107,7 +107,11 @@ export class AuthService {
       return this.generateTokens(savedUser);
     } catch (err) {
       await queryRunner.rollbackTransaction();
-      if (err.code === '23505') {
+      const code =
+        err instanceof Error && 'code' in err
+          ? (err as { code?: string }).code
+          : undefined;
+      if (code === '23505') {
         throw new ConflictException('Email already exists');
       }
       throw err;
@@ -182,7 +186,7 @@ export class AuthService {
       throw new BadRequestException('PIN or passcode is required');
     }
 
-    const whereClause: any = {
+    const whereClause: FindOptionsWhere<User> = {
       role: In([
         UserRole.WAITER,
         UserRole.SUPERVISOR,
@@ -255,7 +259,7 @@ export class AuthService {
   }
 
   async impersonate(
-    currentUser: any,
+    currentUser: { role?: string; userId: string; email?: string },
     dto: { businessId: string; branchId?: string },
   ) {
     if (

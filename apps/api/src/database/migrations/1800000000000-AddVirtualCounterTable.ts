@@ -10,7 +10,9 @@ export class AddVirtualCounterTable1800000000000 implements MigrationInterface {
             ADD COLUMN IF NOT EXISTS "is_virtual" boolean NOT NULL DEFAULT false
         `);
 
-    const branches = await queryRunner.query(`SELECT id FROM "branches"`);
+    const branches = (await queryRunner.query(
+      `SELECT id FROM "branches"`,
+    )) as Array<{ id: string }>;
     for (const branch of branches) {
       await queryRunner.query(VIRTUAL_COUNTER_INSERT_SQL, [branch.id]);
     }

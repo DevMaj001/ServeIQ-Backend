@@ -90,7 +90,9 @@ export class TrackingService {
         });
         paymentAccountNumber = terminal?.account_number || '';
       }
-    } catch {}
+    } catch {
+      // non-fatal: menu item lookup failed
+    }
 
     const orders = await this.orderRepo.find({
       where: { tab_id: tab.id },
@@ -119,7 +121,9 @@ export class TrackingService {
             where: { id: order.menu_item_id },
           });
           menuItemName = menuItem?.name || '';
-        } catch {}
+        } catch {
+          // non-fatal: terminal lookup failed
+        }
 
         return {
           id: order.id,

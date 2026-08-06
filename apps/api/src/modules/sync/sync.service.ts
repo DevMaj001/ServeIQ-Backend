@@ -7,7 +7,7 @@ import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Tab } from '../tab/entities/tab.entity';
 import { Bill } from '../bill/entities/bill.entity';
 
-interface SyncPayload {
+export interface SyncPayload {
   id: string;
   quantity?: number;
   notes?: string;

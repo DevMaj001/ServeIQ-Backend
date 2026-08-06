@@ -19,7 +19,7 @@ export class TransformInterceptor<T> implements NestInterceptor<
 
   intercept(
     context: ExecutionContext,
-    next: CallHandler,
+    next: CallHandler<T>,
   ): Observable<ApiResponse<T>> {
     const skipTransform = this.reflector.getAllAndOverride<boolean>(
       SKIP_TRANSFORM_KEY,
@@ -27,14 +27,16 @@ export class TransformInterceptor<T> implements NestInterceptor<
     );
 
     if (skipTransform) {
-      return next.handle();
+      return next.handle() as unknown as Observable<ApiResponse<T>>;
     }
 
     return next.handle().pipe(
-      map((data) => ({
-        success: true,
-        data,
-      })),
+      map(
+        (data: T): ApiResponse<T> => ({
+          success: true,
+          data,
+        }),
+      ),
     );
   }
 }

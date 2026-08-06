@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, FindOptionsWhere } from 'typeorm';
 import { Department } from './entities/department.entity';
 
 @Injectable()
@@ -11,7 +11,7 @@ export class DepartmentService {
   ) {}
 
   async findAll(branchId: string, includeInactive = false) {
-    const where: any = { branch_id: branchId };
+    const where: FindOptionsWhere<Department> = { branch_id: branchId };
     if (!includeInactive) where.is_active = true;
     return this.departmentRepo.find({ where, order: { name: 'ASC' } });
   }

@@ -4,6 +4,10 @@ import { Repository, In } from 'typeorm';
 import { ModifierGroup } from './modifier-group.entity';
 import { ModifierOption } from './modifier-option.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
+import { CreateModifierGroupDto } from './dto/create-modifier-group.dto';
+import { UpdateModifierGroupDto } from './dto/update-modifier-group.dto';
+import { CreateModifierOptionDto } from './dto/create-modifier-option.dto';
+import { UpdateModifierOptionDto } from './dto/update-modifier-option.dto';
 
 @Injectable()
 export class MenuModifierService {
@@ -35,13 +39,17 @@ export class MenuModifierService {
     return group;
   }
 
-  async createGroup(branchId: string, data: any) {
+  async createGroup(branchId: string, data: CreateModifierGroupDto) {
     return this.groupRepo.save(
       this.groupRepo.create({ ...data, branch_id: branchId }),
     );
   }
 
-  async updateGroup(id: string, branchId: string, data: any) {
+  async updateGroup(
+    id: string,
+    branchId: string,
+    data: UpdateModifierGroupDto,
+  ) {
     const group = await this.findGroup(id, branchId);
     Object.assign(group, data);
     return this.groupRepo.save(group);
@@ -61,7 +69,7 @@ export class MenuModifierService {
     });
   }
 
-  async createOption(groupId: string, data: any) {
+  async createOption(groupId: string, data: CreateModifierOptionDto) {
     const group = await this.groupRepo.findOne({ where: { id: groupId } });
     if (!group) throw new NotFoundException('Modifier group not found');
     return this.optionRepo.save(
@@ -69,7 +77,7 @@ export class MenuModifierService {
     );
   }
 
-  async updateOption(id: string, data: any) {
+  async updateOption(id: string, data: UpdateModifierOptionDto) {
     const option = await this.optionRepo.findOne({ where: { id } });
     if (!option) throw new NotFoundException('Modifier option not found');
     Object.assign(option, data);

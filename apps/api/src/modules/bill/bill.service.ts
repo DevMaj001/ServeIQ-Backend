@@ -258,7 +258,7 @@ export class BillService {
     } catch (err) {
       console.error(
         'PDF receipt generation failed (non-blocking):',
-        err.message,
+        err instanceof Error ? err.message : String(err),
       );
     }
 

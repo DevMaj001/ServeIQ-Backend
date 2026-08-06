@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule, getDataSourceToken } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtModule } from '@nestjs/jwt';

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, FindOptionsWhere } from 'typeorm';
 import { Notification } from './entities/notification.entity';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 
@@ -12,7 +12,9 @@ export class NotificationService {
   ) {}
 
   async findAll(branchId: string, unreadOnly = false) {
-    const where: any = { branch_id: branchId };
+    const where: FindOptionsWhere<Notification> = {
+      branch_id: branchId,
+    };
     if (unreadOnly) where.is_read = false;
     return this.notificationRepository.find({
       where,

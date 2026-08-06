@@ -12,7 +12,7 @@ import {
   ApiOperation,
   ApiResponse,
 } from '@nestjs/swagger';
-import { SyncService } from './sync.service';
+import { SyncService, SyncPayload } from './sync.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 interface RequestWithUser {
@@ -36,7 +36,7 @@ export class SyncController {
     body: {
       entity_type: string;
       operation: string;
-      payload: any;
+      payload: SyncPayload;
       client_idempotency_key?: string;
     },
   ) {

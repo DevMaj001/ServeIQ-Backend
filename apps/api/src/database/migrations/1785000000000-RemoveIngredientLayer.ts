@@ -169,31 +169,31 @@ export class RemoveIngredientLayer1785000000000 implements MigrationInterface {
         `);
 
     // === Summary report (compute before dropping tables) ===
-    const bucketA = await queryRunner.query(`
+    const bucketA = (await queryRunner.query(`
             SELECT COUNT(*)::int AS count FROM "menu_items" WHERE "track_stock" = true
-        `);
-    const bucketB = await queryRunner.query(`
+        `)) as Array<{ count: number }>;
+    const bucketB = (await queryRunner.query(`
             SELECT COUNT(*)::int AS count FROM "menu_items"
             WHERE "track_stock" = false AND "cost_price_kobo" IS NULL
             AND "id" IN (SELECT DISTINCT "menu_item_id" FROM "recipe_items")
-        `);
-    const bucketAAffected = await queryRunner.query(`
+        `)) as Array<{ count: number }>;
+    const bucketAAffected = (await queryRunner.query(`
             SELECT json_agg(json_build_object('id', mi."id", 'name', mi."name") ORDER BY mi."name") AS items
             FROM "menu_items" mi WHERE mi."track_stock" = true
-        `);
-    const bucketBAffected = await queryRunner.query(`
+        `)) as Array<{ items: unknown }>;
+    const bucketBAffected = (await queryRunner.query(`
             SELECT json_agg(json_build_object('id', mi."id", 'name', mi."name") ORDER BY mi."name") AS items
             FROM "menu_items" mi
             WHERE mi."track_stock" = false AND mi."cost_price_kobo" IS NULL
             AND mi."id" IN (SELECT DISTINCT "menu_item_id" FROM "recipe_items")
-        `);
-    const bucketCAffected = await queryRunner.query(`
+        `)) as Array<{ items: unknown }>;
+    const bucketCAffected = (await queryRunner.query(`
             SELECT json_agg(json_build_object('id', mi."id", 'name', mi."name") ORDER BY mi."name") AS items
             FROM "menu_items" mi
             WHERE mi."track_stock" = false AND mi."supplier_id" IS NULL
             AND mi."id" NOT IN (SELECT "menu_item_id" FROM "ingredients" WHERE "menu_item_id" IS NOT NULL)
             AND mi."id" NOT IN (SELECT "menu_item_id" FROM "recipe_items")
-        `);
+        `)) as Array<{ items: unknown }>;
 
     console.log('===== Backfill Summary Report =====');
     console.log(

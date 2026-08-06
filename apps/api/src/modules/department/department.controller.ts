@@ -24,6 +24,12 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 
+interface RequestWithUser {
+  user: {
+    branchId: string;
+  };
+}
+
 @ApiTags('Departments')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -47,7 +53,7 @@ export class DepartmentController {
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
   async findAll(
-    @Request() req: any,
+    @Request() req: RequestWithUser,
     @Query('include_inactive') includeInactive?: string,
   ) {
     return this.departmentService.findAll(
@@ -61,7 +67,7 @@ export class DepartmentController {
   @ApiOperation({ summary: 'Create a new department' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
-  async create(@Request() req: any, @Body('name') name: string) {
+  async create(@Request() req: RequestWithUser, @Body('name') name: string) {
     return this.departmentService.create(req.user.branchId, name);
   }
 

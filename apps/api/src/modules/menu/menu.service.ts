@@ -6,6 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { MenuItem } from './entities/menu-item.entity';
+import { CreateMenuItemDto } from './dto/create-menu-item.dto';
 
 @Injectable()
 export class MenuService {
@@ -14,7 +15,7 @@ export class MenuService {
     private menuRepository: Repository<MenuItem>,
   ) {}
 
-  async create(createDto: any) {
+  async create(createDto: CreateMenuItemDto) {
     const item = this.menuRepository.create(createDto);
     return this.menuRepository.save(item);
   }
@@ -96,7 +97,10 @@ export class MenuService {
         });
         created.push(await this.menuRepository.save(item));
       } catch (err) {
-        errors.push({ row: i + 1, message: err.message });
+        errors.push({
+          row: i + 1,
+          message: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 

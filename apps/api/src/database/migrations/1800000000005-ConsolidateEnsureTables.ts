@@ -179,8 +179,9 @@ export class ConsolidateEnsureTables1800000000005 implements MigrationInterface 
         )`);
   }
 
-  public async down(queryRunner: QueryRunner): Promise<void> {
+  public down(): Promise<void> {
     // No-op: reverse of an idempotent consolidation is intentionally
     // not executed (dropping live tables/columns is destructive).
+    return Promise.resolve();
   }
 }

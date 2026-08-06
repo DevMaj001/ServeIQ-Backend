@@ -29,7 +29,7 @@ export class UserService {
     private auditService: AuditService,
   ) {}
 
-  async create(createDto: any) {
+  async create(createDto: Partial<User>) {
     const user = this.userRepository.create(createDto);
     return this.userRepository.save(user);
   }

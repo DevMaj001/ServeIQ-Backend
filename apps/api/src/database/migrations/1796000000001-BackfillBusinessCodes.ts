@@ -9,7 +9,8 @@ export class BackfillBusinessCodes1796000000001 implements MigrationInterface {
     );
   }
 
-  public async down(queryRunner: QueryRunner): Promise<void> {
+  public down(): Promise<void> {
     // no down — codes are data, not schema
+    return Promise.resolve();
   }
 }

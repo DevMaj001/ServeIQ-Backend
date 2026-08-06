@@ -42,6 +42,7 @@ interface AuthRequestUser {
   role?: string;
   branchId?: string;
   businessId?: string;
+  email?: string;
 }
 
 interface RequestWithUser {

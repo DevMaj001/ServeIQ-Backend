@@ -481,7 +481,7 @@ async function seed() {
   ];
 
   // Seed roles
-  const roleEntities = [];
+  const roleEntities: Role[] = [];
   for (const def of defaultRoles) {
     const role = roleRepo.create({
       name: def.name,
@@ -490,13 +490,11 @@ async function seed() {
     });
     role.permissions = def.permissions
       .map((code) => permissionEntities.find((p) => p.code === code))
-      .filter(Boolean) as any;
+      .filter(Boolean) as Permission[];
     const savedRole = await roleRepo.save(role);
     roleEntities.push(savedRole);
     console.log('Created role:', savedRole.name);
   }
-
-  const roleByName = new Map(roleEntities.map((r) => [r.name, r]));
 
   // ===== 2. CREATE BUSINESS & USERS =====
   // Create Business
@@ -527,11 +525,8 @@ async function seed() {
   await subscriptionRepo.save(subscription);
   console.log('Created trial subscription for branch:', savedBranch.id);
 
-  // Fetch roles for user creation
+  // Fetch owner role for user creation
   const ownerRole = roleEntities.find((r) => r.name === 'Owner');
-  const managerRole = roleEntities.find((r) => r.name === 'Manager');
-  const waiterRole = roleEntities.find((r) => r.name === 'Waiter');
-  const supervisorRole = roleEntities.find((r) => r.name === 'Supervisor');
 
   // Create Owner User
   const salt = await bcrypt.genSalt();

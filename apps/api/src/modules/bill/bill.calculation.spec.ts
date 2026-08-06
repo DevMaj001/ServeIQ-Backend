@@ -591,7 +591,9 @@ describe('BillService â€” Billing Calculation Accuracy (50 scenarios)', () 
   });
 
   it('S041 â€” 1 kobo items x 99 (99 kobo total), 10% service', async () => {
-    const orders = Array(99).fill({ subtotal_kobo: 1 });
+    const orders = Array.from({ length: 99 }, () => ({
+      subtotal_kobo: 1,
+    }));
     const result = await runScenario(orders, {});
     expect(result.subtotal_kobo).toBe(99);
     expect(result.service_charge_kobo).toBe(10); // 99 * 0.10 = 9.9 -> 10

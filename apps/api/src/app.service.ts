@@ -44,7 +44,10 @@ export class AppService implements OnApplicationBootstrap {
         '[SchemaSync] Missing columns and tables created successfully',
       );
     } catch (err) {
-      console.warn('[SchemaSync] Non-fatal schema sync warning:', err.message);
+      console.warn(
+        '[SchemaSync] Non-fatal schema sync warning:',
+        err instanceof Error ? err.message : String(err),
+      );
     }
   }
 

@@ -14,7 +14,7 @@ export class OpenTabDto {
     example: 'table-uuid-123',
     description: 'UUID of the table where the tab is opened',
   })
-  @ValidateIf((o) => o.tab_type !== TabType.TAKEAWAY)
+  @ValidateIf((o: OpenTabDto) => o.tab_type !== TabType.TAKEAWAY)
   @IsNotEmpty()
   @IsString()
   table_id: string;

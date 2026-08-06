@@ -8,14 +8,12 @@ export class BackfillUserRoleId1752892800000 implements MigrationInterface {
 
     // Map legacy users.role enum values to roles.name
     // First, ensure all expected roles exist
-    const roles = await queryRunner.query(
+    const roles = (await queryRunner.query(
       `SELECT id, name FROM roles WHERE name IN ('Owner', 'Manager', 'Supervisor', 'Waiter', 'Chef', 'Cashier', 'Owner')`,
-    );
+    )) as Array<{ id: string; name: string }>;
 
     const roleMap = new Map<string, string>();
-    roles.forEach((r: { id: string; name: string }) =>
-      roleMap.set(r.name, r.id),
-    );
+    roles.forEach((r) => roleMap.set(r.name, r.id));
     console.log('Found roles:', Array.from(roleMap.entries()));
 
     // Verify all expected roles exist
@@ -54,12 +52,12 @@ export class BackfillUserRoleId1752892800000 implements MigrationInterface {
         continue;
       }
 
-      const result = await queryRunner.query(
+      const result = (await queryRunner.query(
         `UPDATE users SET role_id = $1 WHERE role_id IS NULL AND role = $2`,
         [roleId, legacyRole],
-      );
+      )) as unknown[];
 
-      const count = result[1] || 0;
+      const count = Number(result[1]) || 0;
       if (count > 0) {
         console.log(
           `Updated ${count} users with legacy role "${legacyRole}" -> role_id ${roleId} (${roleName})`,
@@ -68,9 +66,9 @@ export class BackfillUserRoleId1752892800000 implements MigrationInterface {
     }
 
     // Check for any remaining NULL role_id
-    const remaining = await queryRunner.query(
+    const remaining = (await queryRunner.query(
       `SELECT id, email, role FROM users WHERE role_id IS NULL`,
-    );
+    )) as Array<{ id: string; email: string; role: string }>;
 
     if (remaining.length > 0) {
       console.warn(
@@ -82,12 +80,10 @@ export class BackfillUserRoleId1752892800000 implements MigrationInterface {
     }
   }
 
-  public async down(queryRunner: QueryRunner): Promise<void> {
+  public down(): Promise<void> {
     // No-op: Backfill is derived from existing data (users.role enum).
     // Reversing would require knowing original NULL state which is not tracked.
     // This migration is effectively irreversible without a backup.
-    console.log(
-      'No-op down migration: role_id backfill is not meaningfully reversible.',
-    );
+    return Promise.resolve();
   }
 }

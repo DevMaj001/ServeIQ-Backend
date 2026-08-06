@@ -29,6 +29,14 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { User } from './entities/user.entity';
 import { getPaginationParams, paginate } from '../../common/pagination';
 
+interface RequestWithUser {
+  user: {
+    userId: string;
+    branchId: string;
+    businessId?: string;
+  };
+}
+
 @ApiTags('User')
 @Controller('user')
 export class UserController {
@@ -53,7 +61,7 @@ export class UserController {
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Get own user profile' })
   @ApiResponse({ status: 200, description: 'User profile.', type: User })
-  async getProfile(@Request() req: any) {
+  async getProfile(@Request() req: RequestWithUser) {
     return this.userService.findOne(req.user.userId, req.user.branchId);
   }
 
@@ -62,7 +70,10 @@ export class UserController {
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Update own user profile' })
   @ApiResponse({ status: 200, description: 'Profile updated.' })
-  async updateProfile(@Request() req: any, @Body() dto: UpdateProfileDto) {
+  async updateProfile(
+    @Request() req: RequestWithUser,
+    @Body() dto: UpdateProfileDto,
+  ) {
     return this.userService.updateProfile(req.user.userId, dto);
   }
 

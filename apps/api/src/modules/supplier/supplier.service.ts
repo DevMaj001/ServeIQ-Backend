@@ -2,6 +2,8 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Supplier } from './entities/supplier.entity';
+import { CreateSupplierDto } from './dto/create-supplier.dto';
+import { UpdateSupplierDto } from './dto/update-supplier.dto';
 
 @Injectable()
 export class SupplierService {
@@ -25,7 +27,7 @@ export class SupplierService {
     return supplier;
   }
 
-  async create(branchId: string, dto: any) {
+  async create(branchId: string, dto: CreateSupplierDto) {
     const supplier = this.supplierRepository.create({
       ...dto,
       branch_id: branchId,
@@ -33,7 +35,7 @@ export class SupplierService {
     return this.supplierRepository.save(supplier);
   }
 
-  async update(id: string, branchId: string, dto: any) {
+  async update(id: string, branchId: string, dto: UpdateSupplierDto) {
     const supplier = await this.findOne(id, branchId);
     Object.assign(supplier, dto);
     return this.supplierRepository.save(supplier);

@@ -7,6 +7,12 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 
+interface ExceptionResponseBody {
+  message?: string | string[];
+  error?: string;
+  statusCode?: number;
+}
+
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
@@ -23,9 +29,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
       exception instanceof HttpException ? exception.getResponse() : null;
 
     const message =
-      typeof exceptionResponse === 'object' && exceptionResponse !== null
-        ? (exceptionResponse as any).message || (exceptionResponse as any).error
+      exceptionResponse && typeof exceptionResponse === 'object'
+        ? (exceptionResponse as ExceptionResponseBody).message ||
+          (exceptionResponse as ExceptionResponseBody).error ||
+          'Internal server error'
         : 'Internal server error';
+    const messageList = Array.isArray(message) ? message : [message];
 
     response.status(status).json({
       success: false,
@@ -34,7 +43,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
         statusCode: status,
         timestamp: new Date().toISOString(),
         path: request.url,
-        message: Array.isArray(message) ? message : [message],
+        message: messageList,
       },
     });
   }
