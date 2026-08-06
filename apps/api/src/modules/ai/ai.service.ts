@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, LessThanOrEqual } from 'typeorm';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { StockMovement } from '../ingredient/entities/stock-movement.entity';
+import { StockMovementType } from '../../common/shared';
 import { Bill } from '../bill/entities/bill.entity';
 import { Order } from '../order/entities/order.entity';
 import { Tab } from '../tab/entities/tab.entity';
@@ -277,7 +278,7 @@ It serves two apps: Admin (web) and Waiter (mobile/tablet).`;
     const adjustments = await this.movementRepo.find({
       where: {
         branch_id: branchId,
-        type: 'manual_adjustment',
+        type: StockMovementType.MANUAL_ADJUSTMENT,
         quantity_change: LessThanOrEqual(0),
         created_at: Between(thirtyDaysAgo, new Date()),
       },
@@ -382,7 +383,7 @@ It serves two apps: Admin (web) and Waiter (mobile/tablet).`;
     const purchases = await this.movementRepo.find({
       where: {
         branch_id: branchId,
-        type: 'purchase',
+        type: StockMovementType.PURCHASE,
         created_at: Between(thirtyDaysAgo, new Date()),
       },
       order: { created_at: 'DESC' },

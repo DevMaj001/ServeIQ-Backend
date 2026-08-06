@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   Index,
 } from 'typeorm';
+import { StockMovementType } from '../../../common/shared';
 
 @Entity('stock_movements')
 export class StockMovement {
@@ -19,8 +20,12 @@ export class StockMovement {
   @Column({ type: 'uuid' })
   menu_item_id: string;
 
-  @Column({ type: 'varchar', length: 25, default: 'manual_adjustment' })
-  type: string;
+  @Column({
+    type: 'varchar',
+    length: 25,
+    default: StockMovementType.MANUAL_ADJUSTMENT,
+  })
+  type: StockMovementType;
 
   @Column({ type: 'decimal', precision: 12, scale: 3 })
   quantity_change: number;

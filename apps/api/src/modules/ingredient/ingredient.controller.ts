@@ -42,7 +42,9 @@ export class IngredientController {
     summary: 'List all inventory items with current stock levels',
   })
   @ApiResponse({ status: 200, description: 'List of inventory items.' })
-  async findAll(@Request() req: any) {
+  async findAll(
+    @Request() req: { user: { branchId: string; userId: string } },
+  ) {
     return this.ingredientService.findAll(req.user.branchId);
   }
 
@@ -53,7 +55,7 @@ export class IngredientController {
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getBestsellers(
-    @Request() req: any,
+    @Request() req: { user: { branchId: string; userId: string } },
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
   ) {
@@ -68,7 +70,9 @@ export class IngredientController {
   @ApiOperation({ summary: 'Get items below reorder level' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getAlerts(@Request() req: any) {
+  async getAlerts(
+    @Request() req: { user: { branchId: string; userId: string } },
+  ) {
     return this.ingredientService.getAlerts(req.user.branchId);
   }
 
@@ -76,7 +80,9 @@ export class IngredientController {
   @ApiOperation({ summary: 'Get menu items that are not tracked for stock' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getUntracked(@Request() req: any) {
+  async getUntracked(
+    @Request() req: { user: { branchId: string; userId: string } },
+  ) {
     return this.ingredientService.findUntracked(req.user.branchId);
   }
 
@@ -84,7 +90,9 @@ export class IngredientController {
   @ApiOperation({ summary: 'Get inventory audit — expected vs actual stock' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getAudit(@Request() req: any) {
+  async getAudit(
+    @Request() req: { user: { branchId: string; userId: string } },
+  ) {
     const data = await this.ingredientService.getAudit(req.user.branchId);
     return { success: true, data };
   }
@@ -94,7 +102,10 @@ export class IngredientController {
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async findOne(@Param('id') id: string, @Request() req: any) {
+  async findOne(
+    @Param('id') id: string,
+    @Request() req: { user: { branchId: string; userId: string } },
+  ) {
     return this.ingredientService.findOne(id, req.user.branchId);
   }
 
@@ -103,7 +114,10 @@ export class IngredientController {
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getMovements(@Param('id') id: string, @Request() req: any) {
+  async getMovements(
+    @Param('id') id: string,
+    @Request() req: { user: { branchId: string; userId: string } },
+  ) {
     return this.ingredientService.getMovements(id, req.user.branchId);
   }
 
@@ -112,7 +126,10 @@ export class IngredientController {
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiOperation({ summary: 'Create inventory item (Owner/Manager only)' })
   @ApiResponse({ status: 201, description: 'Item created.' })
-  async create(@Request() req: any, @Body() dto: CreateInventoryItemDto) {
+  async create(
+    @Request() req: { user: { branchId: string; userId: string } },
+    @Body() dto: CreateInventoryItemDto,
+  ) {
     return this.ingredientService.create(req.user.branchId, {
       ...dto,
       created_by: req.user.userId,
@@ -128,7 +145,7 @@ export class IngredientController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async update(
     @Param('id') id: string,
-    @Request() req: any,
+    @Request() req: { user: { branchId: string; userId: string } },
     @Body() dto: UpdateInventoryItemDto,
   ) {
     return this.ingredientService.update(id, req.user.branchId, dto);
@@ -141,7 +158,10 @@ export class IngredientController {
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async remove(@Param('id') id: string, @Request() req: any) {
+  async remove(
+    @Param('id') id: string,
+    @Request() req: { user: { branchId: string; userId: string } },
+  ) {
     return this.ingredientService.remove(id, req.user.branchId);
   }
 
@@ -150,7 +170,10 @@ export class IngredientController {
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getMenuItemMovements(@Param('id') id: string, @Request() req: any) {
+  async getMenuItemMovements(
+    @Param('id') id: string,
+    @Request() req: { user: { branchId: string; userId: string } },
+  ) {
     return this.ingredientService.getMovements(id, req.user.branchId);
   }
 
@@ -161,7 +184,7 @@ export class IngredientController {
   @ApiResponse({ status: 422, description: 'Validation error.' })
   async restock(
     @Param('id') id: string,
-    @Request() req: any,
+    @Request() req: { user: { branchId: string; userId: string } },
     @Body()
     body: {
       added_quantity: number;
@@ -179,7 +202,11 @@ export class IngredientController {
     } catch (err) {
       if (err instanceof HttpException) throw err;
       throw new HttpException(
-        { success: false, message: err.message, errors: {} },
+        {
+          success: false,
+          message: err instanceof Error ? err.message : 'Unknown error',
+          errors: {},
+        },
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }
@@ -192,7 +219,7 @@ export class IngredientController {
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async reconcile(
-    @Request() req: any,
+    @Request() req: { user: { branchId: string; userId: string } },
     @Body()
     body: {
       reconciliation_id: string;
@@ -211,7 +238,9 @@ export class IngredientController {
   @ApiOperation({ summary: 'Stock variance report — expected vs actual' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getStockVariance(@Request() req: any) {
+  async getStockVariance(
+    @Request() req: { user: { branchId: string; userId: string } },
+  ) {
     return this.ingredientService.getStockVariance(req.user.branchId);
   }
 
@@ -221,7 +250,10 @@ export class IngredientController {
   @ApiQuery({ name: 'date', required: false })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getDailyTally(@Request() req: any, @Query('date') date?: string) {
+  async getDailyTally(
+    @Request() req: { user: { branchId: string; userId: string } },
+    @Query('date') date?: string,
+  ) {
     const data = await this.ingredientService.getDailyTally(
       req.user.branchId,
       date,
@@ -234,7 +266,7 @@ export class IngredientController {
   @ApiOperation({ summary: 'Deprecated — recipe system removed' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getRecipe() {
+  getRecipe() {
     throw new NotFoundException(
       'Recipe system has been removed. Stock is now tracked directly on menu items.',
     );
@@ -244,7 +276,7 @@ export class IngredientController {
   @ApiOperation({ summary: 'Deprecated — recipe system removed' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async addRecipeItem() {
+  addRecipeItem() {
     throw new NotFoundException(
       'Recipe system has been removed. Stock is now tracked directly on menu items.',
     );
@@ -254,7 +286,7 @@ export class IngredientController {
   @ApiOperation({ summary: 'Deprecated — recipe system removed' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async patchRecipe() {
+  patchRecipe() {
     throw new NotFoundException(
       'Recipe system has been removed. Stock is now tracked directly on menu items.',
     );
@@ -264,7 +296,7 @@ export class IngredientController {
   @ApiOperation({ summary: 'Deprecated — recipe system removed' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async deleteRecipe() {
+  deleteRecipe() {
     throw new NotFoundException(
       'Recipe system has been removed. Stock is now tracked directly on menu items.',
     );
@@ -274,7 +306,7 @@ export class IngredientController {
   @ApiOperation({ summary: 'Deprecated — recipe system removed' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async updateRecipeItem() {
+  updateRecipeItem() {
     throw new NotFoundException(
       'Recipe system has been removed. Stock is now tracked directly on menu items.',
     );
@@ -284,7 +316,7 @@ export class IngredientController {
   @ApiOperation({ summary: 'Deprecated — recipe system removed' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async removeRecipeItem() {
+  removeRecipeItem() {
     throw new NotFoundException(
       'Recipe system has been removed. Stock is now tracked directly on menu items.',
     );
