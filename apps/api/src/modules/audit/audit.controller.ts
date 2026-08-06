@@ -1,12 +1,6 @@
 import { Controller, Get, Query, UseGuards, Request } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import {
-  Repository,
-  LessThanOrEqual,
-  MoreThanOrEqual,
-  Between,
-  In,
-} from 'typeorm';
+import { Repository, Between, FindOptionsWhere } from 'typeorm';
 import { AuditLog } from '../../entities/audit-log.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -76,7 +70,7 @@ export class AuditController {
   @ApiQuery({ name: 'limit', required: false, example: '50' })
   @ApiResponse({ status: 200, description: 'Paginated audit log entries.' })
   async findAll(
-    @Request() req: any,
+    @Request() req: { user: { branchId: string } },
     @Query('action') action?: string,
     @Query('user_id') userId?: string,
     @Query('entity_type') entityType?: string,
@@ -94,7 +88,7 @@ export class AuditController {
     );
     const skip = (pageNum - 1) * limitNum;
 
-    const where: any = { branch_id: branchId };
+    const where: FindOptionsWhere<AuditLog> = { branch_id: branchId };
     if (action) where.action = action;
     if (userId) where.user_id = userId;
     if (entityType) where.entity_type = entityType;
@@ -128,7 +122,7 @@ export class AuditController {
     summary: 'Get recent audit logs (last 20) — all staff roles',
   })
   @ApiResponse({ status: 200, description: 'Recent audit log entries.' })
-  async findRecent(@Request() req: any) {
+  async findRecent(@Request() req: { user: { branchId: string } }) {
     return this.auditRepo.find({
       where: { branch_id: req.user.branchId },
       order: { created_at: 'DESC' },

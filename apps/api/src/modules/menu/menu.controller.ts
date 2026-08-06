@@ -37,19 +37,12 @@ import { UpdateMenuItemDto } from './dto/update-menu-item.dto';
 import { MenuItem } from './entities/menu-item.entity';
 import { getPaginationParams, paginate } from '../../common/pagination';
 
-const MAX_CSV_SIZE = 2 * 1024 * 1024; // 2MB
-
-const csvFileFilter = (
-  req: any,
-  file: Express.Multer.File,
-  cb: (error: Error | null, acceptFile: boolean) => void,
-) => {
-  if (file.mimetype !== 'text/csv' && !file.originalname.endsWith('.csv')) {
-    cb(new BadRequestException('Only CSV files are allowed'), false);
-    return;
-  }
-  cb(null, true);
-};
+interface RequestWithUser {
+  user: {
+    branchId: string;
+    userId: string;
+  };
+}
 
 @ApiTags('Menu')
 @ApiBearerAuth('access-token')
@@ -69,7 +62,7 @@ export class MenuController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async findAll(
-    @Request() req: any,
+    @Request() req: RequestWithUser,
     @Query('page') page?: string,
     @Query('per_page') per_page?: string,
   ) {
@@ -91,7 +84,7 @@ export class MenuController {
   })
   @ApiResponse({ status: 404, description: 'Menu item not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async findOne(@Param('id') id: string, @Request() req: any) {
+  async findOne(@Param('id') id: string, @Request() req: RequestWithUser) {
     return this.menuService.findOne(id, req.user.branchId);
   }
 
@@ -106,7 +99,10 @@ export class MenuController {
   })
   @ApiResponse({ status: 400, description: 'Validation error.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async create(@Request() req: any, @Body() createDto: CreateMenuItemDto) {
+  async create(
+    @Request() req: RequestWithUser,
+    @Body() createDto: CreateMenuItemDto,
+  ) {
     const data = { ...createDto };
     if (data.price && !data.price_kobo) {
       data.price_kobo = Math.round(data.price * 100);
@@ -128,7 +124,7 @@ export class MenuController {
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async update(
     @Param('id') id: string,
-    @Request() req: any,
+    @Request() req: RequestWithUser,
     @Body() updateDto: UpdateMenuItemDto,
   ) {
     const data = { ...updateDto };
@@ -168,7 +164,7 @@ export class MenuController {
   })
   @ApiResponse({ status: 201, description: 'Items imported.' })
   async importCsv(
-    @Request() req: any,
+    @Request() req: RequestWithUser,
     @UploadedFile() file: Express.Multer.File,
   ) {
     if (!file) throw new BadRequestException('CSV file required');
@@ -186,7 +182,10 @@ export class MenuController {
   @ApiParam({ name: 'id', description: 'Menu item UUID' })
   @ApiResponse({ status: 200, description: 'Menu item availability toggled.' })
   @ApiResponse({ status: 404, description: 'Menu item not found.' })
-  async toggleAvailability(@Param('id') id: string, @Request() req: any) {
+  async toggleAvailability(
+    @Param('id') id: string,
+    @Request() req: RequestWithUser,
+  ) {
     return this.menuService.toggleAvailability(id, req.user.branchId);
   }
 
@@ -197,7 +196,7 @@ export class MenuController {
   @ApiParam({ name: 'id', description: 'Menu item UUID' })
   @ApiResponse({ status: 200, description: 'Menu item deleted.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async remove(@Param('id') id: string, @Request() req: any) {
+  async remove(@Param('id') id: string, @Request() req: RequestWithUser) {
     return this.menuService.remove(id, req.user.branchId);
   }
 }

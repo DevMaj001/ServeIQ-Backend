@@ -30,6 +30,13 @@ import { Branch } from './entities/branch.entity';
 import * as QRCode from 'qrcode';
 import { Response } from 'express';
 
+interface RequestWithUser {
+  user: {
+    businessId: string;
+    branchId: string;
+  };
+}
+
 @ApiTags('Branches')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
@@ -45,7 +52,7 @@ export class BranchController {
     type: [Branch],
   })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async findAll(@Request() req: any) {
+  async findAll(@Request() req: RequestWithUser) {
     return this.branchService.findAllByBusiness(req.user.businessId);
   }
 
@@ -55,7 +62,7 @@ export class BranchController {
   @ApiResponse({ status: 200, description: 'Branch record.', type: Branch })
   @ApiResponse({ status: 404, description: 'Branch not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async findOne(@Param('id') id: string, @Request() req: any) {
+  async findOne(@Param('id') id: string, @Request() req: RequestWithUser) {
     return this.branchService.findOne(id, req.user.businessId);
   }
 
@@ -67,7 +74,7 @@ export class BranchController {
     type: DashboardStatsDto,
   })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async getDashboardStats(@Request() req: any) {
+  async getDashboardStats(@Request() req: RequestWithUser) {
     return this.branchService.getDashboardStats(req.user.branchId);
   }
 
@@ -78,7 +85,10 @@ export class BranchController {
   @ApiResponse({ status: 201, description: 'Branch created.' })
   @ApiResponse({ status: 400, description: 'Validation error.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async create(@Request() req: any, @Body() createDto: CreateBranchDto) {
+  async create(
+    @Request() req: RequestWithUser,
+    @Body() createDto: CreateBranchDto,
+  ) {
     return this.branchService.create({
       ...createDto,
       business_id: req.user.businessId,
@@ -95,7 +105,7 @@ export class BranchController {
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async update(
     @Param('id') id: string,
-    @Request() req: any,
+    @Request() req: RequestWithUser,
     @Body() updateDto: UpdateBranchDto,
   ) {
     return this.branchService.update(id, req.user.businessId, updateDto);
@@ -111,7 +121,7 @@ export class BranchController {
   @Header('Content-Type', 'image/png')
   async generateQr(
     @Param('id') id: string,
-    @Request() req: any,
+    @Request() req: RequestWithUser,
     @Res() res: Response,
   ) {
     const branch = await this.branchService.findOne(id, req.user.businessId);
@@ -137,7 +147,7 @@ export class BranchController {
   @ApiResponse({ status: 200, description: 'Branch deleted.' })
   @ApiResponse({ status: 404, description: 'Branch not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async remove(@Param('id') id: string, @Request() req: any) {
+  async remove(@Param('id') id: string, @Request() req: RequestWithUser) {
     return this.branchService.remove(id, req.user.businessId);
   }
 }

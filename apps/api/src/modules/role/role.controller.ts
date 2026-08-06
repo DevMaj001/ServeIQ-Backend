@@ -28,6 +28,12 @@ import { PERMISSIONS } from './permission-codes';
 import { Role } from './entities/role.entity';
 import { Permission } from './entities/permission.entity';
 
+interface RequestWithUser {
+  user: {
+    role: string;
+    role_id: string;
+  };
+}
 @ApiTags('Roles & Permissions')
 @Controller('roles')
 export class RoleController {
@@ -45,7 +51,7 @@ export class RoleController {
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
   async getMyPermissions(
-    @Request() req: any,
+    @Request() req: RequestWithUser,
   ): Promise<{ permissions: string[] }> {
     if (req.user.role === 'superadmin' || req.user.role === 'owner') {
       const all = await this.permissionRepo.find({ select: { code: true } });

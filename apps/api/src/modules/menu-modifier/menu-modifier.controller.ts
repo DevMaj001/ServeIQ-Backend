@@ -23,6 +23,12 @@ import { UpdateModifierGroupDto } from './dto/update-modifier-group.dto';
 import { CreateModifierOptionDto } from './dto/create-modifier-option.dto';
 import { UpdateModifierOptionDto } from './dto/update-modifier-option.dto';
 
+interface RequestWithUser {
+  user: {
+    branchId: string;
+  };
+}
+
 @ApiTags('Menu Modifiers')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
@@ -34,7 +40,7 @@ export class MenuModifierController {
   @ApiOperation({ summary: 'List all modifier groups for this branch' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async findAllGroups(@Request() req: any) {
+  async findAllGroups(@Request() req: RequestWithUser) {
     return this.modifierService.findAllGroups(req.user.branchId);
   }
 
@@ -43,7 +49,7 @@ export class MenuModifierController {
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async findGroup(@Param('id') id: string, @Request() req: any) {
+  async findGroup(@Param('id') id: string, @Request() req: RequestWithUser) {
     const group = await this.modifierService.findGroup(id, req.user.branchId);
     const options = await this.modifierService.findOptions(id);
     return { ...group, options };
@@ -53,7 +59,10 @@ export class MenuModifierController {
   @ApiOperation({ summary: 'Create a modifier group' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async createGroup(@Request() req: any, @Body() dto: CreateModifierGroupDto) {
+  async createGroup(
+    @Request() req: RequestWithUser,
+    @Body() dto: CreateModifierGroupDto,
+  ) {
     return this.modifierService.createGroup(req.user.branchId, dto);
   }
 
@@ -64,7 +73,7 @@ export class MenuModifierController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async updateGroup(
     @Param('id') id: string,
-    @Request() req: any,
+    @Request() req: RequestWithUser,
     @Body() dto: UpdateModifierGroupDto,
   ) {
     return this.modifierService.updateGroup(id, req.user.branchId, dto);
@@ -75,7 +84,7 @@ export class MenuModifierController {
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async removeGroup(@Param('id') id: string, @Request() req: any) {
+  async removeGroup(@Param('id') id: string, @Request() req: RequestWithUser) {
     return this.modifierService.removeGroup(id, req.user.branchId);
   }
 
@@ -128,7 +137,7 @@ export class MenuModifierController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async linkGroups(
     @Param('menuItemId') menuItemId: string,
-    @Request() req: any,
+    @Request() req: RequestWithUser,
     @Body() body: { group_ids: string[] },
   ) {
     return this.modifierService.linkGroupsToMenuItem(
@@ -145,7 +154,7 @@ export class MenuModifierController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getMenuItemModifiers(
     @Param('menuItemId') menuItemId: string,
-    @Request() req: any,
+    @Request() req: RequestWithUser,
   ) {
     return this.modifierService.getMenuItemModifiers(
       menuItemId,

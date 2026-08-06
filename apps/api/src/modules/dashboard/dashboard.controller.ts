@@ -22,7 +22,7 @@ export class DashboardController {
     summary: 'Branch overview — totals for tables, open tabs, today revenue',
   })
   @ApiResponse({ status: 200, description: 'Branch overview stats.' })
-  async getBranchOverview(@Request() req: any) {
+  async getBranchOverview(@Request() req: { user: { branchId: string } }) {
     return this.dashboardService.getBranchOverview(req.user.branchId);
   }
 
@@ -31,7 +31,7 @@ export class DashboardController {
     summary: 'Waiter performance — tabs closed and revenue today by waiter',
   })
   @ApiResponse({ status: 200, description: 'Waiter performance list.' })
-  async getWaiterPerformance(@Request() req: any) {
+  async getWaiterPerformance(@Request() req: { user: { branchId: string } }) {
     return this.dashboardService.getWaiterPerformance(req.user.branchId);
   }
 
@@ -66,7 +66,7 @@ export class DashboardController {
     },
   })
   async getSalesReport(
-    @Request() req: any,
+    @Request() req: { user: { branchId: string } },
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
   ) {
@@ -84,7 +84,7 @@ export class DashboardController {
   @ApiQuery({ name: 'dateTo', required: false, example: '2026-06-28' })
   @ApiResponse({ status: 200, description: 'Hourly breakdown array (0-23).' })
   async getPeakHours(
-    @Request() req: any,
+    @Request() req: { user: { branchId: string } },
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
   ) {
@@ -102,7 +102,7 @@ export class DashboardController {
   @ApiQuery({ name: 'dateTo', required: false, example: '2026-06-28' })
   @ApiResponse({ status: 200, description: 'Top items list.' })
   async getTopItems(
-    @Request() req: any,
+    @Request() req: { user: { branchId: string } },
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
   ) {
@@ -122,7 +122,7 @@ export class DashboardController {
     status: 200,
     description: 'Table velocity list sorted by shortest avg duration.',
   })
-  async getTableVelocity(@Request() req: any) {
+  async getTableVelocity(@Request() req: { user: { branchId: string } }) {
     return this.dashboardService.getTableVelocity(req.user.branchId);
   }
 
@@ -136,7 +136,7 @@ export class DashboardController {
     description: 'Hourly efficiency breakdown (0-23).',
   })
   async getPeakEfficiency(
-    @Request() req: any,
+    @Request() req: { user: { branchId: string } },
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
   ) {

@@ -22,6 +22,13 @@ import {
 import { OpenShiftDto } from './dto/open-shift.dto';
 import { CloseShiftDto } from './dto/close-shift.dto';
 
+interface RequestWithUser {
+  user: {
+    branchId: string;
+    userId: string;
+  };
+}
+
 @ApiTags('Shifts')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
@@ -33,7 +40,7 @@ export class ShiftController {
   @ApiOperation({ summary: 'List all shifts for the branch' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
-  async findAll(@Request() req: any) {
+  async findAll(@Request() req: RequestWithUser) {
     return this.shiftService.findAll(req.user.branchId);
   }
 
@@ -41,7 +48,7 @@ export class ShiftController {
   @ApiOperation({ summary: 'Get the currently open shift' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
-  async findCurrent(@Request() req: any) {
+  async findCurrent(@Request() req: RequestWithUser) {
     return this.shiftService.findCurrent(req.user.branchId);
   }
 
@@ -49,7 +56,7 @@ export class ShiftController {
   @ApiOperation({ summary: 'Open a new shift with starting cash' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
-  async openShift(@Request() req: any, @Body() dto: OpenShiftDto) {
+  async openShift(@Request() req: RequestWithUser, @Body() dto: OpenShiftDto) {
     return this.shiftService.openShift(req.user.branchId, req.user.userId, dto);
   }
 
@@ -60,7 +67,7 @@ export class ShiftController {
   @ApiResponse({ status: 401 })
   async closeShift(
     @Param('id') id: string,
-    @Request() req: any,
+    @Request() req: RequestWithUser,
     @Body() dto: CloseShiftDto,
   ) {
     return this.shiftService.closeShift(
@@ -81,7 +88,7 @@ export class ShiftController {
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
   async getShiftSummary(
-    @Request() req: any,
+    @Request() req: RequestWithUser,
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
   ) {

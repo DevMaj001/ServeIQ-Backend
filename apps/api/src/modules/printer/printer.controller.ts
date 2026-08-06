@@ -29,6 +29,12 @@ import { UserRole } from '../../common/shared';
 import { CreatePrinterDto } from './dto/create-printer.dto';
 import { UpdatePrinterDto } from './dto/update-printer.dto';
 
+interface RequestWithUser {
+  user: {
+    branchId: string;
+  };
+}
+
 @ApiTags('Printers & KDS')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
@@ -40,7 +46,7 @@ export class PrinterController {
   @ApiOperation({ summary: 'List all printers for this branch' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async findAll(@Request() req: any) {
+  async findAll(@Request() req: RequestWithUser) {
     return this.printerService.findAll(req.user.branchId);
   }
 
@@ -49,7 +55,7 @@ export class PrinterController {
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async findOne(@Param('id') id: string, @Request() req: any) {
+  async findOne(@Param('id') id: string, @Request() req: RequestWithUser) {
     return this.printerService.findOne(id, req.user.branchId);
   }
 
@@ -59,7 +65,7 @@ export class PrinterController {
   @ApiOperation({ summary: 'Register a printer (Owner/Manager only)' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async create(@Request() req: any, @Body() dto: CreatePrinterDto) {
+  async create(@Request() req: RequestWithUser, @Body() dto: CreatePrinterDto) {
     return this.printerService.create(req.user.branchId, dto);
   }
 
@@ -74,7 +80,7 @@ export class PrinterController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async update(
     @Param('id') id: string,
-    @Request() req: any,
+    @Request() req: RequestWithUser,
     @Body() dto: UpdatePrinterDto,
   ) {
     return this.printerService.update(id, req.user.branchId, dto);
@@ -87,7 +93,7 @@ export class PrinterController {
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async remove(@Param('id') id: string, @Request() req: any) {
+  async remove(@Param('id') id: string, @Request() req: RequestWithUser) {
     return this.printerService.remove(id, req.user.branchId);
   }
 
@@ -96,7 +102,10 @@ export class PrinterController {
   @ApiQuery({ name: 'status', required: false })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getPrintJobs(@Request() req: any, @Query('status') status?: string) {
+  async getPrintJobs(
+    @Request() req: RequestWithUser,
+    @Query('status') status?: string,
+  ) {
     return this.printerService.getPrintJobs(req.user.branchId, status);
   }
 
@@ -105,7 +114,7 @@ export class PrinterController {
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async printJob(@Param('id') id: string, @Request() req: any) {
+  async printJob(@Param('id') id: string, @Request() req: RequestWithUser) {
     return this.printerService.printJob(req.user.branchId, id);
   }
 
@@ -114,7 +123,10 @@ export class PrinterController {
   @ApiParam({ name: 'tabId' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async sendToKds(@Param('tabId') tabId: string, @Request() req: any) {
+  async sendToKds(
+    @Param('tabId') tabId: string,
+    @Request() req: RequestWithUser,
+  ) {
     await this.printerService.sendToKds(req.user.branchId, tabId);
     return { success: true, message: 'Sent to KDS' };
   }
@@ -126,7 +138,7 @@ export class PrinterController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async fireOrder(
     @Param('tabId') tabId: string,
-    @Request() req: any,
+    @Request() req: RequestWithUser,
     @Body() body?: { order_ids?: string[] },
   ) {
     return this.printerService.fireOrder(
@@ -145,7 +157,7 @@ export class PrinterController {
   async bumpOrder(
     @Param('tabId') tabId: string,
     @Param('orderId') orderId: string,
-    @Request() req: any,
+    @Request() req: RequestWithUser,
   ) {
     await this.printerService.bumpOrder(req.user.branchId, tabId, orderId);
     return { success: true };
@@ -156,9 +168,11 @@ export class PrinterController {
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @Sse()
-  kdsStream(@Request() req: any): Observable<MessageEvent> {
+  kdsStream(@Request() req: RequestWithUser): Observable<MessageEvent> {
     return this.printerService
       .subscribeKds(req.user.branchId)
-      .pipe(map((data) => ({ data })));
+      .pipe(
+        map((data: unknown): MessageEvent => ({ data: data as string | object })),
+      );
   }
 }
