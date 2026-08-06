@@ -56,7 +56,7 @@ export class AdminService {
       .createQueryBuilder('bill')
       .select('COALESCE(SUM(bill.total_kobo), 0)', 'total')
       .where('bill.paid_at IS NOT NULL')
-      .getRawOne();
+      .getRawOne<{ total: string }>();
     const totalRevenueKobo = Number(revenueResult?.total ?? 0);
 
     const newBusinessesThisMonth = await this.businessRepo
@@ -69,7 +69,7 @@ export class AdminService {
       .select('s.status', 'status')
       .addSelect('COUNT(s.id)', 'count')
       .groupBy('s.status')
-      .getRawMany();
+      .getRawMany<{ status: string; count: string }>();
 
     const planBreakdown = await this.subscriptionRepo
       .createQueryBuilder('s')
@@ -77,7 +77,7 @@ export class AdminService {
       .addSelect('COUNT(s.id)', 'count')
       .leftJoin('s.plan', 'p')
       .groupBy("COALESCE(p.name, 'free_trial')")
-      .getRawMany();
+      .getRawMany<{ plan: string; count: string }>();
 
     const totalSubscriptions = statusBreakdown.reduce(
       (sum, r) => sum + Number(r.count),
@@ -121,11 +121,11 @@ export class AdminService {
         statusBreakdown.find((r) => r.status === 'trialing')?.count || 0,
       subscription_canceled:
         statusBreakdown.find((r) => r.status === 'canceled')?.count || 0,
-      subscription_breakdown: planBreakdown.map((r: any) => ({
+      subscription_breakdown: planBreakdown.map((r) => ({
         plan: r.plan || 'free_trial',
         count: Number(r.count),
       })),
-      subscription_status_breakdown: statusBreakdown.map((r: any) => ({
+      subscription_status_breakdown: statusBreakdown.map((r) => ({
         status: r.status,
         count: Number(r.count),
       })),
@@ -188,7 +188,7 @@ export class AdminService {
         .addSelect('COUNT(br.id)', 'count')
         .where('br.business_id IN (:...ids)', { ids: businessIds })
         .groupBy('br.business_id')
-        .getRawMany();
+        .getRawMany<{ business_id: string; count: string }>();
       for (const c of counts) {
         branchCounts[c.business_id] = Number(c.count);
       }

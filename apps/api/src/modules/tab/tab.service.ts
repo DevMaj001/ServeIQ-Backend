@@ -6,7 +6,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, FindOptionsWhere } from 'typeorm';
 import { Tab } from './entities/tab.entity';
 import { Table, TableStatus } from '../table/entities/table.entity';
 import { User } from '../user/entities/user.entity';
@@ -40,7 +40,15 @@ export class TabService {
   ) {}
 
   async openTab(
-    createDto: any,
+    createDto: {
+      table_id: string;
+      tab_type?: TabType;
+      branch_id: string;
+      waiter_id?: string;
+      customer_name?: string;
+      party_size?: number;
+      notes?: string;
+    },
     currentUserId?: string,
     currentUserRole?: string,
   ) {
@@ -117,9 +125,7 @@ export class TabService {
         tracking_code: await this.trackingService.generateUniqueCode(),
         tracking_generated_at: new Date(),
       });
-      const savedTab = (await queryRunner.manager.save(
-        newTab,
-      )) as unknown as Tab;
+      const savedTab = await queryRunner.manager.save(newTab);
 
       // Virtual tables never participate in occupancy logic — they are system records, not seatable tables.
       if (tabType !== TabType.TAKEAWAY) {
@@ -195,7 +201,7 @@ export class TabService {
     waiterId?: string,
     pagination?: { page: number; per_page: number },
   ) {
-    const where: any = { branch_id: branchId };
+    const where: FindOptionsWhere<Tab> = { branch_id: branchId };
     if (status) {
       where.status = status;
     }
@@ -249,7 +255,7 @@ export class TabService {
       .select('DISTINCT tab.waiter_id', 'waiter_id')
       .where('tab.branch_id = :branchId', { branchId })
       .andWhere('tab.waiter_id IS NOT NULL')
-      .getRawMany();
+      .getRawMany<{ waiter_id: string }>();
 
     const ids = raw.map((r) => r.waiter_id);
     if (ids.length === 0) return [];
@@ -319,10 +325,6 @@ export class TabService {
     if (tab.status !== 'open') {
       throw new BadRequestException('Only open tabs can be transferred');
     }
-
-    const sourceTable = await this.tableRepository.findOne({
-      where: { id: tab.table_id },
-    });
 
     // Block incompatible transfers: takeaway <-> physical, dine-in <-> virtual counter
     if (tab.tab_type === TabType.TAKEAWAY) {

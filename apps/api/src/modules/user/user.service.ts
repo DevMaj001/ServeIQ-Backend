@@ -6,13 +6,15 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, FindOptionsWhere } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from './entities/user.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { Role } from '../role/entities/role.entity';
 import { UserRole } from '../../common/shared';
 import { CreateWaiterDto } from './dto/create-waiter.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { AuditService } from '../../common/services/audit.service';
 
 @Injectable()
@@ -95,7 +97,9 @@ export class UserService {
       const salt = await bcrypt.genSalt();
       const pinHash = await bcrypt.hash(pin, salt);
 
-      const targetRole = dto.role ?? UserRole.WAITER;
+      const targetRole: UserRole = dto.role
+        ? (dto.role as UserRole)
+        : UserRole.WAITER;
 
       // Generate a placeholder email if not supplied
       const email =
@@ -127,7 +131,7 @@ export class UserService {
         avatar_url: dto.avatar_url || null,
         password_hash: passwordHash,
         pin_hash: pinHash,
-        role: targetRole as UserRole,
+        role: targetRole,
         role_id: pbacRole?.id || null,
         is_active: true,
       });
@@ -184,7 +188,7 @@ export class UserService {
       }
 
       // Handle potential duplicate email or other DB constraints
-      if (err.code === '23505') {
+      if ((err as { code?: string }).code === '23505') {
         throw new ConflictException(
           'A staff member with this email or identity already exists.',
         );
@@ -200,7 +204,7 @@ export class UserService {
     pagination?: { page: number; per_page: number },
     roleFilter?: string,
   ) {
-    const where: any = { branch_id: branchId };
+    const where: FindOptionsWhere<User> = { branch_id: branchId };
     if (roleFilter === 'all') {
       where.role = In([
         UserRole.WAITER,
@@ -277,7 +281,7 @@ export class UserService {
   }
 
   async findOne(id: string, branchId?: string) {
-    const where: any = { id };
+    const where: FindOptionsWhere<User> = { id };
     if (branchId) where.branch_id = branchId;
     const user = await this.userRepository.findOne({ where });
     if (!user) throw new NotFoundException('User not found');
@@ -290,26 +294,29 @@ export class UserService {
     });
   }
 
-  async update(id: string, branchId: string, updateDto: any) {
+  async update(id: string, branchId: string, updateDto: UpdateUserDto) {
     const user = await this.findOne(id, branchId);
-    const allowed = ['full_name', 'phone', 'email', 'is_active'];
-    for (const key of Object.keys(updateDto)) {
-      if (allowed.includes(key)) {
-        (user as any)[key] = updateDto[key];
+    const allowed = ['full_name', 'phone', 'email', 'is_active'] as const;
+    for (const key of allowed) {
+      const value = updateDto[key];
+      if (value !== undefined) {
+        (user as unknown as Record<string, unknown>)[key] = value;
       }
     }
-    if (updateDto.password) {
+    const password = (updateDto as UpdateUserDto & { password?: string })
+      .password;
+    if (password) {
       const salt = await bcrypt.genSalt();
-      user.password_hash = await bcrypt.hash(updateDto.password, salt);
+      user.password_hash = await bcrypt.hash(password, salt);
     }
     return this.userRepository.save(user);
   }
 
-  async updateProfile(userId: string, dto: any) {
+  async updateProfile(userId: string, dto: UpdateProfileDto) {
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
 
-    const changes: any = {};
+    const changes: Record<string, unknown> = {};
     if (dto.full_name) {
       changes.full_name = { old: user.full_name, new: dto.full_name };
       user.full_name = dto.full_name;

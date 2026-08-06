@@ -1,4 +1,4 @@
-import { Injectable, Logger, ConflictException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { SyncQueue } from './sync.entity';
@@ -6,6 +6,13 @@ import { Order } from '../order/entities/order.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Tab } from '../tab/entities/tab.entity';
 import { Bill } from '../bill/entities/bill.entity';
+
+interface SyncPayload {
+  id: string;
+  quantity?: number;
+  notes?: string;
+  [key: string]: unknown;
+}
 
 @Injectable()
 export class SyncService {
@@ -29,7 +36,7 @@ export class SyncService {
     branchId: string,
     entityType: string,
     operation: string,
-    payload: any,
+    payload: SyncPayload,
     clientKey?: string,
   ) {
     if (clientKey) {
@@ -69,10 +76,11 @@ export class SyncService {
         const result = await this.replayOne(entry);
         results.push(result);
       } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
         entry.status = 'failed';
-        entry.error_message = err.message;
+        entry.error_message = message;
         await this.syncQueueRepo.save(entry);
-        results.push({ id: entry.id, status: 'failed', error: err.message });
+        results.push({ id: entry.id, status: 'failed', error: message });
       }
     }
 
@@ -80,7 +88,8 @@ export class SyncService {
   }
 
   private async replayOne(entry: SyncQueue) {
-    const { entity_type, operation, payload, branch_id } = entry;
+    const { entity_type, operation } = entry;
+    const payload = entry.payload as SyncPayload;
 
     // Merge strategy — server state wins for conflicts, but client changes
     // are preserved for non-conflicting fields.
@@ -91,7 +100,7 @@ export class SyncService {
             .getRepository(Order)
             .findOne({ where: { id: payload.id } });
           if (existing) {
-            existing.quantity = payload.quantity;
+            existing.quantity = payload.quantity ?? existing.quantity;
             existing.notes = payload.notes ?? existing.notes;
             await manager.getRepository(Order).save(existing);
           } else {

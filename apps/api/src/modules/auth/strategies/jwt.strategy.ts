@@ -7,6 +7,19 @@ import { DataSource } from 'typeorm';
 import { User } from '../../user/entities/user.entity';
 import { Branch } from '../../branch/entities/branch.entity';
 
+interface JwtPayload {
+  sub: string;
+  email?: string;
+  role?: string;
+  role_id?: string | null;
+  businessId?: string;
+  business_id?: string;
+  branchId?: string;
+  branch_id?: string;
+  pin_token_version?: number;
+  staff_token_version?: number;
+}
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
@@ -17,14 +30,15 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
         ExtractJwt.fromAuthHeaderAsBearerToken(),
-        (req: any) => req?.cookies?.access_token || null,
+        (req: { cookies?: { access_token?: string } }) =>
+          req?.cookies?.access_token || null,
       ]),
       ignoreExpiration: false,
       secretOrKey: configService.get<string>('JWT_SECRET')!,
     });
   }
 
-  async validate(payload: any) {
+  async validate(payload: JwtPayload) {
     if (
       payload.pin_token_version !== undefined ||
       payload.staff_token_version !== undefined
