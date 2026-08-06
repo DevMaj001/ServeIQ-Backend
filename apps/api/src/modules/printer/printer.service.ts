@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, FindOptionsWhere } from 'typeorm';
 import { Observable, Subject } from 'rxjs';
 import { Printer } from './printer.entity';
 import { PrintJob } from './print-job.entity';
@@ -13,11 +13,57 @@ import { Order } from '../order/entities/order.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Tab } from '../tab/entities/tab.entity';
 import { Table } from '../table/entities/table.entity';
+import type { ThermalPrinter } from 'node-thermal-printer';
+import type { CreatePrinterDto } from './dto/create-printer.dto';
+import type { UpdatePrinterDto } from './dto/update-printer.dto';
+
+interface KdsOrderItem {
+  id: string;
+  name: string;
+  qty: number;
+  notes?: string | null;
+  status: string;
+  fulfillment_type?: string | null;
+}
+
+interface KdsEvent {
+  type: string;
+  tab_id: string;
+  table_number?: string | number;
+  round_number?: number;
+  items?: KdsOrderItem[];
+  ordered_at?: Date;
+  order_ids?: string[];
+  order_id?: string;
+}
+
+interface ReceiptPrintPayload {
+  business_name?: string;
+  items?: Array<{ name: string; qty: number; subtotal: number }>;
+  total_kobo: number;
+  payment_method?: string;
+  paid_at?: string | number | Date;
+  table_number?: string | number;
+}
+
+interface KitchenPrintPayload {
+  table_number?: string | number;
+  items?: Array<{
+    qty: number;
+    name: string;
+    notes?: string | null;
+    fulfillment_type?: string | null;
+  }>;
+  round_number?: number;
+  notes?: string | null;
+  waiter_name?: string;
+  ordered_at?: string | number | Date;
+}
 
 @Injectable()
 export class PrinterService {
   private readonly logger = new Logger(PrinterService.name);
-  private kdsSubjects = new Map<string, Subject<any>>();
+  private kdsSubjects = new Map<string, Subject<KdsEvent>>();
 
   constructor(
     @InjectRepository(Printer)
@@ -51,7 +97,7 @@ export class PrinterService {
     return printer;
   }
 
-  async create(branchId: string, data: any) {
+  async create(branchId: string, data: CreatePrinterDto) {
     if (data.is_default) {
       await this.printerRepo.update(
         { branch_id: branchId, is_default: true },
@@ -63,7 +109,7 @@ export class PrinterService {
     );
   }
 
-  async update(id: string, branchId: string, data: any) {
+  async update(id: string, branchId: string, data: UpdatePrinterDto) {
     const printer = await this.findOne(id, branchId);
     if (data.is_default && !printer.is_default) {
       await this.printerRepo.update(
@@ -85,7 +131,7 @@ export class PrinterService {
   async queuePrintJob(
     branchId: string,
     jobType: string,
-    payload: any,
+    payload: unknown,
     printerId?: string,
   ) {
     return this.printJobRepo.save(
@@ -99,7 +145,7 @@ export class PrinterService {
   }
 
   async getPrintJobs(branchId: string, status?: string) {
-    const where: any = { branch_id: branchId };
+    const where: FindOptionsWhere<PrintJob> = { branch_id: branchId };
     if (status) where.status = status;
     return this.printJobRepo.find({ where, order: { created_at: 'ASC' } });
   }
@@ -136,27 +182,28 @@ export class PrinterService {
       }
 
       if (job.job_type === 'receipt') {
-        await this.printReceipt(escpos, job.payload);
+        this.printReceipt(escpos, job.payload as ReceiptPrintPayload);
       } else if (job.job_type === 'kitchen') {
-        await this.printKitchenTicket(escpos, job.payload);
+        this.printKitchenTicket(escpos, job.payload as KitchenPrintPayload);
       }
 
-      await escpos.cut();
+      escpos.cut();
       await escpos.execute();
 
       job.status = 'printed';
       job.printed_at = new Date();
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       job.status = 'failed';
-      job.error_message = err.message;
+      job.error_message = message;
       job.retry_count += 1;
-      this.logger.error(`Print failed for job ${jobId}: ${err.message}`);
+      this.logger.error(`Print failed for job ${jobId}: ${message}`);
     }
 
     return this.printJobRepo.save(job);
   }
 
-  private async printReceipt(escpos: any, data: any) {
+  private printReceipt(escpos: ThermalPrinter, data: ReceiptPrintPayload) {
     const {
       business_name,
       items,
@@ -186,11 +233,14 @@ export class PrinterService {
     escpos.println(`Total: ₦${(total_kobo / 100).toFixed(2)}`);
     escpos.bold(false);
     escpos.println(`Paid: ${payment_method}`);
-    escpos.println(new Date(paid_at).toLocaleString());
+    escpos.println(new Date(paid_at as string | number).toLocaleString());
     escpos.println('Thank you!');
   }
 
-  private async printKitchenTicket(escpos: any, data: any) {
+  private printKitchenTicket(
+    escpos: ThermalPrinter,
+    data: KitchenPrintPayload,
+  ) {
     const {
       table_number,
       items,
@@ -224,14 +274,14 @@ export class PrinterService {
     }
 
     escpos.println('----------------');
-    escpos.println(new Date(ordered_at).toLocaleString());
+    escpos.println(new Date(ordered_at as string | number).toLocaleString());
   }
 
   // ── KDS (Kitchen Display System) SSE ──
 
-  subscribeKds(branchId: string): Observable<any> {
+  subscribeKds(branchId: string): Observable<KdsEvent> {
     if (!this.kdsSubjects.has(branchId)) {
-      this.kdsSubjects.set(branchId, new Subject<any>());
+      this.kdsSubjects.set(branchId, new Subject<KdsEvent>());
     }
     return this.kdsSubjects.get(branchId)!.asObservable();
   }
@@ -245,7 +295,7 @@ export class PrinterService {
       where: { tab_id: tabId },
       order: { created_at: 'ASC' },
     });
-    const items = [];
+    const items: KdsOrderItem[] = [];
     for (const order of orders) {
       const menuItem = await this.menuItemRepo.findOne({
         where: { id: order.menu_item_id },
@@ -280,7 +330,7 @@ export class PrinterService {
   // ── Order Fired (from KDS) ──
 
   async fireOrder(branchId: string, tabId: string, orderIds?: string[]) {
-    const where: any = { tab_id: tabId };
+    const where: FindOptionsWhere<Order> = { tab_id: tabId };
     if (orderIds) where.id = In(orderIds);
     const orders = await this.orderRepo.find({ where });
     for (const order of orders) {
@@ -299,7 +349,7 @@ export class PrinterService {
     return { fired: orders.length };
   }
 
-  async bumpOrder(branchId: string, tabId: string, orderId: string) {
+  bumpOrder(branchId: string, tabId: string, orderId: string) {
     const subject = this.kdsSubjects.get(branchId);
     if (subject) {
       subject.next({ type: 'order_bumped', tab_id: tabId, order_id: orderId });

@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
-
-const PDFDocument = require('pdfkit');
+import PDFDocument from 'pdfkit';
 
 export interface ReceiptData {
   business?: {

@@ -154,12 +154,12 @@ export class PrinterController {
   @ApiParam({ name: 'orderId' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async bumpOrder(
+  bumpOrder(
     @Param('tabId') tabId: string,
     @Param('orderId') orderId: string,
     @Request() req: RequestWithUser,
   ) {
-    await this.printerService.bumpOrder(req.user.branchId, tabId, orderId);
+    this.printerService.bumpOrder(req.user.branchId, tabId, orderId);
     return { success: true };
   }
 
@@ -172,7 +172,9 @@ export class PrinterController {
     return this.printerService
       .subscribeKds(req.user.branchId)
       .pipe(
-        map((data: unknown): MessageEvent => ({ data: data as string | object })),
+        map(
+          (data: unknown): MessageEvent => ({ data: data as string | object }),
+        ),
       );
   }
 }
