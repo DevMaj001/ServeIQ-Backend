@@ -15,7 +15,20 @@ import { ReceiptService } from './receipt.service';
 import { CloudinaryModule } from '../../cloudinary/cloudinary.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Bill, Tab, Order, Table, MenuItem, User, Branch, Business]), IngredientModule, CloudinaryModule],
+  imports: [
+    TypeOrmModule.forFeature([
+      Bill,
+      Tab,
+      Order,
+      Table,
+      MenuItem,
+      User,
+      Branch,
+      Business,
+    ]),
+    IngredientModule,
+    CloudinaryModule,
+  ],
   providers: [BillService, ReceiptService],
   controllers: [BillController],
   exports: [BillService],

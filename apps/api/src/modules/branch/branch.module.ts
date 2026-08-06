@@ -14,7 +14,11 @@ import { SubscriptionModule } from '../subscription/subscription.module';
 import { TableModule } from '../table/table.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Branch, Table, Tab, Bill, Order, User, AuditLog]), SubscriptionModule, TableModule],
+  imports: [
+    TypeOrmModule.forFeature([Branch, Table, Tab, Bill, Order, User, AuditLog]),
+    SubscriptionModule,
+    TableModule,
+  ],
   providers: [BranchService, AuditService],
   controllers: [BranchController],
   exports: [BranchService],

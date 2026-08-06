@@ -43,14 +43,19 @@ export class TrackingService {
   async generateUniqueCode(): Promise<string> {
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       const code = this.generateCode();
-      const existing = await this.tabRepo.findOne({ where: { tracking_code: code } });
+      const existing = await this.tabRepo.findOne({
+        where: { tracking_code: code },
+      });
       if (!existing) return code;
     }
-    throw new Error('Failed to generate unique tracking code after max retries');
+    throw new Error(
+      'Failed to generate unique tracking code after max retries',
+    );
   }
 
   async getTrackingByCode(code: string) {
-    const codeRegex = /^(?:SVQ-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{3}|[A-HJ-NP-Z2-9]{5})$/i;
+    const codeRegex =
+      /^(?:SVQ-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{3}|[A-HJ-NP-Z2-9]{5})$/i;
     if (!codeRegex.test(code)) {
       throw new NotFoundException('Tracking code not found');
     }
@@ -80,7 +85,9 @@ export class TrackingService {
     try {
       const bill = await this.billRepo.findOne({ where: { tab_id: tab.id } });
       if (bill?.terminal_id) {
-        const terminal = await this.posTerminalRepo.findOne({ where: { id: bill.terminal_id } });
+        const terminal = await this.posTerminalRepo.findOne({
+          where: { id: bill.terminal_id },
+        });
         paymentAccountNumber = terminal?.account_number || '';
       }
     } catch {}
@@ -108,7 +115,9 @@ export class TrackingService {
       orders.map(async (order) => {
         let menuItemName = '';
         try {
-          const menuItem = await this.menuItemRepo.findOne({ where: { id: order.menu_item_id } });
+          const menuItem = await this.menuItemRepo.findOne({
+            where: { id: order.menu_item_id },
+          });
           menuItemName = menuItem?.name || '';
         } catch {}
 
@@ -128,7 +137,9 @@ export class TrackingService {
       }),
     );
 
-    const hasDeclined = orders.some(o => o.order_status === OrderStatus.DECLINED);
+    const hasDeclined = orders.some(
+      (o) => o.order_status === OrderStatus.DECLINED,
+    );
 
     return {
       businessName,

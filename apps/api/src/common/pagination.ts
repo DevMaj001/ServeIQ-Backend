@@ -17,11 +17,18 @@ export interface PaginatedResult<T> {
 
 export function getPaginationParams(query: PaginationQuery): PaginationParams {
   const page = Math.max(1, parseInt(query.page || '1', 10) || 1);
-  const per_page = Math.min(100, Math.max(1, parseInt(query.per_page || '20', 10) || 20));
+  const per_page = Math.min(
+    100,
+    Math.max(1, parseInt(query.per_page || '20', 10) || 20),
+  );
   return { page, per_page };
 }
 
-export function paginate<T>(data: T[], total: number, params: PaginationParams): PaginatedResult<T> {
+export function paginate<T>(
+  data: T[],
+  total: number,
+  params: PaginationParams,
+): PaginatedResult<T> {
   return {
     data,
     meta: {

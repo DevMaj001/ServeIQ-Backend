@@ -1,6 +1,19 @@
-import { Injectable, Inject, NotFoundException, BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  NotFoundException,
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, DataSource, QueryFailedError, EntityManager } from 'typeorm';
+import {
+  Repository,
+  Between,
+  DataSource,
+  QueryFailedError,
+  EntityManager,
+} from 'typeorm';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { StockMovement } from './entities/stock-movement.entity';
 import { Tab } from '../tab/entities/tab.entity';
@@ -28,7 +41,7 @@ export class IngredientService {
       relations: { supplier: true },
       order: { name: 'ASC' },
     });
-    return items.map(i => ({
+    return items.map((i) => ({
       ...i,
       is_low_stock: Number(i.quantity_in_stock) <= Number(i.reorder_level),
     }));
@@ -40,7 +53,11 @@ export class IngredientService {
       relations: { supplier: true },
     });
     if (!item) throw new NotFoundException('Inventory item not found');
-    return { ...item, is_low_stock: Number(item.quantity_in_stock) <= Number(item.reorder_level) };
+    return {
+      ...item,
+      is_low_stock:
+        Number(item.quantity_in_stock) <= Number(item.reorder_level),
+    };
   }
 
   async create(branchId: string, data: any) {
@@ -74,21 +91,37 @@ export class IngredientService {
     return this.menuItemRepo
       .createQueryBuilder('mi')
       .where('mi.branch_id = :branchId', { branchId })
-      .andWhere('(mi.track_stock IS NULL OR mi.track_stock = :val)', { val: false })
+      .andWhere('(mi.track_stock IS NULL OR mi.track_stock = :val)', {
+        val: false,
+      })
       .orderBy('mi.name', 'ASC')
       .getMany();
   }
 
   async remove(id: string, branchId: string) {
-    const item = await this.menuItemRepo.findOne({ where: { id, branch_id: branchId } });
+    const item = await this.menuItemRepo.findOne({
+      where: { id, branch_id: branchId },
+    });
     if (!item) throw new NotFoundException('Inventory item not found');
     return this.menuItemRepo.softRemove(item);
   }
 
-  async restock(id: string, branchId: string, data: { added_quantity: number; cost_price_kobo?: number; barcode?: string }) {
+  async restock(
+    id: string,
+    branchId: string,
+    data: {
+      added_quantity: number;
+      cost_price_kobo?: number;
+      barcode?: string;
+    },
+  ) {
     if (data.added_quantity <= 0) {
       throw new HttpException(
-        { success: false, message: 'Added quantity must be positive', errors: {} },
+        {
+          success: false,
+          message: 'Added quantity must be positive',
+          errors: {},
+        },
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }
@@ -133,8 +166,8 @@ export class IngredientService {
       relations: { supplier: true },
     });
     return items
-      .filter(i => Number(i.quantity_in_stock) <= Number(i.reorder_level))
-      .map(i => ({
+      .filter((i) => Number(i.quantity_in_stock) <= Number(i.reorder_level))
+      .map((i) => ({
         ...i,
         is_low_stock: true,
         deficit: Number(i.reorder_level) - Number(i.quantity_in_stock),
@@ -142,14 +175,22 @@ export class IngredientService {
   }
 
   async getBestsellers(branchId: string, dateFrom?: string, dateTo?: string) {
-    const from = dateFrom ? new Date(dateFrom) : new Date(new Date().setHours(0, 0, 0, 0));
-    const to = dateTo ? new Date(dateTo) : new Date(new Date().setHours(23, 59, 59, 999));
+    const from = dateFrom
+      ? new Date(dateFrom)
+      : new Date(new Date().setHours(0, 0, 0, 0));
+    const to = dateTo
+      ? new Date(dateTo)
+      : new Date(new Date().setHours(23, 59, 59, 999));
     if (!dateFrom) from.setHours(0, 0, 0, 0);
 
     const paidTabs = await this.tabRepo.find({
-      where: { branch_id: branchId, status: 'paid', closed_at: Between(from, to) },
+      where: {
+        branch_id: branchId,
+        status: 'paid',
+        closed_at: Between(from, to),
+      },
     });
-    const tabIds = paidTabs.map(t => t.id);
+    const tabIds = paidTabs.map((t) => t.id);
 
     const orderMap: Record<string, { qty: number; revenue: number }> = {};
     if (tabIds.length > 0) {
@@ -171,22 +212,26 @@ export class IngredientService {
       relations: { supplier: true },
     });
 
-    const result = items.map(item => {
-      const sales = orderMap[item.id] || { qty: 0, revenue: 0 };
-      return {
-        menu_item_id: item.id,
-        name: item.name,
-        unit: item.unit,
-        current_stock: Number(item.quantity_in_stock),
-        total_sold: sales.qty,
-        revenue_kobo: sales.revenue,
-      };
-    }).sort((a, b) => b.total_sold - a.total_sold);
+    const result = items
+      .map((item) => {
+        const sales = orderMap[item.id] || { qty: 0, revenue: 0 };
+        return {
+          menu_item_id: item.id,
+          name: item.name,
+          unit: item.unit,
+          current_stock: Number(item.quantity_in_stock),
+          total_sold: sales.qty,
+          revenue_kobo: sales.revenue,
+        };
+      })
+      .sort((a, b) => b.total_sold - a.total_sold);
 
     return {
-      bestsellers: result.filter(r => r.total_sold > 0),
-      slow_movers: result.filter(r => r.total_sold === 0 && r.current_stock > 0),
-      out_of_stock: result.filter(r => r.current_stock === 0),
+      bestsellers: result.filter((r) => r.total_sold > 0),
+      slow_movers: result.filter(
+        (r) => r.total_sold === 0 && r.current_stock > 0,
+      ),
+      out_of_stock: result.filter((r) => r.current_stock === 0),
     };
   }
 
@@ -203,17 +248,21 @@ export class IngredientService {
         order: { created_at: 'DESC' },
       });
 
-      const totalPurchased = movements.filter(m => m.type === StockMovementType.PURCHASE)
+      const totalPurchased = movements
+        .filter((m) => m.type === StockMovementType.PURCHASE)
         .reduce((s, m) => s + Number(m.quantity_change), 0);
-      const totalSold = movements.filter(m => m.type === StockMovementType.ORDER_CONSUMPTION)
+      const totalSold = movements
+        .filter((m) => m.type === StockMovementType.ORDER_CONSUMPTION)
         .reduce((s, m) => s + Math.abs(Number(m.quantity_change)), 0);
-      const totalWaste = movements.filter(m => m.type === StockMovementType.WASTE)
+      const totalWaste = movements
+        .filter((m) => m.type === StockMovementType.WASTE)
         .reduce((s, m) => s + Number(m.quantity_change), 0);
 
       const expected = totalPurchased - totalSold - totalWaste;
       const actual = Number(item.quantity_in_stock);
       const variance = actual - expected;
-      const variancePercent = expected !== 0 ? Math.round((variance / expected) * 100) : 0;
+      const variancePercent =
+        expected !== 0 ? Math.round((variance / expected) * 100) : 0;
 
       result.push({
         menu_item_id: item.id,
@@ -235,7 +284,10 @@ export class IngredientService {
     manager?: EntityManager,
   ) {
     const alreadyDeducted = await this.movementRepo.findOne({
-      where: { reference_id: tab.id, type: StockMovementType.ORDER_CONSUMPTION },
+      where: {
+        reference_id: tab.id,
+        type: StockMovementType.ORDER_CONSUMPTION,
+      },
     });
     if (alreadyDeducted) return;
 
@@ -295,7 +347,10 @@ export class IngredientService {
         try {
           await movementRepo.save(movement);
         } catch (err) {
-          if (err instanceof QueryFailedError && (err as any).code === '23505') {
+          if (
+            err instanceof QueryFailedError &&
+            (err as any).code === '23505'
+          ) {
             continue;
           }
           throw err;
@@ -323,19 +378,28 @@ export class IngredientService {
         order: { created_at: 'DESC' },
       });
 
-      const totalRestocked = movements.filter(m => m.type === StockMovementType.PURCHASE)
+      const totalRestocked = movements
+        .filter((m) => m.type === StockMovementType.PURCHASE)
         .reduce((s, m) => s + Number(m.quantity_change), 0);
-      const totalSold = movements.filter(m => m.type === StockMovementType.ORDER_CONSUMPTION)
+      const totalSold = movements
+        .filter((m) => m.type === StockMovementType.ORDER_CONSUMPTION)
         .reduce((s, m) => s + Math.abs(Number(m.quantity_change)), 0);
-      const totalWaste = movements.filter(m => m.type === StockMovementType.WASTE)
+      const totalWaste = movements
+        .filter((m) => m.type === StockMovementType.WASTE)
         .reduce((s, m) => s + Number(m.quantity_change), 0);
-      const totalAdjustments = movements.filter(m => m.type === StockMovementType.MANUAL_ADJUSTMENT)
+      const totalAdjustments = movements
+        .filter((m) => m.type === StockMovementType.MANUAL_ADJUSTMENT)
         .reduce((s, m) => s + Number(m.quantity_change), 0);
 
       const currentStock = Number(item.quantity_in_stock);
 
       // Derive initial_stock backwards from the ledger
-      const initialStock = currentStock - totalRestocked + totalSold - totalAdjustments + Math.abs(totalWaste);
+      const initialStock =
+        currentStock -
+        totalRestocked +
+        totalSold -
+        totalAdjustments +
+        Math.abs(totalWaste);
 
       // Book balance = what stock should be based on purchases and sales only
       // (excluding manual adjustments and waste — those are real-world events that
@@ -345,7 +409,7 @@ export class IngredientService {
       const slippage = actualBalance - bookBalance;
 
       const lastRestock = movements
-        .filter(m => m.type === StockMovementType.PURCHASE)
+        .filter((m) => m.type === StockMovementType.PURCHASE)
         .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())[0];
 
       const hasMovements = movements.length > 0;
@@ -378,12 +442,21 @@ export class IngredientService {
     return result;
   }
 
-  async reconcile(branchId: string, data: { reconciliation_id: string; counts: { menu_item_id: string; physical_count: number }[] }) {
+  async reconcile(
+    branchId: string,
+    data: {
+      reconciliation_id: string;
+      counts: { menu_item_id: string; physical_count: number }[];
+    },
+  ) {
     const existingMovements = await this.movementRepo.find({
-      where: { reference_id: data.reconciliation_id, type: StockMovementType.MANUAL_ADJUSTMENT },
+      where: {
+        reference_id: data.reconciliation_id,
+        type: StockMovementType.MANUAL_ADJUSTMENT,
+      },
     });
     if (existingMovements.length > 0) {
-      const adjustments = existingMovements.map(m => ({
+      const adjustments = existingMovements.map((m) => ({
         menu_item_id: m.menu_item_id,
         delta: Number(m.quantity_change),
         movement_id: m.id,
@@ -416,7 +489,11 @@ export class IngredientService {
       });
       const saved = await this.movementRepo.save(movement);
 
-      adjustments.push({ menu_item_id: count.menu_item_id, delta, movement_id: saved.id });
+      adjustments.push({
+        menu_item_id: count.menu_item_id,
+        delta,
+        movement_id: saved.id,
+      });
     }
 
     return { adjustments };
@@ -442,20 +519,33 @@ export class IngredientService {
 
     for (const item of items) {
       const todayMovements = await this.movementRepo.find({
-        where: { branch_id: branchId, menu_item_id: item.id, created_at: Between(tallyDate, nextDay) },
+        where: {
+          branch_id: branchId,
+          menu_item_id: item.id,
+          created_at: Between(tallyDate, nextDay),
+        },
       });
 
-      const todayPurchases = todayMovements.filter(m => m.type === StockMovementType.PURCHASE)
+      const todayPurchases = todayMovements
+        .filter((m) => m.type === StockMovementType.PURCHASE)
         .reduce((s, m) => s + Number(m.quantity_change), 0);
-      const todaySales = todayMovements.filter(m => m.type === StockMovementType.ORDER_CONSUMPTION)
+      const todaySales = todayMovements
+        .filter((m) => m.type === StockMovementType.ORDER_CONSUMPTION)
         .reduce((s, m) => s + Math.abs(Number(m.quantity_change)), 0);
-      const todayWaste = todayMovements.filter(m => m.type === StockMovementType.WASTE)
+      const todayWaste = todayMovements
+        .filter((m) => m.type === StockMovementType.WASTE)
         .reduce((s, m) => s + Number(m.quantity_change), 0);
-      const todayAdjustments = todayMovements.filter(m => m.type === StockMovementType.MANUAL_ADJUSTMENT)
+      const todayAdjustments = todayMovements
+        .filter((m) => m.type === StockMovementType.MANUAL_ADJUSTMENT)
         .reduce((s, m) => s + Number(m.quantity_change), 0);
 
       const currentStock = Number(item.quantity_in_stock);
-      const openingStock = currentStock - todayPurchases + todaySales - todayWaste - todayAdjustments;
+      const openingStock =
+        currentStock -
+        todayPurchases +
+        todaySales -
+        todayWaste -
+        todayAdjustments;
 
       const closingStock = currentStock;
       const restockedToday = todayPurchases;
@@ -466,7 +556,9 @@ export class IngredientService {
       const openingValue = openingStock * unitCost;
       const closingValue = closingStock * unitCost;
 
-      const isTallyValid = Math.abs(closingStock - (openingStock + restockedToday - soldToday)) < 0.001;
+      const isTallyValid =
+        Math.abs(closingStock - (openingStock + restockedToday - soldToday)) <
+        0.001;
       if (!isTallyValid) allBalanced = false;
 
       const explanation = `${item.name}: opening ${openingStock} + restocked ${restockedToday} - sold ${soldToday} = closing ${closingStock}`;

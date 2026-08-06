@@ -24,10 +24,22 @@ export class StructuredLogger implements LoggerService {
     }
   }
 
-  log(message: any, ...optionalParams: any[]) { this.formatMessage('log', message, ...optionalParams); }
-  error(message: any, ...optionalParams: any[]) { this.formatMessage('error', message, ...optionalParams); }
-  warn(message: any, ...optionalParams: any[]) { this.formatMessage('warn', message, ...optionalParams); }
-  debug?(message: any, ...optionalParams: any[]) { this.formatMessage('debug', message, ...optionalParams); }
-  verbose?(message: any, ...optionalParams: any[]) { this.formatMessage('verbose', message, ...optionalParams); }
-  fatal?(message: any, ...optionalParams: any[]) { this.formatMessage('fatal', message, ...optionalParams); }
+  log(message: any, ...optionalParams: any[]) {
+    this.formatMessage('log', message, ...optionalParams);
+  }
+  error(message: any, ...optionalParams: any[]) {
+    this.formatMessage('error', message, ...optionalParams);
+  }
+  warn(message: any, ...optionalParams: any[]) {
+    this.formatMessage('warn', message, ...optionalParams);
+  }
+  debug?(message: any, ...optionalParams: any[]) {
+    this.formatMessage('debug', message, ...optionalParams);
+  }
+  verbose?(message: any, ...optionalParams: any[]) {
+    this.formatMessage('verbose', message, ...optionalParams);
+  }
+  fatal?(message: any, ...optionalParams: any[]) {
+    this.formatMessage('fatal', message, ...optionalParams);
+  }
 }

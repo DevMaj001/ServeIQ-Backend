@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index, ManyToMany, JoinTable } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+  ManyToMany,
+  JoinTable,
+} from 'typeorm';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 
 @Entity('modifier_groups')

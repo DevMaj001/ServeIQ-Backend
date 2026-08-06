@@ -10,7 +10,9 @@ import { Tab } from '../tab/entities/tab.entity';
 import { Table } from '../table/entities/table.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Printer, PrintJob, Order, MenuItem, Tab, Table])],
+  imports: [
+    TypeOrmModule.forFeature([Printer, PrintJob, Order, MenuItem, Tab, Table]),
+  ],
   providers: [PrinterService],
   controllers: [PrinterController],
   exports: [PrinterService],

@@ -2,7 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan, In } from 'typeorm';
-import { Subscription, SubscriptionStatus } from './entities/subscription.entity';
+import {
+  Subscription,
+  SubscriptionStatus,
+} from './entities/subscription.entity';
 
 @Injectable()
 export class SubscriptionScheduler {
@@ -26,7 +29,9 @@ export class SubscriptionScheduler {
 
     for (const sub of trialingExpired) {
       sub.status = SubscriptionStatus.EXPIRED;
-      this.logger.log(`Subscription ${sub.id} (branch ${sub.branch_id}): trial ended → expired`);
+      this.logger.log(
+        `Subscription ${sub.id} (branch ${sub.branch_id}): trial ended → expired`,
+      );
     }
     if (trialingExpired.length) {
       await this.subscriptionRepo.save(trialingExpired);
@@ -41,7 +46,9 @@ export class SubscriptionScheduler {
 
     for (const sub of pastDueExpired) {
       sub.status = SubscriptionStatus.EXPIRED;
-      this.logger.log(`Subscription ${sub.id} (branch ${sub.branch_id}): grace period ended → expired`);
+      this.logger.log(
+        `Subscription ${sub.id} (branch ${sub.branch_id}): grace period ended → expired`,
+      );
     }
     if (pastDueExpired.length) {
       await this.subscriptionRepo.save(pastDueExpired);
@@ -56,7 +63,9 @@ export class SubscriptionScheduler {
 
     for (const sub of canceledExpired) {
       sub.status = SubscriptionStatus.EXPIRED;
-      this.logger.log(`Subscription ${sub.id} (branch ${sub.branch_id}): canceled period ended → expired`);
+      this.logger.log(
+        `Subscription ${sub.id} (branch ${sub.branch_id}): canceled period ended → expired`,
+      );
     }
     if (canceledExpired.length) {
       await this.subscriptionRepo.save(canceledExpired);

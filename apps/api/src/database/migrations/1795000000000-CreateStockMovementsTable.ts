@@ -1,10 +1,10 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateStockMovementsTable1795000000000 implements MigrationInterface {
-    name = 'CreateStockMovementsTable1795000000000'
+  name = 'CreateStockMovementsTable1795000000000';
 
-    public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`
             CREATE TABLE IF NOT EXISTS "stock_movements" (
                 "id" uuid NOT NULL DEFAULT gen_random_uuid(),
                 "branch_id" uuid NOT NULL,
@@ -19,17 +19,17 @@ export class CreateStockMovementsTable1795000000000 implements MigrationInterfac
                 CONSTRAINT "PK_stock_movements" PRIMARY KEY ("id")
             )
         `);
-        await queryRunner.query(`
+    await queryRunner.query(`
             CREATE INDEX IF NOT EXISTS "IDX_stock_movements_branch_id"
             ON "stock_movements" ("branch_id")
         `);
-        await queryRunner.query(`
+    await queryRunner.query(`
             CREATE INDEX IF NOT EXISTS "IDX_stock_movements_menu_item_id"
             ON "stock_movements" ("menu_item_id")
         `);
-    }
+  }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`DROP TABLE IF EXISTS "stock_movements"`);
-    }
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`DROP TABLE IF EXISTS "stock_movements"`);
+  }
 }

@@ -12,7 +12,18 @@ import { Shift } from '../shift/entities/shift.entity';
 import { TrackingModule } from '../tracking/tracking.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Tab, Table, User, Order, StockMovement, MenuItem, Shift]), TrackingModule],
+  imports: [
+    TypeOrmModule.forFeature([
+      Tab,
+      Table,
+      User,
+      Order,
+      StockMovement,
+      MenuItem,
+      Shift,
+    ]),
+    TrackingModule,
+  ],
   providers: [TabService],
   controllers: [TabController],
   exports: [TabService],

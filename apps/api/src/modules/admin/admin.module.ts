@@ -10,7 +10,16 @@ import { Subscription } from '../subscription/entities/subscription.entity';
 import { Plan } from '../subscription/entities/plan.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Business, Branch, User, Bill, Subscription, Plan])],
+  imports: [
+    TypeOrmModule.forFeature([
+      Business,
+      Branch,
+      User,
+      Bill,
+      Subscription,
+      Plan,
+    ]),
+  ],
   controllers: [AdminController],
   providers: [AdminService],
 })

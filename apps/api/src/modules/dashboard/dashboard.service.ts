@@ -32,9 +32,19 @@ export class DashboardService {
     tomorrow.setDate(tomorrow.getDate() + 1);
 
     // Exclude virtual (system) tables from occupancy reporting
-    const totalTables = await this.tableRepository.count({ where: { branch_id: branchId, is_virtual: false } });
-    const occupiedTables = await this.tableRepository.count({ where: { branch_id: branchId, status: TableStatus.OCCUPIED, is_virtual: false } });
-    const openTabs = await this.tabRepository.count({ where: { branch_id: branchId, status: 'open' } });
+    const totalTables = await this.tableRepository.count({
+      where: { branch_id: branchId, is_virtual: false },
+    });
+    const occupiedTables = await this.tableRepository.count({
+      where: {
+        branch_id: branchId,
+        status: TableStatus.OCCUPIED,
+        is_virtual: false,
+      },
+    });
+    const openTabs = await this.tabRepository.count({
+      where: { branch_id: branchId, status: 'open' },
+    });
 
     const todayBills = await this.billRepository
       .createQueryBuilder('bill')
@@ -61,7 +71,9 @@ export class DashboardService {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const waiters = await this.userRepository.find({ where: { branch_id: branchId } });
+    const waiters = await this.userRepository.find({
+      where: { branch_id: branchId },
+    });
     const result = [];
 
     for (const waiter of waiters) {
@@ -76,7 +88,9 @@ export class DashboardService {
 
       let totalRevenue = 0;
       for (const tab of closedTabs) {
-        const bill = await this.billRepository.findOne({ where: { tab_id: tab.id } });
+        const bill = await this.billRepository.findOne({
+          where: { tab_id: tab.id },
+        });
         if (bill) totalRevenue += bill.total_kobo;
       }
 
@@ -128,14 +142,19 @@ export class DashboardService {
     return {
       total_revenue_kobo: totalRevenue,
       transaction_count: bills.length,
-      average_bill_kobo: bills.length > 0 ? Math.round(totalRevenue / bills.length) : 0,
+      average_bill_kobo:
+        bills.length > 0 ? Math.round(totalRevenue / bills.length) : 0,
       breakdown_by_method: byMethod,
     };
   }
 
   async getPeakHours(branchId: string, dateFrom?: string, dateTo?: string) {
-    const from = dateFrom ? new Date(dateFrom) : new Date(new Date().setHours(0, 0, 0, 0));
-    const to = dateTo ? new Date(dateTo) : new Date(new Date().setHours(23, 59, 59, 999));
+    const from = dateFrom
+      ? new Date(dateFrom)
+      : new Date(new Date().setHours(0, 0, 0, 0));
+    const to = dateTo
+      ? new Date(dateTo)
+      : new Date(new Date().setHours(23, 59, 59, 999));
     if (!dateFrom) from.setHours(0, 0, 0, 0);
 
     const rows = await this.orderRepository
@@ -145,14 +164,17 @@ export class DashboardService {
       .andWhere('tab.status = :status', { status: 'paid' })
       .andWhere('o.created_at >= :from', { from })
       .andWhere('o.created_at <= :to', { to })
-      .select("EXTRACT(HOUR FROM o.created_at)", "hour")
-      .addSelect("COUNT(o.id)", "order_count")
-      .addSelect("SUM(o.subtotal_kobo)", "revenue_kobo")
-      .groupBy("EXTRACT(HOUR FROM o.created_at)")
+      .select('EXTRACT(HOUR FROM o.created_at)', 'hour')
+      .addSelect('COUNT(o.id)', 'order_count')
+      .addSelect('SUM(o.subtotal_kobo)', 'revenue_kobo')
+      .groupBy('EXTRACT(HOUR FROM o.created_at)')
       .orderBy('"hour"', 'ASC')
       .getRawMany();
 
-    const hourly: Record<number, { hour: number; order_count: number; revenue_kobo: number }> = {};
+    const hourly: Record<
+      number,
+      { hour: number; order_count: number; revenue_kobo: number }
+    > = {};
     for (let h = 0; h < 24; h++) {
       hourly[h] = { hour: h, order_count: 0, revenue_kobo: 0 };
     }
@@ -169,8 +191,12 @@ export class DashboardService {
   }
 
   async getTopItems(branchId: string, dateFrom?: string, dateTo?: string) {
-    const from = dateFrom ? new Date(dateFrom) : new Date(new Date().setHours(0, 0, 0, 0));
-    const to = dateTo ? new Date(dateTo) : new Date(new Date().setHours(23, 59, 59, 999));
+    const from = dateFrom
+      ? new Date(dateFrom)
+      : new Date(new Date().setHours(0, 0, 0, 0));
+    const to = dateTo
+      ? new Date(dateTo)
+      : new Date(new Date().setHours(23, 59, 59, 999));
 
     if (!dateFrom) from.setHours(0, 0, 0, 0);
 
@@ -182,7 +208,7 @@ export class DashboardService {
       },
     });
 
-    const tabIds = paidTabs.map(t => t.id);
+    const tabIds = paidTabs.map((t) => t.id);
     if (tabIds.length === 0) return [];
 
     const orders = await this.orderRepository
@@ -206,7 +232,9 @@ export class DashboardService {
 
     const result = [];
     for (const item of sorted) {
-      const menuItem = await this.menuItemRepository.findOne({ where: { id: item.menu_item_id } });
+      const menuItem = await this.menuItemRepository.findOne({
+        where: { id: item.menu_item_id },
+      });
       result.push({
         menu_item_id: item.menu_item_id,
         name: menuItem?.name || 'Unknown',
@@ -220,7 +248,8 @@ export class DashboardService {
   }
 
   async getTableVelocity(branchId: string) {
-    const rows = await this.tabRepository.query(`
+    const rows = await this.tabRepository.query(
+      `
       SELECT
         t.table_id,
         tbl.table_number,
@@ -234,17 +263,28 @@ export class DashboardService {
         AND t.closed_at IS NOT NULL
       GROUP BY t.table_id, tbl.table_number
       ORDER BY avg_duration_minutes ASC
-    `, [branchId]);
+    `,
+      [branchId],
+    );
 
     return rows;
   }
 
-  async getPeakEfficiency(branchId: string, dateFrom?: string, dateTo?: string) {
-    const from = dateFrom ? new Date(dateFrom) : new Date(new Date().setHours(0, 0, 0, 0));
-    const to = dateTo ? new Date(dateTo) : new Date(new Date().setHours(23, 59, 59, 999));
+  async getPeakEfficiency(
+    branchId: string,
+    dateFrom?: string,
+    dateTo?: string,
+  ) {
+    const from = dateFrom
+      ? new Date(dateFrom)
+      : new Date(new Date().setHours(0, 0, 0, 0));
+    const to = dateTo
+      ? new Date(dateTo)
+      : new Date(new Date().setHours(23, 59, 59, 999));
     if (!dateFrom) from.setHours(0, 0, 0, 0);
 
-    const rows = await this.tabRepository.query(`
+    const rows = await this.tabRepository.query(
+      `
       SELECT
         EXTRACT(HOUR FROM t.closed_at)::int AS hour,
         COUNT(t.id) AS total_covers,
@@ -258,9 +298,14 @@ export class DashboardService {
         AND t.closed_at IS NOT NULL
       GROUP BY EXTRACT(HOUR FROM t.closed_at)
       ORDER BY hour ASC
-    `, [branchId, from, to]);
+    `,
+      [branchId, from, to],
+    );
 
-    const hourly: Record<number, { hour: number; total_covers: number; avg_duration_minutes: number }> = {};
+    const hourly: Record<
+      number,
+      { hour: number; total_covers: number; avg_duration_minutes: number }
+    > = {};
     for (let h = 0; h < 24; h++) {
       hourly[h] = { hour: h, total_covers: 0, avg_duration_minutes: 0 };
     }

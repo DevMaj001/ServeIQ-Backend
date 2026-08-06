@@ -10,7 +10,9 @@ import { User } from '../user/entities/user.entity';
 import { Table } from '../table/entities/table.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Tab, Bill, Order, MenuItem, User, Table])],
+  imports: [
+    TypeOrmModule.forFeature([Tab, Bill, Order, MenuItem, User, Table]),
+  ],
   providers: [DashboardService],
   controllers: [DashboardController],
   exports: [DashboardService],

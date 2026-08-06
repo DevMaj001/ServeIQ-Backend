@@ -1,7 +1,24 @@
-import { Controller, Get, Patch, Delete, Body, Param, UseGuards, Request, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  Request,
+  Query,
+} from '@nestjs/common';
 import { NotificationService } from './notification.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { MarkReadDto } from './dto/mark-read.dto';
 
 @ApiTags('Notifications')
@@ -13,17 +30,27 @@ export class NotificationController {
 
   @Get()
   @ApiOperation({ summary: 'List notifications for the current branch' })
-  @ApiQuery({ name: 'unreadOnly', required: false, type: Boolean, example: true })
+  @ApiQuery({
+    name: 'unreadOnly',
+    required: false,
+    type: Boolean,
+    example: true,
+  })
   @ApiResponse({ status: 200, description: 'List of notifications.' })
   async findAll(@Request() req: any, @Query('unreadOnly') unreadOnly?: string) {
-    return this.notificationService.findAll(req.user.branchId, unreadOnly === 'true');
+    return this.notificationService.findAll(
+      req.user.branchId,
+      unreadOnly === 'true',
+    );
   }
 
   @Get('count')
   @ApiOperation({ summary: 'Get unread notification count' })
   @ApiResponse({ status: 200, description: 'Unread count.' })
   async getUnreadCount(@Request() req: any) {
-    const count = await this.notificationService.getUnreadCount(req.user.branchId);
+    const count = await this.notificationService.getUnreadCount(
+      req.user.branchId,
+    );
     return { count };
   }
 

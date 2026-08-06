@@ -40,7 +40,10 @@ describe('ServeIQ (e2e, real Postgres)', () => {
     // Fast reachability probe before booting the app. TypeORM is configured
     // with 10 retries x 3s, so a dead DB would otherwise stall app.init() far
     // past any sane hook timeout. Fail fast here and skip the suite instead.
-    const probe = new Client({ connectionString: testUrl, connectionTimeoutMillis: 4000 });
+    const probe = new Client({
+      connectionString: testUrl,
+      connectionTimeoutMillis: 4000,
+    });
     try {
       await probe.connect();
       await probe.end();
@@ -102,7 +105,10 @@ describe('ServeIQ (e2e, real Postgres)', () => {
   }
 
   realDbTest('app boots and serves / (Hello World!)', async () => {
-    await request(app!.getHttpServer()).get('/').expect(200).expect('Hello World!');
+    await request(app!.getHttpServer())
+      .get('/')
+      .expect(200)
+      .expect('Hello World!');
   });
 
   realDbTest('migrations built a real schema from scratch', async () => {

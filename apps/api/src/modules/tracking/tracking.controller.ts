@@ -1,4 +1,11 @@
-import { Controller, Get, Param, Logger, Req, NotFoundException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Logger,
+  Req,
+  NotFoundException,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { Request } from 'express';
@@ -15,7 +22,9 @@ export class TrackingController {
   @Get(':code')
   @SkipTransform()
   @Throttle({ default: { limit: 20, ttl: 60000 } })
-  @ApiOperation({ summary: 'Get order tracking info by tracking code (no auth required)' })
+  @ApiOperation({
+    summary: 'Get order tracking info by tracking code (no auth required)',
+  })
   @ApiParam({ name: 'code', description: 'Tracking code' })
   @ApiResponse({ status: 200, description: 'Order tracking info.' })
   @ApiResponse({ status: 404, description: 'Tracking code not found.' })

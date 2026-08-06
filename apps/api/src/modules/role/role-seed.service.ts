@@ -14,74 +14,319 @@ interface PermissionDef {
 
 const ALL_PERMISSIONS: PermissionDef[] = [
   // Orders
-  { code: PERMISSIONS.APPROVE_ORDERS, name: 'Approve Orders', description: 'Approve pending orders', category: 'Orders' },
-  { code: PERMISSIONS.DECLINE_ORDERS, name: 'Decline Orders', description: 'Decline pending orders', category: 'Orders' },
-  { code: PERMISSIONS.EDIT_ORDERS, name: 'Edit Orders', description: 'Edit existing orders', category: 'Orders' },
-  { code: PERMISSIONS.CANCEL_ORDERS, name: 'Cancel Orders', description: 'Cancel orders', category: 'Orders' },
-  { code: PERMISSIONS.ASSIGN_DEPARTMENT, name: 'Assign Department', description: 'Assign orders to a department', category: 'Orders' },
-  { code: PERMISSIONS.CHANGE_PRIORITY, name: 'Change Priority', description: 'Change order priority', category: 'Orders' },
-  { code: PERMISSIONS.MARK_READY, name: 'Mark Ready', description: 'Mark order as ready for pickup', category: 'Orders' },
-  { code: PERMISSIONS.MARK_DELIVERED, name: 'Mark Delivered', description: 'Mark order as delivered', category: 'Orders' },
+  {
+    code: PERMISSIONS.APPROVE_ORDERS,
+    name: 'Approve Orders',
+    description: 'Approve pending orders',
+    category: 'Orders',
+  },
+  {
+    code: PERMISSIONS.DECLINE_ORDERS,
+    name: 'Decline Orders',
+    description: 'Decline pending orders',
+    category: 'Orders',
+  },
+  {
+    code: PERMISSIONS.EDIT_ORDERS,
+    name: 'Edit Orders',
+    description: 'Edit existing orders',
+    category: 'Orders',
+  },
+  {
+    code: PERMISSIONS.CANCEL_ORDERS,
+    name: 'Cancel Orders',
+    description: 'Cancel orders',
+    category: 'Orders',
+  },
+  {
+    code: PERMISSIONS.ASSIGN_DEPARTMENT,
+    name: 'Assign Department',
+    description: 'Assign orders to a department',
+    category: 'Orders',
+  },
+  {
+    code: PERMISSIONS.CHANGE_PRIORITY,
+    name: 'Change Priority',
+    description: 'Change order priority',
+    category: 'Orders',
+  },
+  {
+    code: PERMISSIONS.MARK_READY,
+    name: 'Mark Ready',
+    description: 'Mark order as ready for pickup',
+    category: 'Orders',
+  },
+  {
+    code: PERMISSIONS.MARK_DELIVERED,
+    name: 'Mark Delivered',
+    description: 'Mark order as delivered',
+    category: 'Orders',
+  },
 
   // Tables
-  { code: PERMISSIONS.OPEN_TABLE, name: 'Open Table', description: 'Open a new table', category: 'Tables' },
-  { code: PERMISSIONS.CLOSE_TABLE, name: 'Close Table', description: 'Close a table', category: 'Tables' },
-  { code: PERMISSIONS.MERGE_TABLES, name: 'Merge Tables', description: 'Merge two or more tables', category: 'Tables' },
-  { code: PERMISSIONS.SPLIT_TABLE, name: 'Split Table', description: 'Split a table into multiple', category: 'Tables' },
-  { code: PERMISSIONS.TRANSFER_TABLE, name: 'Transfer Table', description: 'Transfer table to another waiter', category: 'Tables' },
-  { code: PERMISSIONS.ASSIGN_WAITER, name: 'Assign Waiter', description: 'Assign a waiter to a table', category: 'Tables' },
+  {
+    code: PERMISSIONS.OPEN_TABLE,
+    name: 'Open Table',
+    description: 'Open a new table',
+    category: 'Tables',
+  },
+  {
+    code: PERMISSIONS.CLOSE_TABLE,
+    name: 'Close Table',
+    description: 'Close a table',
+    category: 'Tables',
+  },
+  {
+    code: PERMISSIONS.MERGE_TABLES,
+    name: 'Merge Tables',
+    description: 'Merge two or more tables',
+    category: 'Tables',
+  },
+  {
+    code: PERMISSIONS.SPLIT_TABLE,
+    name: 'Split Table',
+    description: 'Split a table into multiple',
+    category: 'Tables',
+  },
+  {
+    code: PERMISSIONS.TRANSFER_TABLE,
+    name: 'Transfer Table',
+    description: 'Transfer table to another waiter',
+    category: 'Tables',
+  },
+  {
+    code: PERMISSIONS.ASSIGN_WAITER,
+    name: 'Assign Waiter',
+    description: 'Assign a waiter to a table',
+    category: 'Tables',
+  },
 
   // Payments
-  { code: PERMISSIONS.ACCEPT_PAYMENT, name: 'Accept Payment', description: 'Accept payments', category: 'Payments' },
-  { code: PERMISSIONS.SPLIT_BILL, name: 'Split Bill', description: 'Split a bill between customers', category: 'Payments' },
-  { code: PERMISSIONS.ISSUE_REFUND, name: 'Issue Refund', description: 'Issue a refund', category: 'Payments' },
-  { code: PERMISSIONS.VOID_PAYMENT, name: 'Void Payment', description: 'Void a payment', category: 'Payments' },
-  { code: PERMISSIONS.DISCOUNT_BILL, name: 'Discount Bill', description: 'Apply a discount to a bill', category: 'Payments' },
-  { code: PERMISSIONS.REOPEN_INVOICE, name: 'Reopen Invoice', description: 'Reopen a closed invoice', category: 'Payments' },
+  {
+    code: PERMISSIONS.ACCEPT_PAYMENT,
+    name: 'Accept Payment',
+    description: 'Accept payments',
+    category: 'Payments',
+  },
+  {
+    code: PERMISSIONS.SPLIT_BILL,
+    name: 'Split Bill',
+    description: 'Split a bill between customers',
+    category: 'Payments',
+  },
+  {
+    code: PERMISSIONS.ISSUE_REFUND,
+    name: 'Issue Refund',
+    description: 'Issue a refund',
+    category: 'Payments',
+  },
+  {
+    code: PERMISSIONS.VOID_PAYMENT,
+    name: 'Void Payment',
+    description: 'Void a payment',
+    category: 'Payments',
+  },
+  {
+    code: PERMISSIONS.DISCOUNT_BILL,
+    name: 'Discount Bill',
+    description: 'Apply a discount to a bill',
+    category: 'Payments',
+  },
+  {
+    code: PERMISSIONS.REOPEN_INVOICE,
+    name: 'Reopen Invoice',
+    description: 'Reopen a closed invoice',
+    category: 'Payments',
+  },
 
   // Menu
-  { code: PERMISSIONS.CREATE_MENU, name: 'Create Menu', description: 'Create new menu items', category: 'Menu' },
-  { code: PERMISSIONS.EDIT_MENU, name: 'Edit Menu', description: 'Edit existing menu items', category: 'Menu' },
-  { code: PERMISSIONS.DELETE_MENU, name: 'Delete Menu', description: 'Delete menu items', category: 'Menu' },
-  { code: PERMISSIONS.CHANGE_PRICE, name: 'Change Price', description: 'Change menu item prices', category: 'Menu' },
-  { code: PERMISSIONS.MARK_UNAVAILABLE, name: 'Mark Unavailable', description: 'Mark menu items as unavailable', category: 'Menu' },
+  {
+    code: PERMISSIONS.CREATE_MENU,
+    name: 'Create Menu',
+    description: 'Create new menu items',
+    category: 'Menu',
+  },
+  {
+    code: PERMISSIONS.EDIT_MENU,
+    name: 'Edit Menu',
+    description: 'Edit existing menu items',
+    category: 'Menu',
+  },
+  {
+    code: PERMISSIONS.DELETE_MENU,
+    name: 'Delete Menu',
+    description: 'Delete menu items',
+    category: 'Menu',
+  },
+  {
+    code: PERMISSIONS.CHANGE_PRICE,
+    name: 'Change Price',
+    description: 'Change menu item prices',
+    category: 'Menu',
+  },
+  {
+    code: PERMISSIONS.MARK_UNAVAILABLE,
+    name: 'Mark Unavailable',
+    description: 'Mark menu items as unavailable',
+    category: 'Menu',
+  },
 
   // Inventory
-  { code: PERMISSIONS.VIEW_INVENTORY, name: 'View Inventory', description: 'View inventory levels', category: 'Inventory' },
-  { code: PERMISSIONS.UPDATE_INVENTORY, name: 'Update Inventory', description: 'Update inventory counts', category: 'Inventory' },
-  { code: PERMISSIONS.ADJUST_STOCK, name: 'Adjust Stock', description: 'Adjust stock levels', category: 'Inventory' },
-  { code: PERMISSIONS.MANAGE_SUPPLIERS, name: 'Manage Suppliers', description: 'Manage supplier records', category: 'Inventory' },
+  {
+    code: PERMISSIONS.VIEW_INVENTORY,
+    name: 'View Inventory',
+    description: 'View inventory levels',
+    category: 'Inventory',
+  },
+  {
+    code: PERMISSIONS.UPDATE_INVENTORY,
+    name: 'Update Inventory',
+    description: 'Update inventory counts',
+    category: 'Inventory',
+  },
+  {
+    code: PERMISSIONS.ADJUST_STOCK,
+    name: 'Adjust Stock',
+    description: 'Adjust stock levels',
+    category: 'Inventory',
+  },
+  {
+    code: PERMISSIONS.MANAGE_SUPPLIERS,
+    name: 'Manage Suppliers',
+    description: 'Manage supplier records',
+    category: 'Inventory',
+  },
 
   // Reports
-  { code: PERMISSIONS.VIEW_DASHBOARD, name: 'View Dashboard', description: 'View the main dashboard', category: 'Reports' },
-  { code: PERMISSIONS.VIEW_DAILY_SALES, name: 'View Daily Sales', description: 'View daily sales reports', category: 'Reports' },
-  { code: PERMISSIONS.VIEW_MONTHLY_SALES, name: 'View Monthly Sales', description: 'View monthly sales reports', category: 'Reports' },
-  { code: PERMISSIONS.VIEW_PROFIT, name: 'View Profit', description: 'View profit reports', category: 'Reports' },
-  { code: PERMISSIONS.EXPORT_REPORTS, name: 'Export Reports', description: 'Export reports to CSV/PDF', category: 'Reports' },
+  {
+    code: PERMISSIONS.VIEW_DASHBOARD,
+    name: 'View Dashboard',
+    description: 'View the main dashboard',
+    category: 'Reports',
+  },
+  {
+    code: PERMISSIONS.VIEW_DAILY_SALES,
+    name: 'View Daily Sales',
+    description: 'View daily sales reports',
+    category: 'Reports',
+  },
+  {
+    code: PERMISSIONS.VIEW_MONTHLY_SALES,
+    name: 'View Monthly Sales',
+    description: 'View monthly sales reports',
+    category: 'Reports',
+  },
+  {
+    code: PERMISSIONS.VIEW_PROFIT,
+    name: 'View Profit',
+    description: 'View profit reports',
+    category: 'Reports',
+  },
+  {
+    code: PERMISSIONS.EXPORT_REPORTS,
+    name: 'Export Reports',
+    description: 'Export reports to CSV/PDF',
+    category: 'Reports',
+  },
 
   // Staff
-  { code: PERMISSIONS.VIEW_STAFF, name: 'View Staff', description: 'View staff list', category: 'Staff' },
-  { code: PERMISSIONS.CREATE_STAFF, name: 'Create Staff', description: 'Create new staff accounts', category: 'Staff' },
-  { code: PERMISSIONS.EDIT_STAFF, name: 'Edit Staff', description: 'Edit staff profiles', category: 'Staff' },
-  { code: PERMISSIONS.DELETE_STAFF, name: 'Delete Staff', description: 'Delete staff accounts', category: 'Staff' },
-  { code: PERMISSIONS.ASSIGN_ROLES, name: 'Assign Roles', description: 'Assign or change staff roles', category: 'Staff' },
-  { code: PERMISSIONS.RESET_PASSWORD, name: 'Reset Password', description: 'Reset staff passwords and PINs', category: 'Staff' },
+  {
+    code: PERMISSIONS.VIEW_STAFF,
+    name: 'View Staff',
+    description: 'View staff list',
+    category: 'Staff',
+  },
+  {
+    code: PERMISSIONS.CREATE_STAFF,
+    name: 'Create Staff',
+    description: 'Create new staff accounts',
+    category: 'Staff',
+  },
+  {
+    code: PERMISSIONS.EDIT_STAFF,
+    name: 'Edit Staff',
+    description: 'Edit staff profiles',
+    category: 'Staff',
+  },
+  {
+    code: PERMISSIONS.DELETE_STAFF,
+    name: 'Delete Staff',
+    description: 'Delete staff accounts',
+    category: 'Staff',
+  },
+  {
+    code: PERMISSIONS.ASSIGN_ROLES,
+    name: 'Assign Roles',
+    description: 'Assign or change staff roles',
+    category: 'Staff',
+  },
+  {
+    code: PERMISSIONS.RESET_PASSWORD,
+    name: 'Reset Password',
+    description: 'Reset staff passwords and PINs',
+    category: 'Staff',
+  },
 
   // Customers
-  { code: PERMISSIONS.VIEW_TRACKING, name: 'View Tracking', description: 'View order tracking info', category: 'Customers' },
-  { code: PERMISSIONS.GENERATE_TRACKING, name: 'Generate Tracking', description: 'Generate tracking codes', category: 'Customers' },
-  { code: PERMISSIONS.MANAGE_RESERVATIONS, name: 'Manage Reservations', description: 'Manage table reservations', category: 'Customers' },
+  {
+    code: PERMISSIONS.VIEW_TRACKING,
+    name: 'View Tracking',
+    description: 'View order tracking info',
+    category: 'Customers',
+  },
+  {
+    code: PERMISSIONS.GENERATE_TRACKING,
+    name: 'Generate Tracking',
+    description: 'Generate tracking codes',
+    category: 'Customers',
+  },
+  {
+    code: PERMISSIONS.MANAGE_RESERVATIONS,
+    name: 'Manage Reservations',
+    description: 'Manage table reservations',
+    category: 'Customers',
+  },
 
   // System
-  { code: PERMISSIONS.MANAGE_SUBSCRIPTION, name: 'Manage Subscription', description: 'Manage business subscription', category: 'System' },
-  { code: PERMISSIONS.PAYMENT_GATEWAY, name: 'Payment Gateway', description: 'Configure payment gateway', category: 'System' },
-  { code: PERMISSIONS.API_KEYS, name: 'API Keys', description: 'Manage API keys', category: 'System' },
-  { code: PERMISSIONS.RESTAURANT_SETTINGS, name: 'Restaurant Settings', description: 'Manage restaurant settings', category: 'System' },
-  { code: PERMISSIONS.SECURITY_SETTINGS, name: 'Security Settings', description: 'Manage security settings', category: 'System' },
-  { code: PERMISSIONS.BRANDING, name: 'Branding', description: 'Manage branding and appearance', category: 'System' },
+  {
+    code: PERMISSIONS.MANAGE_SUBSCRIPTION,
+    name: 'Manage Subscription',
+    description: 'Manage business subscription',
+    category: 'System',
+  },
+  {
+    code: PERMISSIONS.PAYMENT_GATEWAY,
+    name: 'Payment Gateway',
+    description: 'Configure payment gateway',
+    category: 'System',
+  },
+  {
+    code: PERMISSIONS.API_KEYS,
+    name: 'API Keys',
+    description: 'Manage API keys',
+    category: 'System',
+  },
+  {
+    code: PERMISSIONS.RESTAURANT_SETTINGS,
+    name: 'Restaurant Settings',
+    description: 'Manage restaurant settings',
+    category: 'System',
+  },
+  {
+    code: PERMISSIONS.SECURITY_SETTINGS,
+    name: 'Security Settings',
+    description: 'Manage security settings',
+    category: 'System',
+  },
+  {
+    code: PERMISSIONS.BRANDING,
+    name: 'Branding',
+    description: 'Manage branding and appearance',
+    category: 'System',
+  },
 ];
 
-const ALL_CODES = ALL_PERMISSIONS.map(p => p.code);
+const ALL_CODES = ALL_PERMISSIONS.map((p) => p.code);
 
 interface RoleDef {
   name: string;
@@ -198,11 +443,18 @@ export class RoleSeedService implements OnApplicationBootstrap {
 
     // Seed permissions
     const permissionEntities = this.permissionRepo.create(
-      ALL_PERMISSIONS.map(p => ({ code: p.code, name: p.name, description: p.description, category: p.category }))
+      ALL_PERMISSIONS.map((p) => ({
+        code: p.code,
+        name: p.name,
+        description: p.description,
+        category: p.category,
+      })),
     );
     await this.permissionRepo.save(permissionEntities);
 
-    const codeToPermission = new Map(permissionEntities.map(p => [p.code, p]));
+    const codeToPermission = new Map(
+      permissionEntities.map((p) => [p.code, p]),
+    );
 
     // Seed roles
     for (const def of DEFAULT_ROLES) {
@@ -212,7 +464,7 @@ export class RoleSeedService implements OnApplicationBootstrap {
         is_system: def.isSystem,
       });
       role.permissions = def.permissions
-        .map(code => codeToPermission.get(code))
+        .map((code) => codeToPermission.get(code))
         .filter(Boolean) as Permission[];
       await this.roleRepo.save(role);
     }

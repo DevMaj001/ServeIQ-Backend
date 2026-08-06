@@ -30,24 +30,34 @@ export class CustomerService {
     private trackingService: TrackingService,
   ) {}
 
-  async openTab(dto: { branch_id: string; table_id?: string; customer_name?: string; party_size?: number; tab_type?: string }) {
+  async openTab(dto: {
+    branch_id: string;
+    table_id?: string;
+    customer_name?: string;
+    party_size?: number;
+    tab_type?: string;
+  }) {
     const tabType = dto.tab_type || TabType.DINE_IN;
 
     if (tabType === TabType.DINE_IN) {
-      if (!dto.table_id) throw new BadRequestException('table_id is required for dine-in');
+      if (!dto.table_id)
+        throw new BadRequestException('table_id is required for dine-in');
 
       const table = await this.tableRepo.findOne({
         where: { id: dto.table_id, branch_id: dto.branch_id },
       });
       if (!table) throw new NotFoundException('Table not found');
-      if (table.is_virtual) throw new BadRequestException('Cannot dine-in at the takeaway counter');
+      if (table.is_virtual)
+        throw new BadRequestException('Cannot dine-in at the takeaway counter');
 
       const existingOpenTab = await this.tabRepo.findOne({
         where: { table_id: dto.table_id, status: 'open' },
       });
       if (existingOpenTab) {
         if (existingOpenTab.waiter_id) {
-          throw new ForbiddenException('This table is currently being served by a waiter');
+          throw new ForbiddenException(
+            'This table is currently being served by a waiter',
+          );
         }
         return this.getTabResponse(existingOpenTab.id);
       }
@@ -75,7 +85,9 @@ export class CustomerService {
       where: { branch_id: dto.branch_id, is_virtual: true },
     });
     if (!virtualTable) {
-      throw new NotFoundException('No counter/takeaway table found for this branch');
+      throw new NotFoundException(
+        'No counter/takeaway table found for this branch',
+      );
     }
 
     const newTab = this.tabRepo.create({
@@ -96,39 +108,58 @@ export class CustomerService {
     return this.getTabResponse(savedTab.id);
   }
 
-  async addItems(tabId: string, trackingCode: string, items: { menu_item_id: string; quantity: number; notes?: string; modifiers?: any[] }[]) {
+  async addItems(
+    tabId: string,
+    trackingCode: string,
+    items: {
+      menu_item_id: string;
+      quantity: number;
+      notes?: string;
+      modifiers?: any[];
+    }[],
+  ) {
     const tab = await this.tabRepo.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
-    if (tab.tracking_code !== trackingCode) throw new ForbiddenException('Invalid tracking code');
+    if (tab.tracking_code !== trackingCode)
+      throw new ForbiddenException('Invalid tracking code');
     if (tab.status !== 'open') throw new BadRequestException('Tab is not open');
-    if (tab.waiter_id !== null) throw new BadRequestException('This tab is managed by a waiter');
+    if (tab.waiter_id !== null)
+      throw new BadRequestException('This tab is managed by a waiter');
 
-    const menuItemIds = items.map(i => i.menu_item_id);
-    const menuItems = await this.menuItemRepo.find({ where: { id: menuItemIds as any } });
-    const menuMap = new Map(menuItems.map(m => [m.id, m]));
+    const menuItemIds = items.map((i) => i.menu_item_id);
+    const menuItems = await this.menuItemRepo.find({
+      where: { id: menuItemIds as any },
+    });
+    const menuMap = new Map(menuItems.map((m) => [m.id, m]));
 
     for (const item of items) {
       const menuItem = menuMap.get(item.menu_item_id);
-      if (!menuItem) throw new NotFoundException(`Menu item ${item.menu_item_id} not found`);
-      if (!menuItem.is_available) throw new BadRequestException(`"${menuItem.name}" is not available`);
+      if (!menuItem)
+        throw new NotFoundException(`Menu item ${item.menu_item_id} not found`);
+      if (!menuItem.is_available)
+        throw new BadRequestException(`"${menuItem.name}" is not available`);
     }
 
     const orders = await this.dataSource.transaction(async (manager) => {
       const savedOrders: Order[] = [];
       for (const item of items) {
         const menuItem = menuMap.get(item.menu_item_id)!;
-        const modifierTotal = (item.modifiers || []).reduce((sum: number, m: any) => sum + (m.price_kobo * m.qty), 0);
+        const modifierTotal = (item.modifiers || []).reduce(
+          (sum: number, m: any) => sum + m.price_kobo * m.qty,
+          0,
+        );
         const order = manager.getRepository(Order).create({
           tab_id: tabId,
           menu_item_id: item.menu_item_id,
           quantity: item.quantity,
           unit_price_kobo: menuItem.price_kobo,
-          subtotal_kobo: (item.quantity * menuItem.price_kobo) + modifierTotal,
+          subtotal_kobo: item.quantity * menuItem.price_kobo + modifierTotal,
           round_number: 1,
           created_by: 'self-service',
           notes: item.notes,
           modifiers: item.modifiers,
-          fulfillment_type: tab.tab_type === TabType.TAKEAWAY ? 'takeaway' : 'serve',
+          fulfillment_type:
+            tab.tab_type === TabType.TAKEAWAY ? 'takeaway' : 'serve',
           order_status: 'pending_supervisor_approval',
         });
         savedOrders.push(await manager.getRepository(Order).save(order));
@@ -136,13 +167,24 @@ export class CustomerService {
       return savedOrders;
     });
 
-    return { tabId, trackingCode, orders: orders.map(o => ({ id: o.id, menu_item_id: o.menu_item_id, quantity: o.quantity, subtotal_kobo: o.subtotal_kobo, order_status: o.order_status })) };
+    return {
+      tabId,
+      trackingCode,
+      orders: orders.map((o) => ({
+        id: o.id,
+        menu_item_id: o.menu_item_id,
+        quantity: o.quantity,
+        subtotal_kobo: o.subtotal_kobo,
+        order_status: o.order_status,
+      })),
+    };
   }
 
   async getTab(tabId: string, trackingCode: string) {
     const tab = await this.tabRepo.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
-    if (tab.tracking_code !== trackingCode) throw new ForbiddenException('Invalid tracking code');
+    if (tab.tracking_code !== trackingCode)
+      throw new ForbiddenException('Invalid tracking code');
 
     return this.getTabResponse(tabId);
   }
@@ -166,7 +208,7 @@ export class CustomerService {
       tracking_generated_at: tab.tracking_generated_at,
       opened_at: tab.opened_at,
       total_kobo: orders.reduce((sum, o) => sum + o.subtotal_kobo, 0),
-      orders: orders.map(o => ({
+      orders: orders.map((o) => ({
         id: o.id,
         menu_item_id: o.menu_item_id,
         quantity: o.quantity,

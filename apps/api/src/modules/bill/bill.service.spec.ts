@@ -31,7 +31,12 @@ describe('BillService', () => {
     findOne: jest.fn(),
     find: jest.fn(),
     create: jest.fn((dto) => dto),
-    save: jest.fn(async (entity) => ({ ...entity, id: 'bill-1', created_at: new Date(), updated_at: new Date() })),
+    save: jest.fn(async (entity) => ({
+      ...entity,
+      id: 'bill-1',
+      created_at: new Date(),
+      updated_at: new Date(),
+    })),
     update: jest.fn(),
   });
 
@@ -44,19 +49,27 @@ describe('BillService', () => {
     businessRepo = mockRepo();
 
     dataSource = {
-      transaction: jest.fn(async (cb) => cb({
-        getRepository: jest.fn(() => ({
-          findOne: jest.fn(),
-          find: jest.fn().mockResolvedValue([]),
-          update: jest.fn(),
-          save: jest.fn(async (e) => e),
-        })),
-      })),
+      transaction: jest.fn(async (cb) =>
+        cb({
+          getRepository: jest.fn(() => ({
+            findOne: jest.fn(),
+            find: jest.fn().mockResolvedValue([]),
+            update: jest.fn(),
+            save: jest.fn(async (e) => e),
+          })),
+        }),
+      ),
     };
 
     ingredientService = { deductByTab: jest.fn().mockResolvedValue(undefined) };
-    receiptService = { generatePdf: jest.fn().mockReturnValue(Buffer.from('pdf')) };
-    cloudinaryService = { uploadFile: jest.fn().mockResolvedValue({ secure_url: 'https://cloudinary.com/receipt.pdf' }) };
+    receiptService = {
+      generatePdf: jest.fn().mockReturnValue(Buffer.from('pdf')),
+    };
+    cloudinaryService = {
+      uploadFile: jest.fn().mockResolvedValue({
+        secure_url: 'https://cloudinary.com/receipt.pdf',
+      }),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -81,13 +94,20 @@ describe('BillService', () => {
 
   describe('generateBill', () => {
     it('generates a bill with subtotal, service charge, tax', async () => {
-      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1', waiter_id: 'waiter-1' });
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        waiter_id: 'waiter-1',
+      });
       billRepo.findOne.mockResolvedValue(null);
       orderRepo.find.mockResolvedValue([
         { subtotal_kobo: 10000 },
         { subtotal_kobo: 5000 },
       ]);
-      branchRepo.findOne.mockResolvedValue({ id: 'branch-1', business_id: 'biz-1' });
+      branchRepo.findOne.mockResolvedValue({
+        id: 'branch-1',
+        business_id: 'biz-1',
+      });
       businessRepo.findOne.mockResolvedValue({ id: 'biz-1', tax_rate: 7.5 });
 
       const result = await service.generateBill('tab-1', 'waiter-1', 'waiter');
@@ -99,7 +119,11 @@ describe('BillService', () => {
     });
 
     it('returns existing bill if already generated', async () => {
-      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1', waiter_id: null });
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        waiter_id: null,
+      });
       const existing = { id: 'bill-1', tab_id: 'tab-1', total_kobo: 5000 };
       billRepo.findOne.mockResolvedValue(existing);
 
@@ -108,7 +132,10 @@ describe('BillService', () => {
     });
 
     it('throws ForbiddenException for another waiter tab', async () => {
-      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', waiter_id: 'waiter-other' });
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        waiter_id: 'waiter-other',
+      });
 
       await expect(
         service.generateBill('tab-1', 'waiter-me', 'waiter'),
@@ -116,13 +143,24 @@ describe('BillService', () => {
     });
 
     it('allows manager to bill any tab', async () => {
-      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1', waiter_id: 'waiter-other' });
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        waiter_id: 'waiter-other',
+      });
       billRepo.findOne.mockResolvedValue(null);
       orderRepo.find.mockResolvedValue([{ subtotal_kobo: 10000 }]);
-      branchRepo.findOne.mockResolvedValue({ id: 'branch-1', business_id: 'biz-1' });
+      branchRepo.findOne.mockResolvedValue({
+        id: 'branch-1',
+        business_id: 'biz-1',
+      });
       businessRepo.findOne.mockResolvedValue({ id: 'biz-1', tax_rate: 7.5 });
 
-      const result = await service.generateBill('tab-1', 'manager-1', 'manager');
+      const result = await service.generateBill(
+        'tab-1',
+        'manager-1',
+        'manager',
+      );
       expect(result.subtotal_kobo).toBe(10000);
     });
   });
@@ -131,12 +169,19 @@ describe('BillService', () => {
     it('applies fixed kobo discount', async () => {
       tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
       billRepo.findOne.mockResolvedValue({
-        id: 'bill-1', tab_id: 'tab-1',
-        subtotal_kobo: 10000, service_charge_kobo: 1000, tax_kobo: 750, discount_kobo: 0, total_kobo: 11750,
+        id: 'bill-1',
+        tab_id: 'tab-1',
+        subtotal_kobo: 10000,
+        service_charge_kobo: 1000,
+        tax_kobo: 750,
+        discount_kobo: 0,
+        total_kobo: 11750,
         paid_at: null,
       });
 
-      const result = await service.applyDiscount('tab-1', 'branch-1', { discount_kobo: 2000 });
+      const result = await service.applyDiscount('tab-1', 'branch-1', {
+        discount_kobo: 2000,
+      });
 
       expect(result.discount_kobo).toBe(2000);
       expect(result.total_kobo).toBe(9750);
@@ -145,12 +190,19 @@ describe('BillService', () => {
     it('applies percent discount', async () => {
       tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
       billRepo.findOne.mockResolvedValue({
-        id: 'bill-1', tab_id: 'tab-1',
-        subtotal_kobo: 10000, service_charge_kobo: 1000, tax_kobo: 750, discount_kobo: 0, total_kobo: 11750,
+        id: 'bill-1',
+        tab_id: 'tab-1',
+        subtotal_kobo: 10000,
+        service_charge_kobo: 1000,
+        tax_kobo: 750,
+        discount_kobo: 0,
+        total_kobo: 11750,
         paid_at: null,
       });
 
-      const result = await service.applyDiscount('tab-1', 'branch-1', { discount_percent: 10 });
+      const result = await service.applyDiscount('tab-1', 'branch-1', {
+        discount_percent: 10,
+      });
 
       expect(result.discount_kobo).toBe(1000);
       expect(result.total_kobo).toBe(10750);
@@ -159,7 +211,9 @@ describe('BillService', () => {
     it('rejects discount on paid bill', async () => {
       tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
       billRepo.findOne.mockResolvedValue({
-        id: 'bill-1', subtotal_kobo: 10000, paid_at: new Date(),
+        id: 'bill-1',
+        subtotal_kobo: 10000,
+        paid_at: new Date(),
       });
 
       await expect(
@@ -170,11 +224,21 @@ describe('BillService', () => {
 
   describe('processPayment', () => {
     it('processes payment and updates tab/table status', async () => {
-      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1', table_id: 'table-1', waiter_id: null });
-      billRepo.findOne.mockResolvedValue({ id: 'bill-1', tab_id: 'tab-1', total_kobo: 5000 });
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        table_id: 'table-1',
+        waiter_id: null,
+      });
+      billRepo.findOne.mockResolvedValue({
+        id: 'bill-1',
+        tab_id: 'tab-1',
+        total_kobo: 5000,
+      });
 
       const result = await service.processPayment('tab-1', 'user-1', 'owner', {
-        amount: 5000, method: 'cash' as any,
+        amount: 5000,
+        method: 'cash' as any,
       });
 
       expect(result.payment_method).toBe('cash');
@@ -190,7 +254,9 @@ describe('BillService', () => {
       tabRepo.findOne.mockResolvedValue({ id: 'tab-1', waiter_id: null });
 
       const result = await service.processPayment('tab-1', 'user-1', 'owner', {
-        amount: 5000, method: 'card' as any, idempotency_key: 'dup-key',
+        amount: 5000,
+        method: 'card' as any,
+        idempotency_key: 'dup-key',
       });
 
       expect(result).toEqual(existing);

@@ -11,17 +11,25 @@ export class SupplierService {
   ) {}
 
   async findAll(branchId: string) {
-    return this.supplierRepository.find({ where: { branch_id: branchId }, order: { name: 'ASC' } });
+    return this.supplierRepository.find({
+      where: { branch_id: branchId },
+      order: { name: 'ASC' },
+    });
   }
 
   async findOne(id: string, branchId: string) {
-    const supplier = await this.supplierRepository.findOne({ where: { id, branch_id: branchId } });
+    const supplier = await this.supplierRepository.findOne({
+      where: { id, branch_id: branchId },
+    });
     if (!supplier) throw new NotFoundException('Supplier not found');
     return supplier;
   }
 
   async create(branchId: string, dto: any) {
-    const supplier = this.supplierRepository.create({ ...dto, branch_id: branchId });
+    const supplier = this.supplierRepository.create({
+      ...dto,
+      branch_id: branchId,
+    });
     return this.supplierRepository.save(supplier);
   }
 

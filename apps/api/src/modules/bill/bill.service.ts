@@ -1,4 +1,10 @@
-import { Inject, Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Bill } from './entities/bill.entity';
@@ -42,11 +48,18 @@ export class BillService {
     private cloudinaryService: CloudinaryService,
   ) {}
 
-  async generateBill(tabId: string, userId: string, userRole: string, generateBillDto?: GenerateBillDto) {
+  async generateBill(
+    tabId: string,
+    userId: string,
+    userRole: string,
+    generateBillDto?: GenerateBillDto,
+  ) {
     const tab = await this.tabRepository.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
 
-    const existing = await this.billRepository.findOne({ where: { tab_id: tabId } });
+    const existing = await this.billRepository.findOne({
+      where: { tab_id: tabId },
+    });
     if (existing) {
       return existing;
     }
@@ -62,16 +75,28 @@ export class BillService {
       throw new ForbiddenException('This tab belongs to another waiter');
     }
 
-    const orders = await this.orderRepository.find({ where: { tab_id: tabId } });
-    const subtotal = orders.reduce((sum, order) => sum + (order.subtotal_kobo ?? 0), 0);
+    const orders = await this.orderRepository.find({
+      where: { tab_id: tabId },
+    });
+    const subtotal = orders.reduce(
+      (sum, order) => sum + (order.subtotal_kobo ?? 0),
+      0,
+    );
 
     const serviceChargePercent = generateBillDto?.service_charge_percent ?? 10;
     const serviceCharge = Math.round(subtotal * (serviceChargePercent / 100));
     const discount = generateBillDto?.discount_kobo ?? 0;
 
-    const tabBranch = await this.branchRepository.findOne({ where: { id: tab.branch_id } });
-    const business = tabBranch ? await this.businessRepository.findOne({ where: { id: tabBranch.business_id } }) : null;
-    const effectiveTaxRate = generateBillDto?.tax_rate_percent ?? Number(business?.tax_rate ?? 7.5);
+    const tabBranch = await this.branchRepository.findOne({
+      where: { id: tab.branch_id },
+    });
+    const business = tabBranch
+      ? await this.businessRepository.findOne({
+          where: { id: tabBranch.business_id },
+        })
+      : null;
+    const effectiveTaxRate =
+      generateBillDto?.tax_rate_percent ?? Number(business?.tax_rate ?? 7.5);
     const tax = Math.round(subtotal * (effectiveTaxRate / 100));
 
     let total = subtotal + serviceCharge + tax - discount;
@@ -89,7 +114,10 @@ export class BillService {
 
     const savedBill = await this.billRepository.save(bill);
 
-    await this.tabRepository.update(tabId, { status: 'billed', billed_at: new Date() });
+    await this.tabRepository.update(tabId, {
+      status: 'billed',
+      billed_at: new Date(),
+    });
 
     return savedBill;
   }
@@ -97,25 +125,40 @@ export class BillService {
   async applyDiscount(tabId: string, branchId: string, dto: ApplyDiscountDto) {
     const tab = await this.tabRepository.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
-    if (tab.branch_id !== branchId) throw new ForbiddenException('Tab does not belong to your branch');
+    if (tab.branch_id !== branchId)
+      throw new ForbiddenException('Tab does not belong to your branch');
 
-    const bill = await this.billRepository.findOne({ where: { tab_id: tabId } });
+    const bill = await this.billRepository.findOne({
+      where: { tab_id: tabId },
+    });
     if (!bill) throw new NotFoundException('Bill not found');
-    if (bill.paid_at) throw new BadRequestException('Cannot modify a paid bill');
+    if (bill.paid_at)
+      throw new BadRequestException('Cannot modify a paid bill');
 
     if (dto.discount_kobo !== undefined) {
       bill.discount_kobo = dto.discount_kobo;
     } else if (dto.discount_percent !== undefined) {
-      bill.discount_kobo = Math.round(bill.subtotal_kobo * (dto.discount_percent / 100));
+      bill.discount_kobo = Math.round(
+        bill.subtotal_kobo * (dto.discount_percent / 100),
+      );
     }
 
-    bill.total_kobo = bill.subtotal_kobo + bill.service_charge_kobo + bill.tax_kobo - bill.discount_kobo;
+    bill.total_kobo =
+      bill.subtotal_kobo +
+      bill.service_charge_kobo +
+      bill.tax_kobo -
+      bill.discount_kobo;
     if (bill.total_kobo < 0) bill.total_kobo = 0;
 
     return this.billRepository.save(bill);
   }
 
-  async processPayment(tabId: string, userId: string, userRole: string, paymentDto: ProcessPaymentDto) {
+  async processPayment(
+    tabId: string,
+    userId: string,
+    userRole: string,
+    paymentDto: ProcessPaymentDto,
+  ) {
     const tab = await this.tabRepository.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
 
@@ -130,7 +173,9 @@ export class BillService {
       throw new ForbiddenException('This tab belongs to another waiter');
     }
 
-    const bill = await this.billRepository.findOne({ where: { tab_id: tabId } });
+    const bill = await this.billRepository.findOne({
+      where: { tab_id: tabId },
+    });
     if (!bill) throw new NotFoundException('Bill not found');
 
     if (paymentDto.idempotency_key) {
@@ -151,11 +196,16 @@ export class BillService {
     // processing deduction here is correct. In a traditional restaurant (pay-at-end)
     // the deduction would move to a kitchen status transition instead.
     await this.dataSource.transaction(async (manager) => {
-      const orders = await manager.getRepository(Order).find({ where: { tab_id: tabId } });
+      const orders = await manager
+        .getRepository(Order)
+        .find({ where: { tab_id: tabId } });
 
       await this.ingredientService.deductByTab(
         { id: tabId, branch_id: tab.branch_id },
-        orders.map(o => ({ menu_item_id: o.menu_item_id, quantity: o.quantity })),
+        orders.map((o) => ({
+          menu_item_id: o.menu_item_id,
+          quantity: o.quantity,
+        })),
         manager,
       );
 
@@ -174,12 +224,20 @@ export class BillService {
 
       await manager.getRepository(Bill).save(bill);
 
-      await manager.getRepository(Tab).update(tabId, { status: 'paid', closed_at: new Date(), cashier_id: userId });
+      await manager.getRepository(Tab).update(tabId, {
+        status: 'paid',
+        closed_at: new Date(),
+        cashier_id: userId,
+      });
 
       // Virtual tables never participate in occupancy logic — they are system records, not seatable tables.
-      const payTable = await manager.getRepository(Table).findOne({ where: { id: tab.table_id } });
+      const payTable = await manager
+        .getRepository(Table)
+        .findOne({ where: { id: tab.table_id } });
       if (payTable && !payTable.is_virtual) {
-        await manager.getRepository(Table).update(tab.table_id, { status: TableStatus.AVAILABLE });
+        await manager
+          .getRepository(Table)
+          .update(tab.table_id, { status: TableStatus.AVAILABLE });
       }
     });
 
@@ -198,7 +256,10 @@ export class BillService {
         await this.billRepository.save(bill);
       }
     } catch (err) {
-      console.error('PDF receipt generation failed (non-blocking):', err.message);
+      console.error(
+        'PDF receipt generation failed (non-blocking):',
+        err.message,
+      );
     }
 
     return bill;
@@ -208,24 +269,40 @@ export class BillService {
     const tab = await this.tabRepository.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
 
-    const bill = await this.billRepository.findOne({ where: { tab_id: tabId } });
+    const bill = await this.billRepository.findOne({
+      where: { tab_id: tabId },
+    });
     if (!bill) return null;
 
-    const orders = await this.orderRepository.find({ where: { tab_id: tabId } });
+    const orders = await this.orderRepository.find({
+      where: { tab_id: tabId },
+    });
 
     const orderItems = [];
     for (const order of orders) {
-      const menuItem = await this.menuItemRepository.findOne({ where: { id: order.menu_item_id } });
+      const menuItem = await this.menuItemRepository.findOne({
+        where: { id: order.menu_item_id },
+      });
       orderItems.push({
         ...order,
         menu_item: menuItem,
       });
     }
 
-    const table = await this.tableRepository.findOne({ where: { id: tab.table_id } });
-    const waiter = tab.waiter_id ? await this.userRepository.findOne({ where: { id: tab.waiter_id } }) : null;
-    const branch = await this.branchRepository.findOne({ where: { id: tab.branch_id } });
-    const business = branch ? await this.businessRepository.findOne({ where: { id: branch.business_id } }) : null;
+    const table = await this.tableRepository.findOne({
+      where: { id: tab.table_id },
+    });
+    const waiter = tab.waiter_id
+      ? await this.userRepository.findOne({ where: { id: tab.waiter_id } })
+      : null;
+    const branch = await this.branchRepository.findOne({
+      where: { id: tab.branch_id },
+    });
+    const business = branch
+      ? await this.businessRepository.findOne({
+          where: { id: branch.business_id },
+        })
+      : null;
 
     return {
       business,
@@ -241,45 +318,64 @@ export class BillService {
 
   // ── Split Checks ──
 
-  async splitEvenly(tabId: string, userId: string, userRole: string, numSplits: number) {
+  async splitEvenly(
+    tabId: string,
+    userId: string,
+    userRole: string,
+    numSplits: number,
+  ) {
     const tab = await this.tabRepository.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
 
-    const orders = await this.orderRepository.find({ where: { tab_id: tabId } });
-    if (orders.length === 0) throw new BadRequestException('No items on this tab');
+    const orders = await this.orderRepository.find({
+      where: { tab_id: tabId },
+    });
+    if (orders.length === 0)
+      throw new BadRequestException('No items on this tab');
 
     const total = orders.reduce((sum, o) => sum + o.subtotal_kobo, 0);
     const baseAmount = Math.floor(total / numSplits);
-    const remainder = total - (baseAmount * numSplits);
+    const remainder = total - baseAmount * numSplits;
 
     const splitGroup = `split_${Date.now()}_${tabId.slice(0, 8)}`;
     const bills = [];
 
     for (let i = 0; i < numSplits; i++) {
       const amount = baseAmount + (i < remainder ? 1 : 0);
-      bills.push(await this.billRepository.save(this.billRepository.create({
-        tab_id: tabId,
-        split_group: splitGroup,
-        subtotal_kobo: amount,
-        service_charge_kobo: 0,
-        tax_kobo: 0,
-        discount_kobo: 0,
-        total_kobo: amount,
-        payment_status: 'pending',
-        issued_by: userId,
-      })));
+      bills.push(
+        await this.billRepository.save(
+          this.billRepository.create({
+            tab_id: tabId,
+            split_group: splitGroup,
+            subtotal_kobo: amount,
+            service_charge_kobo: 0,
+            tax_kobo: 0,
+            discount_kobo: 0,
+            total_kobo: amount,
+            payment_status: 'pending',
+            issued_by: userId,
+          }),
+        ),
+      );
     }
 
     await this.tabRepository.update(tabId, { status: 'billed' });
     return bills;
   }
 
-  async splitByItem(tabId: string, userId: string, userRole: string, allocations: { order_ids: string[]; label?: string }[]) {
+  async splitByItem(
+    tabId: string,
+    userId: string,
+    userRole: string,
+    allocations: { order_ids: string[]; label?: string }[],
+  ) {
     const tab = await this.tabRepository.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
 
-    const allOrders = await this.orderRepository.find({ where: { tab_id: tabId } });
-    const orderMap = new Map(allOrders.map(o => [o.id, o]));
+    const allOrders = await this.orderRepository.find({
+      where: { tab_id: tabId },
+    });
+    const orderMap = new Map(allOrders.map((o) => [o.id, o]));
     const splitGroup = `split_${Date.now()}_${tabId.slice(0, 8)}`;
     const bills = [];
 
@@ -291,17 +387,21 @@ export class BillService {
       }
       if (subtotal === 0) continue;
 
-      bills.push(await this.billRepository.save(this.billRepository.create({
-        tab_id: tabId,
-        split_group: splitGroup,
-        subtotal_kobo: subtotal,
-        service_charge_kobo: 0,
-        tax_kobo: 0,
-        discount_kobo: 0,
-        total_kobo: subtotal,
-        payment_status: 'pending',
-        issued_by: userId,
-      })));
+      bills.push(
+        await this.billRepository.save(
+          this.billRepository.create({
+            tab_id: tabId,
+            split_group: splitGroup,
+            subtotal_kobo: subtotal,
+            service_charge_kobo: 0,
+            tax_kobo: 0,
+            discount_kobo: 0,
+            total_kobo: subtotal,
+            payment_status: 'pending',
+            issued_by: userId,
+          }),
+        ),
+      );
     }
 
     await this.tabRepository.update(tabId, { status: 'billed' });
@@ -311,7 +411,8 @@ export class BillService {
   async getSplitBills(tabId: string, branchId: string) {
     const tab = await this.tabRepository.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
-    if (tab.branch_id !== branchId) throw new ForbiddenException('Tab does not belong to your branch');
+    if (tab.branch_id !== branchId)
+      throw new ForbiddenException('Tab does not belong to your branch');
 
     return this.billRepository.find({
       where: { tab_id: tabId },
@@ -319,13 +420,24 @@ export class BillService {
     });
   }
 
-  async processSplitPayment(tabId: string, billId: string, userId: string, userRole: string, paymentDto: ProcessPaymentDto) {
-    const bill = await this.billRepository.findOne({ where: { id: billId, tab_id: tabId } });
+  async processSplitPayment(
+    tabId: string,
+    billId: string,
+    userId: string,
+    userRole: string,
+    paymentDto: ProcessPaymentDto,
+  ) {
+    const bill = await this.billRepository.findOne({
+      where: { id: billId, tab_id: tabId },
+    });
     if (!bill) throw new NotFoundException('Split bill not found');
-    if (bill.paid_at) throw new BadRequestException('This split bill is already paid');
+    if (bill.paid_at)
+      throw new BadRequestException('This split bill is already paid');
 
     if (paymentDto.idempotency_key) {
-      const dup = await this.billRepository.findOne({ where: { idempotency_key: paymentDto.idempotency_key } });
+      const dup = await this.billRepository.findOne({
+        where: { idempotency_key: paymentDto.idempotency_key },
+      });
       if (dup?.paid_at) return dup;
     }
 
@@ -333,23 +445,34 @@ export class BillService {
     bill.payment_amount_kobo = paymentDto.amount;
     if (paymentDto.reference) bill.payment_reference = paymentDto.reference;
     if (paymentDto.terminal_id) bill.terminal_id = paymentDto.terminal_id;
-    if (paymentDto.idempotency_key) bill.idempotency_key = paymentDto.idempotency_key;
+    if (paymentDto.idempotency_key)
+      bill.idempotency_key = paymentDto.idempotency_key;
     bill.paid_at = new Date();
     bill.payment_status = 'paid';
     const saved = await this.billRepository.save(bill);
 
-    const allBills = await this.billRepository.find({ where: { tab_id: tabId } });
-    const allPaid = allBills.every(b => b.paid_at);
-    const anyPaid = allBills.some(b => b.paid_at);
+    const allBills = await this.billRepository.find({
+      where: { tab_id: tabId },
+    });
+    const allPaid = allBills.every((b) => b.paid_at);
+    const anyPaid = allBills.some((b) => b.paid_at);
 
     if (allPaid) {
       const tab = await this.tabRepository.findOne({ where: { id: tabId } });
       if (tab) {
-        await this.tabRepository.update(tabId, { status: 'paid', closed_at: new Date(), cashier_id: userId });
+        await this.tabRepository.update(tabId, {
+          status: 'paid',
+          closed_at: new Date(),
+          cashier_id: userId,
+        });
         if (tab.table_id) {
-          const splitTable = await this.tableRepository.findOne({ where: { id: tab.table_id } });
+          const splitTable = await this.tableRepository.findOne({
+            where: { id: tab.table_id },
+          });
           if (splitTable && !splitTable.is_virtual) {
-            await this.tableRepository.update(tab.table_id, { status: TableStatus.AVAILABLE });
+            await this.tableRepository.update(tab.table_id, {
+              status: TableStatus.AVAILABLE,
+            });
           }
         }
       }
@@ -363,7 +486,8 @@ export class BillService {
   async getReceipt(tabId: string, branchId: string) {
     const tab = await this.tabRepository.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
-    if (tab.branch_id !== branchId) throw new ForbiddenException('Tab does not belong to your branch');
+    if (tab.branch_id !== branchId)
+      throw new ForbiddenException('Tab does not belong to your branch');
 
     return this.buildReceiptData(tabId);
   }
@@ -371,7 +495,8 @@ export class BillService {
   async getReceiptPdf(tabId: string, branchId: string): Promise<Buffer> {
     const tab = await this.tabRepository.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
-    if (tab.branch_id !== branchId) throw new ForbiddenException('Tab does not belong to your branch');
+    if (tab.branch_id !== branchId)
+      throw new ForbiddenException('Tab does not belong to your branch');
 
     const data = await this.buildReceiptData(tabId);
     if (!data) throw new NotFoundException('Bill not found');

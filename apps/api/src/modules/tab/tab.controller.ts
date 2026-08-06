@@ -1,10 +1,28 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Request, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  Request,
+  Query,
+} from '@nestjs/common';
 import { TabService } from './tab.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../../common/shared';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { OpenTabDto } from './dto/open-tab.dto';
 import { TransferTabDto } from './dto/transfer-tab.dto';
 import { UpdateTabDto } from './dto/update-tab.dto';
@@ -20,12 +38,31 @@ export class TabController {
   constructor(private readonly tabService: TabService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get all tabs for the branch (optionally filtered by status or waiter)' })
-  @ApiQuery({ name: 'status', required: false, enum: ['open', 'billed', 'paid', 'voided'] })
-  @ApiQuery({ name: 'waiter_id', required: false, description: 'Filter by waiter UUID' })
+  @ApiOperation({
+    summary:
+      'Get all tabs for the branch (optionally filtered by status or waiter)',
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['open', 'billed', 'paid', 'voided'],
+  })
+  @ApiQuery({
+    name: 'waiter_id',
+    required: false,
+    description: 'Filter by waiter UUID',
+  })
   @ApiQuery({ name: 'page', required: false, example: '1' })
-  @ApiQuery({ name: 'per_page', required: false, example: '20', description: 'Defaults to 20, max 100' })
-  @ApiResponse({ status: 200, description: 'Paginated list of tabs with waiter/table/orders.' })
+  @ApiQuery({
+    name: 'per_page',
+    required: false,
+    example: '20',
+    description: 'Defaults to 20, max 100',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Paginated list of tabs with waiter/table/orders.',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async findAll(
     @Request() req: any,
@@ -35,18 +72,30 @@ export class TabController {
     @Query('per_page') per_page?: string,
   ) {
     const pagination = getPaginationParams({ page, per_page });
-    const { data, total } = await this.tabService.findAllByBranch(req.user.branchId, status, waiterId, pagination);
+    const { data, total } = await this.tabService.findAllByBranch(
+      req.user.branchId,
+      status,
+      waiterId,
+      pagination,
+    );
     return paginate(data, total, pagination);
   }
 
   @Get('waiter-list')
-  @ApiOperation({ summary: 'List all users who have tabs in this branch (for filter dropdown)' })
-  @ApiResponse({ status: 200, description: 'List of users with waiter name and id.', schema: {
-    example: [
-      { id: 'uuid-1', full_name: 'Stella Celetine', role: 'waiter' },
-      { id: 'uuid-2', full_name: 'Admin User', role: 'owner' },
-    ],
-  } })
+  @ApiOperation({
+    summary:
+      'List all users who have tabs in this branch (for filter dropdown)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of users with waiter name and id.',
+    schema: {
+      example: [
+        { id: 'uuid-1', full_name: 'Stella Celetine', role: 'waiter' },
+        { id: 'uuid-2', full_name: 'Admin User', role: 'owner' },
+      ],
+    },
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async getTabWaiters(@Request() req: any) {
     return this.tabService.getTabWaiters(req.user.branchId);
@@ -54,25 +103,42 @@ export class TabController {
 
   @Post('open')
   @ApiOperation({ summary: 'Open a new tab at a table' })
-  @ApiResponse({ status: 201, description: 'Tab opened successfully.', type: Tab })
+  @ApiResponse({
+    status: 201,
+    description: 'Tab opened successfully.',
+    type: Tab,
+  })
   @ApiResponse({ status: 400, description: 'Validation error.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async openTab(@Request() req: any, @Body() createDto: OpenTabDto) {
-    return this.tabService.openTab({
-      ...createDto,
-      branch_id: req.user.branchId,
-      waiter_id: req.user.userId,
-    }, req.user.userId, req.user.role);
+    return this.tabService.openTab(
+      {
+        ...createDto,
+        branch_id: req.user.branchId,
+        waiter_id: req.user.userId,
+      },
+      req.user.userId,
+      req.user.role,
+    );
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get a tab by ID (includes its orders)' })
   @ApiParam({ name: 'id', description: 'Tab UUID', example: 'tab-uuid-here' })
-  @ApiResponse({ status: 200, description: 'Tab record with order items.', type: Tab })
+  @ApiResponse({
+    status: 200,
+    description: 'Tab record with order items.',
+    type: Tab,
+  })
   @ApiResponse({ status: 404, description: 'Tab not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async findOne(@Param('id') id: string, @Request() req: any) {
-    return this.tabService.findOne(id, req.user.branchId, req.user.userId, req.user.role);
+    return this.tabService.findOne(
+      id,
+      req.user.branchId,
+      req.user.userId,
+      req.user.role,
+    );
   }
 
   @Post(':id/close')
@@ -82,7 +148,12 @@ export class TabController {
   @ApiResponse({ status: 404, description: 'Tab not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async closeTab(@Param('id') id: string, @Request() req: any) {
-    return this.tabService.closeTab(id, req.user.branchId, req.user.userId, req.user.role);
+    return this.tabService.closeTab(
+      id,
+      req.user.branchId,
+      req.user.userId,
+      req.user.role,
+    );
   }
 
   @Patch(':id')
@@ -93,14 +164,20 @@ export class TabController {
   @ApiResponse({ status: 200, description: 'Tab updated.' })
   @ApiResponse({ status: 404, description: 'Tab not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async update(@Param('id') id: string, @Request() req: any, @Body() updateDto: UpdateTabDto) {
+  async update(
+    @Param('id') id: string,
+    @Request() req: any,
+    @Body() updateDto: UpdateTabDto,
+  ) {
     return this.tabService.update(id, req.user.branchId, updateDto);
   }
 
   @Post(':id/transfer')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER)
-  @ApiOperation({ summary: 'Transfer a tab to a different table (Supervisor/Manager/Owner)' })
+  @ApiOperation({
+    summary: 'Transfer a tab to a different table (Supervisor/Manager/Owner)',
+  })
   @ApiParam({ name: 'id', description: 'Tab UUID' })
   @ApiResponse({ status: 200, description: 'Tab transferred to new table.' })
   @ApiResponse({ status: 400, description: 'Target table not available.' })
@@ -110,13 +187,19 @@ export class TabController {
     @Request() req: any,
     @Body() transferDto: TransferTabDto,
   ) {
-    return this.tabService.transferTab(id, req.user.branchId, transferDto.target_table_id);
+    return this.tabService.transferTab(
+      id,
+      req.user.branchId,
+      transferDto.target_table_id,
+    );
   }
 
   @Post(':id/void')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER)
-  @ApiOperation({ summary: 'Void a tab with a reason (Supervisor/Manager/Owner)' })
+  @ApiOperation({
+    summary: 'Void a tab with a reason (Supervisor/Manager/Owner)',
+  })
   @ApiParam({ name: 'id', description: 'Tab UUID' })
   @ApiResponse({ status: 200, description: 'Tab voided.' })
   @ApiResponse({ status: 400, description: 'Tab is not open.' })
@@ -126,7 +209,13 @@ export class TabController {
     @Request() req: any,
     @Body() voidDto: VoidTabDto,
   ) {
-    return this.tabService.voidTab(id, req.user.branchId, req.user.userId, req.user.role, voidDto.reason);
+    return this.tabService.voidTab(
+      id,
+      req.user.branchId,
+      req.user.userId,
+      req.user.role,
+      voidDto.reason,
+    );
   }
 
   @Delete(':id')
@@ -141,5 +230,3 @@ export class TabController {
     return this.tabService.remove(id, req.user.branchId);
   }
 }
-
-

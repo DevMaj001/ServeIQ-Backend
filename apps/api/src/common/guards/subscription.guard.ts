@@ -2,7 +2,10 @@ import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
-import { Subscription, SubscriptionStatus } from '../../modules/subscription/entities/subscription.entity';
+import {
+  Subscription,
+  SubscriptionStatus,
+} from '../../modules/subscription/entities/subscription.entity';
 import { SubscriptionRequiredException } from '../../modules/subscription/exceptions/subscription-required.exception';
 
 const EXCLUDED_MATCHES = [
@@ -20,7 +23,15 @@ const EXCLUDED_MATCHES = [
   '/api/v1/webhooks/paystack',
 ];
 
-const EXCLUDED_PREFIXES = ['/api/v1/auth/', '/api/v1/subscriptions/', '/api/v1/webhooks/paystack', '/api/v1/public/', '/api/v1/tracking/', '/api/v1/user/me', '/api/v1/notifications'];
+const EXCLUDED_PREFIXES = [
+  '/api/v1/auth/',
+  '/api/v1/subscriptions/',
+  '/api/v1/webhooks/paystack',
+  '/api/v1/public/',
+  '/api/v1/tracking/',
+  '/api/v1/user/me',
+  '/api/v1/notifications',
+];
 
 @Injectable()
 export class SubscriptionGuard implements CanActivate {
@@ -59,7 +70,11 @@ export class SubscriptionGuard implements CanActivate {
     }
 
     // Super admins bypass the subscription check entirely
-    if (user?.role === 'superadmin' || user?.role === 'super_admin' || user?.impersonating === true) {
+    if (
+      user?.role === 'superadmin' ||
+      user?.role === 'super_admin' ||
+      user?.impersonating === true
+    ) {
       return true;
     }
 
@@ -91,7 +106,11 @@ export class SubscriptionGuard implements CanActivate {
       return true;
     }
 
-    if (sub.current_period_end && sub.current_period_end.getTime() > now && sub.status === SubscriptionStatus.CANCELED) {
+    if (
+      sub.current_period_end &&
+      sub.current_period_end.getTime() > now &&
+      sub.status === SubscriptionStatus.CANCELED
+    ) {
       return true;
     }
 
@@ -106,7 +125,10 @@ export class SubscriptionGuard implements CanActivate {
         throw new SubscriptionRequiredException('expired', 'subscribe');
 
       case SubscriptionStatus.PAST_DUE:
-        if (sub.grace_period_ends_at && sub.grace_period_ends_at.getTime() > now) {
+        if (
+          sub.grace_period_ends_at &&
+          sub.grace_period_ends_at.getTime() > now
+        ) {
           return true;
         }
         throw new SubscriptionRequiredException('past_due', 'retry_payment');

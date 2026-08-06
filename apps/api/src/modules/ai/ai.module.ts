@@ -10,7 +10,9 @@ import { StockMovement } from '../ingredient/entities/stock-movement.entity';
 import { User } from '../user/entities/user.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Tab, Bill, Order, MenuItem, StockMovement, User])],
+  imports: [
+    TypeOrmModule.forFeature([Tab, Bill, Order, MenuItem, StockMovement, User]),
+  ],
   providers: [AiService],
   controllers: [AiController],
   exports: [AiService],

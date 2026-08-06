@@ -10,7 +10,10 @@ import { Bill } from '../bill/entities/bill.entity';
 import { OrderModule } from '../order/order.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([SyncQueue, Order, MenuItem, Tab, Bill]), OrderModule],
+  imports: [
+    TypeOrmModule.forFeature([SyncQueue, Order, MenuItem, Tab, Bill]),
+    OrderModule,
+  ],
   providers: [SyncService],
   controllers: [SyncController],
   exports: [SyncService],

@@ -24,7 +24,13 @@ export class AdvertisementService {
         { branch_id: IsNull(), is_active: true },
       ],
       order: { sort_order: 'ASC', created_at: 'DESC' },
-      select: { id: true, image_url: true, link_url: true, title: true, sort_order: true },
+      select: {
+        id: true,
+        image_url: true,
+        link_url: true,
+        title: true,
+        sort_order: true,
+      },
     });
   }
 

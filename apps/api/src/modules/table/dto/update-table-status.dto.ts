@@ -1,4 +1,3 @@
-
 import { IsEnum, IsNotEmpty } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { TableStatus } from '../../../common/shared';

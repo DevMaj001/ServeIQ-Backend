@@ -12,12 +12,26 @@ import { ApiTags, ApiOperation, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { CloudinaryService } from '../../cloudinary/cloudinary.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
-const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+const ALLOWED_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'application/pdf',
+];
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
-const fileFilter = (req: any, file: Express.Multer.File, cb: (error: Error | null, acceptFile: boolean) => void) => {
+const fileFilter = (
+  req: any,
+  file: Express.Multer.File,
+  cb: (error: Error | null, acceptFile: boolean) => void,
+) => {
   if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
-    cb(new BadRequestException('Invalid file type. Allowed: JPEG, PNG, WebP, PDF'), false);
+    cb(
+      new BadRequestException(
+        'Invalid file type. Allowed: JPEG, PNG, WebP, PDF',
+      ),
+      false,
+    );
     return;
   }
   cb(null, true);
@@ -38,7 +52,10 @@ export class UploadController {
     }),
   )
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Upload a file (image or PDF). Returns the file URL to use in other endpoints.' })
+  @ApiOperation({
+    summary:
+      'Upload a file (image or PDF). Returns the file URL to use in other endpoints.',
+  })
   @ApiBody({
     schema: {
       type: 'object',

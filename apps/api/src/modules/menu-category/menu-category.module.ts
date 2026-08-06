@@ -11,4 +11,3 @@ import { MenuCategory } from './entities/menu-category.entity';
   exports: [MenuCategoryService],
 })
 export class MenuCategoryModule {}
-

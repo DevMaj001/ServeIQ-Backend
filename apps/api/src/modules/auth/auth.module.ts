@@ -26,16 +26,12 @@ import { SubscriptionModule } from '../subscription/subscription.module';
       useFactory: (configService: ConfigService) => ({
         secret: configService.get('JWT_SECRET'),
         signOptions: {
-          expiresIn: (configService.get('JWT_EXPIRES_IN', '24h') as any),
+          expiresIn: configService.get('JWT_EXPIRES_IN', '24h'),
         },
       }),
     }),
   ],
-  providers: [
-    AuthService,
-    JwtStrategy,
-    AuditService,
-  ],
+  providers: [AuthService, JwtStrategy, AuditService],
   controllers: [AuthController],
   exports: [AuthService],
 })

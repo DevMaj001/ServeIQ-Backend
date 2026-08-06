@@ -10,7 +10,14 @@ import {
   Delete,
   Query,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiResponse, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiQuery,
+  ApiResponse,
+  ApiParam,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -62,10 +69,17 @@ export class UserController {
   @Get('waiters')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'List waiters (or all staff with ?role=all) in the branch' })
+  @ApiOperation({
+    summary: 'List waiters (or all staff with ?role=all) in the branch',
+  })
   @ApiQuery({ name: 'page', required: false, example: '1' })
   @ApiQuery({ name: 'per_page', required: false, example: '20' })
-  @ApiQuery({ name: 'role', required: false, example: 'all', description: 'Pass "all" to include supervisors' })
+  @ApiQuery({
+    name: 'role',
+    required: false,
+    example: 'all',
+    description: 'Pass "all" to include supervisors',
+  })
   @ApiResponse({ status: 200, description: 'List of staff.', type: [User] })
   async getWaiters(
     @Request() req: { user: { branchId: string } },
@@ -74,7 +88,11 @@ export class UserController {
     @Query('role') role?: string,
   ) {
     const pagination = getPaginationParams({ page, per_page });
-    const { data, total } = await this.userService.findAllWaiters(req.user.branchId, pagination, role);
+    const { data, total } = await this.userService.findAllWaiters(
+      req.user.branchId,
+      pagination,
+      role,
+    );
     return paginate(data, total, pagination);
   }
 
@@ -82,7 +100,10 @@ export class UserController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Reset staff PIN (Owner/Manager only) — works for waiters, supervisors, managers, and chefs' })
+  @ApiOperation({
+    summary:
+      'Reset staff PIN (Owner/Manager only) — works for waiters, supervisors, managers, and chefs',
+  })
   @ApiParam({ name: 'id', description: 'User UUID' })
   async resetWaiterPin(
     @Request() req: { user: { businessId: string } },
@@ -95,7 +116,9 @@ export class UserController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Update a user/waiter profile (Owner/Manager only)' })
+  @ApiOperation({
+    summary: 'Update a user/waiter profile (Owner/Manager only)',
+  })
   @ApiParam({ name: 'id', description: 'User UUID' })
   @ApiResponse({ status: 200, description: 'User updated.' })
   @ApiResponse({ status: 404, description: 'User not found.' })

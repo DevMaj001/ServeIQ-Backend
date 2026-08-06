@@ -7,9 +7,7 @@ import { Order } from '../order/entities/order.entity';
 import { PosTerminal } from '../pos/entities/pos-terminal.entity';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Tab, Bill, Order, PosTerminal]),
-  ],
+  imports: [TypeOrmModule.forFeature([Tab, Bill, Order, PosTerminal])],
   controllers: [PaymentController],
 })
 export class PaymentModule {}

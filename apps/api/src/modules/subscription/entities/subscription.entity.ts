@@ -1,4 +1,14 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, Index, Unique } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
+  Unique,
+} from 'typeorm';
 import { Branch } from '../../branch/entities/branch.entity';
 import { Plan } from './plan.entity';
 
@@ -31,7 +41,11 @@ export class Subscription {
   @JoinColumn({ name: 'plan_id' })
   plan: Plan;
 
-  @Column({ type: 'enum', enum: SubscriptionStatus, default: SubscriptionStatus.TRIALING })
+  @Column({
+    type: 'enum',
+    enum: SubscriptionStatus,
+    default: SubscriptionStatus.TRIALING,
+  })
   status: SubscriptionStatus;
 
   @Column({ type: 'timestamptz', nullable: true })

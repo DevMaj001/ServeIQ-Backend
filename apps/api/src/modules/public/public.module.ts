@@ -13,7 +13,14 @@ import { TrackingModule } from '../tracking/tracking.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Branch, MenuItem, Advertisement, Tab, Table, Order]),
+    TypeOrmModule.forFeature([
+      Branch,
+      MenuItem,
+      Advertisement,
+      Tab,
+      Table,
+      Order,
+    ]),
     TrackingModule,
   ],
   controllers: [PublicMenuController, CustomerController],

@@ -10,7 +10,10 @@ describe('BusinessService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BusinessService,
-        { provide: getRepositoryToken(Business), useValue: { findOne: jest.fn(), save: jest.fn(), find: jest.fn() } },
+        {
+          provide: getRepositoryToken(Business),
+          useValue: { findOne: jest.fn(), save: jest.fn(), find: jest.fn() },
+        },
       ],
     }).compile();
 

@@ -14,7 +14,12 @@ import { NotificationModule } from '../notification/notification.module';
 import { TrackingModule } from '../tracking/tracking.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Order, MenuItem, Tab, Department, AuditLog]), IngredientModule, NotificationModule, TrackingModule],
+  imports: [
+    TypeOrmModule.forFeature([Order, MenuItem, Tab, Department, AuditLog]),
+    IngredientModule,
+    NotificationModule,
+    TrackingModule,
+  ],
   providers: [OrderService, OrderScheduler, AuditService],
   controllers: [OrderController],
   exports: [OrderService],

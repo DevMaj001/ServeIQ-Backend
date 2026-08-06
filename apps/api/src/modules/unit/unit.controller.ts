@@ -1,5 +1,21 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Request } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -17,7 +33,14 @@ export class UnitController {
   constructor(private readonly unitService: UnitService) {}
 
   @Get()
-  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.WAITER, UserRole.CHEF, UserRole.CASHIER, UserRole.SUPERVISOR)
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.WAITER,
+    UserRole.CHEF,
+    UserRole.CASHIER,
+    UserRole.SUPERVISOR,
+  )
   @ApiOperation({ summary: 'Get all units for the branch' })
   @ApiResponse({ status: 200, description: 'List of units.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
@@ -26,7 +49,14 @@ export class UnitController {
   }
 
   @Get(':id')
-  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.WAITER, UserRole.CHEF, UserRole.CASHIER, UserRole.SUPERVISOR)
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.WAITER,
+    UserRole.CHEF,
+    UserRole.CASHIER,
+    UserRole.SUPERVISOR,
+  )
   @ApiOperation({ summary: 'Get a unit by ID' })
   @ApiParam({ name: 'id', description: 'Unit UUID' })
   @ApiResponse({ status: 200, description: 'Unit details.' })
@@ -36,8 +66,14 @@ export class UnitController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Create a new unit (Owner/Manager only). If name already exists, returns existing.' })
-  @ApiResponse({ status: 201, description: 'Unit created or existing returned.' })
+  @ApiOperation({
+    summary:
+      'Create a new unit (Owner/Manager only). If name already exists, returns existing.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Unit created or existing returned.',
+  })
   @ApiResponse({ status: 400, description: 'Validation error.' })
   async create(@Request() req: any, @Body() dto: CreateUnitDto) {
     return this.unitService.create({
@@ -51,7 +87,11 @@ export class UnitController {
   @ApiParam({ name: 'id', description: 'Unit UUID' })
   @ApiResponse({ status: 200, description: 'Unit updated.' })
   @ApiResponse({ status: 404, description: 'Unit not found.' })
-  async update(@Param('id') id: string, @Request() req: any, @Body() dto: UpdateUnitDto) {
+  async update(
+    @Param('id') id: string,
+    @Request() req: any,
+    @Body() dto: UpdateUnitDto,
+  ) {
     return this.unitService.update(id, req.user.branchId, dto);
   }
 
@@ -64,4 +104,3 @@ export class UnitController {
     return this.unitService.remove(id, req.user.branchId);
   }
 }
-

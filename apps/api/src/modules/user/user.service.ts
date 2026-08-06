@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -26,29 +32,43 @@ export class UserService {
     return this.userRepository.save(user);
   }
 
-  async createWaiter(dto: CreateWaiterDto, businessId: string): Promise<{ waiter: Partial<User>; pin: string }> {
+  async createWaiter(
+    dto: CreateWaiterDto,
+    businessId: string,
+  ): Promise<{ waiter: Partial<User>; pin: string }> {
     if (!businessId) {
       console.error('[UserService] businessId missing from request context');
-      throw new UnauthorizedException('Business ID is missing. Please re-login.');
+      throw new UnauthorizedException(
+        'Business ID is missing. Please re-login.',
+      );
     }
 
     try {
       // 1. Validate branch exists and belongs to this business
-      console.log(`[UserService] DEBUG: Creating waiter. Branch: ${dto.branchId}, Business: ${businessId}`);
-      
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      console.log(
+        `[UserService] DEBUG: Creating waiter. Branch: ${dto.branchId}, Business: ${businessId}`,
+      );
+
+      const uuidRegex =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(dto.branchId)) {
-        throw new BadRequestException(`Invalid branch ID format: ${dto.branchId}`);
+        throw new BadRequestException(
+          `Invalid branch ID format: ${dto.branchId}`,
+        );
       }
       if (!uuidRegex.test(businessId)) {
-        throw new BadRequestException(`Invalid business ID format: ${businessId}`);
+        throw new BadRequestException(
+          `Invalid business ID format: ${businessId}`,
+        );
       }
 
       const branch = await this.branchRepository.findOne({
         where: { id: dto.branchId, business_id: businessId },
       });
       if (!branch) {
-        throw new NotFoundException(`Branch not found or does not belong to your business`);
+        throw new NotFoundException(
+          `Branch not found or does not belong to your business`,
+        );
       }
 
       // 2. Generate a unique 4-digit PIN for this business
@@ -63,7 +83,11 @@ export class UserService {
           where: { business_id: businessId, is_active: true },
         });
         const pinTaken = await Promise.all(
-          existing.map((w) => (w.pin_hash ? bcrypt.compare(pin, w.pin_hash) : Promise.resolve(false))),
+          existing.map((w) =>
+            w.pin_hash
+              ? bcrypt.compare(pin, w.pin_hash)
+              : Promise.resolve(false),
+          ),
         );
         pinIsUnique = !pinTaken.some(Boolean);
       }
@@ -74,18 +98,24 @@ export class UserService {
       const targetRole = dto.role ?? UserRole.WAITER;
 
       // Generate a placeholder email if not supplied
-      const email = (dto.email && dto.email.trim() !== '') 
-        ? dto.email 
-        : `staff-${Date.now()}-${Math.floor(Math.random() * 1000)}@internal.serveiq`;
+      const email =
+        dto.email && dto.email.trim() !== ''
+          ? dto.email
+          : `staff-${Date.now()}-${Math.floor(Math.random() * 1000)}@internal.serveiq`;
 
       // Managers/chefs use the admin dashboard (email+password login).
       // Waiters/supervisors use PIN-based login on the POS app.
-      const needsPassword = targetRole === UserRole.MANAGER || targetRole === UserRole.CHEF;
-      const passwordHash = needsPassword ? pinHash : await bcrypt.hash(Math.random().toString(36), salt);
+      const needsPassword =
+        targetRole === UserRole.MANAGER || targetRole === UserRole.CHEF;
+      const passwordHash = needsPassword
+        ? pinHash
+        : await bcrypt.hash(Math.random().toString(36), salt);
 
       // Look up the PBAC Role entity for this user's role
       const roleName = targetRole.charAt(0).toUpperCase() + targetRole.slice(1);
-      const pbacRole = await this.roleRepository.findOne({ where: { name: roleName } });
+      const pbacRole = await this.roleRepository.findOne({
+        where: { name: roleName },
+      });
 
       const user = new User();
       Object.assign(user, {
@@ -105,17 +135,26 @@ export class UserService {
       const savedUser = await this.userRepository.save(user);
 
       const auditAction =
-        targetRole === UserRole.SUPERVISOR ? 'SUPERVISOR_CREATED' :
-        targetRole === UserRole.MANAGER ? 'MANAGER_CREATED' :
-        targetRole === UserRole.CHEF ? 'CHEF_CREATED' :
-        targetRole === UserRole.CASHIER ? 'CASHIER_CREATED' : 'WAITER_CREATED';
+        targetRole === UserRole.SUPERVISOR
+          ? 'SUPERVISOR_CREATED'
+          : targetRole === UserRole.MANAGER
+            ? 'MANAGER_CREATED'
+            : targetRole === UserRole.CHEF
+              ? 'CHEF_CREATED'
+              : targetRole === UserRole.CASHIER
+                ? 'CASHIER_CREATED'
+                : 'WAITER_CREATED';
       await this.auditService.log({
         branchId: dto.branchId,
         userId: savedUser.id,
         action: auditAction,
         entityType: 'User',
         entityId: savedUser.id,
-        payload: { fullName: savedUser.full_name, email: savedUser.email, role: savedUser.role },
+        payload: {
+          fullName: savedUser.full_name,
+          email: savedUser.email,
+          role: savedUser.role,
+        },
       });
 
       return {
@@ -133,44 +172,85 @@ export class UserService {
       };
     } catch (err) {
       console.error('[UserService] Error creating waiter:', err);
-      
+
       // If it's already a Nest exception, just re-throw it
-      if (err instanceof NotFoundException || err instanceof BadRequestException || err instanceof UnauthorizedException || err instanceof ConflictException) {
+      if (
+        err instanceof NotFoundException ||
+        err instanceof BadRequestException ||
+        err instanceof UnauthorizedException ||
+        err instanceof ConflictException
+      ) {
         throw err;
       }
 
       // Handle potential duplicate email or other DB constraints
       if (err.code === '23505') {
-        throw new ConflictException('A staff member with this email or identity already exists.');
+        throw new ConflictException(
+          'A staff member with this email or identity already exists.',
+        );
       }
-      
+
       // For any other DB error, wrap it in a BadRequestException or re-throw
       throw new BadRequestException('Failed to create user');
     }
   }
 
-  async findAllWaiters(branchId: string, pagination?: { page: number; per_page: number }, roleFilter?: string) {
+  async findAllWaiters(
+    branchId: string,
+    pagination?: { page: number; per_page: number },
+    roleFilter?: string,
+  ) {
     const where: any = { branch_id: branchId };
     if (roleFilter === 'all') {
-      where.role = In([UserRole.WAITER, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.CHEF, UserRole.CASHIER]);
+      where.role = In([
+        UserRole.WAITER,
+        UserRole.SUPERVISOR,
+        UserRole.MANAGER,
+        UserRole.CHEF,
+        UserRole.CASHIER,
+      ]);
     } else {
       where.role = UserRole.WAITER;
     }
-    const skip = pagination ? (pagination.page - 1) * pagination.per_page : undefined;
+    const skip = pagination
+      ? (pagination.page - 1) * pagination.per_page
+      : undefined;
     const take = pagination ? pagination.per_page : undefined;
 
     const [data, total] = await this.userRepository.findAndCount({
       where,
       skip,
       take,
-      select: { id: true, full_name: true, email: true, phone: true, avatar_url: true, role: true, is_active: true, created_at: true },
+      select: {
+        id: true,
+        full_name: true,
+        email: true,
+        phone: true,
+        avatar_url: true,
+        role: true,
+        is_active: true,
+        created_at: true,
+      },
     });
     return { data, total };
   }
 
-  async resetWaiterPin(userId: string, businessId: string): Promise<{ pin: string }> {
+  async resetWaiterPin(
+    userId: string,
+    businessId: string,
+  ): Promise<{ pin: string }> {
     const user = await this.userRepository.findOne({
-      where: { id: userId, business_id: businessId, role: In([UserRole.WAITER, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.CHEF, UserRole.CASHIER]) },
+      where: {
+        id: userId,
+        business_id: businessId,
+        role: In([
+          UserRole.WAITER,
+          UserRole.SUPERVISOR,
+          UserRole.MANAGER,
+          UserRole.CHEF,
+          UserRole.CASHIER,
+        ]),
+      },
     });
     if (!user) throw new NotFoundException('Staff member not found');
 
@@ -264,7 +344,10 @@ export class UserService {
     const user = await this.userRepository.findOne({
       where: { id, business_id: businessId },
     });
-    if (!user) throw new NotFoundException('User not found or does not belong to your business');
+    if (!user)
+      throw new NotFoundException(
+        'User not found or does not belong to your business',
+      );
     user.is_active = false;
     await this.userRepository.save(user);
 
@@ -285,9 +368,13 @@ export class UserService {
       where: { id, business_id: businessId },
     });
     if (!user) {
-      const existsElsewhere = await this.userRepository.findOne({ where: { id } });
+      const existsElsewhere = await this.userRepository.findOne({
+        where: { id },
+      });
       if (existsElsewhere) {
-        throw new NotFoundException('User exists but belongs to a different business');
+        throw new NotFoundException(
+          'User exists but belongs to a different business',
+        );
       }
       throw new NotFoundException('User not found');
     }
@@ -298,14 +385,19 @@ export class UserService {
         where: { business_id: businessId, role: UserRole.OWNER },
       });
       if (ownerCount <= 1) {
-        throw new BadRequestException('Cannot delete the last owner of this business');
+        throw new BadRequestException(
+          'Cannot delete the last owner of this business',
+        );
       }
     }
 
     await this.auditService.log({
       branchId: user.branch_id,
       userId: user.id,
-      action: user.role === UserRole.SUPERVISOR ? 'SUPERVISOR_DELETED' : 'USER_DELETED',
+      action:
+        user.role === UserRole.SUPERVISOR
+          ? 'SUPERVISOR_DELETED'
+          : 'USER_DELETED',
       entityType: 'User',
       entityId: user.id,
       payload: { fullName: user.full_name, email: user.email, role: user.role },

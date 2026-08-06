@@ -46,4 +46,3 @@ export class UnitService {
     return { deleted: true };
   }
 }
-

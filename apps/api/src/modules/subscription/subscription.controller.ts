@@ -1,5 +1,17 @@
-import { Controller, Get, Post, Body, UseGuards, Request } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { SubscriptionService } from './subscription.service';
 import { InitializeSubscriptionDto } from './dto/initialize-subscription.dto';
 import { AdminGrantDto } from './dto/admin-grant.dto';
@@ -17,10 +29,18 @@ export class SubscriptionController {
   @Post('initialize')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Initialize a Paystack transaction for a subscription plan' })
-  @ApiResponse({ status: 200, description: 'Returns authorization_url for Paystack redirect' })
+  @ApiOperation({
+    summary: 'Initialize a Paystack transaction for a subscription plan',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns authorization_url for Paystack redirect',
+  })
   @ApiResponse({ status: 404, description: 'Plan not found' })
-  async initialize(@Request() req: any, @Body() dto: InitializeSubscriptionDto) {
+  async initialize(
+    @Request() req: any,
+    @Body() dto: InitializeSubscriptionDto,
+  ) {
     return this.subscriptionService.initialize(req.user.branchId, dto.plan_id);
   }
 
@@ -36,8 +56,13 @@ export class SubscriptionController {
   @Get('current')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Get current subscription status for the authenticated branch' })
-  @ApiResponse({ status: 200, description: 'Subscription details with plan and timestamps' })
+  @ApiOperation({
+    summary: 'Get current subscription status for the authenticated branch',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Subscription details with plan and timestamps',
+  })
   @ApiResponse({ status: 404, description: 'No subscription found' })
   async getCurrent(@Request() req: any) {
     return this.subscriptionService.getCurrent(req.user.branchId);
@@ -49,7 +74,10 @@ export class SubscriptionController {
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Cancel subscription (Owner only)' })
   @ApiResponse({ status: 200, description: 'Subscription marked as canceled' })
-  @ApiResponse({ status: 400, description: 'Subscription is not eligible for cancellation' })
+  @ApiResponse({
+    status: 400,
+    description: 'Subscription is not eligible for cancellation',
+  })
   async cancel(@Request() req: any) {
     return this.subscriptionService.cancel(req.user.branchId);
   }
@@ -58,7 +86,9 @@ export class SubscriptionController {
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions(PERMISSIONS.MANAGE_SUBSCRIPTION)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Manually grant or extend a subscription (superadmin only)' })
+  @ApiOperation({
+    summary: 'Manually grant or extend a subscription (superadmin only)',
+  })
   @ApiResponse({ status: 200, description: 'Subscription granted or extended' })
   async adminGrant(@Request() req: any, @Body() dto: AdminGrantDto) {
     return this.subscriptionService.adminGrant(dto);
@@ -68,7 +98,9 @@ export class SubscriptionController {
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions(PERMISSIONS.MANAGE_SUBSCRIPTION)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Extend grace period for a branch subscription (superadmin only)' })
+  @ApiOperation({
+    summary: 'Extend grace period for a branch subscription (superadmin only)',
+  })
   @ApiResponse({ status: 200, description: 'Grace period extended' })
   @ApiResponse({ status: 404, description: 'Subscription not found' })
   async extendGrace(@Request() req: any, @Body() dto: AdminExtendGraceDto) {

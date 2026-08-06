@@ -8,9 +8,7 @@ import { Order } from '../order/entities/order.entity';
 import { Tab } from '../tab/entities/tab.entity';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([StockMovement, MenuItem, Order, Tab]),
-  ],
+  imports: [TypeOrmModule.forFeature([StockMovement, MenuItem, Order, Tab])],
   controllers: [IngredientController],
   providers: [IngredientService],
   exports: [IngredientService],

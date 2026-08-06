@@ -526,7 +526,7 @@ export class AuthService {
       });
     }
 
-    let subscription = await this.dataSource
+    const subscription = await this.dataSource
       .getRepository(Subscription)
       .findOne({
         where: { branch_id: branch.id },

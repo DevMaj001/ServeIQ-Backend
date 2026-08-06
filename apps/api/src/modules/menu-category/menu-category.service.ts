@@ -46,4 +46,3 @@ export class MenuCategoryService {
     return { deleted: true };
   }
 }
-

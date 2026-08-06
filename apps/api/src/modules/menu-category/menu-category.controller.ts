@@ -1,5 +1,21 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Request } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -17,7 +33,14 @@ export class MenuCategoryController {
   constructor(private readonly categoryService: MenuCategoryService) {}
 
   @Get()
-  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.WAITER, UserRole.CHEF, UserRole.CASHIER, UserRole.SUPERVISOR)
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.WAITER,
+    UserRole.CHEF,
+    UserRole.CASHIER,
+    UserRole.SUPERVISOR,
+  )
   @ApiOperation({ summary: 'Get all menu categories for the branch' })
   @ApiResponse({ status: 200, description: 'List of menu categories.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
@@ -26,7 +49,14 @@ export class MenuCategoryController {
   }
 
   @Get(':id')
-  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.WAITER, UserRole.CHEF, UserRole.CASHIER, UserRole.SUPERVISOR)
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.WAITER,
+    UserRole.CHEF,
+    UserRole.CASHIER,
+    UserRole.SUPERVISOR,
+  )
   @ApiOperation({ summary: 'Get a menu category by ID' })
   @ApiParam({ name: 'id', description: 'Menu category UUID' })
   @ApiResponse({ status: 200, description: 'Menu category details.' })
@@ -51,7 +81,11 @@ export class MenuCategoryController {
   @ApiParam({ name: 'id', description: 'Menu category UUID' })
   @ApiResponse({ status: 200, description: 'Menu category updated.' })
   @ApiResponse({ status: 404, description: 'Menu category not found.' })
-  async update(@Param('id') id: string, @Request() req: any, @Body() dto: UpdateMenuCategoryDto) {
+  async update(
+    @Param('id') id: string,
+    @Request() req: any,
+    @Body() dto: UpdateMenuCategoryDto,
+  ) {
     return this.categoryService.update(id, req.user.branchId, dto);
   }
 
@@ -64,4 +98,3 @@ export class MenuCategoryController {
     return this.categoryService.remove(id, req.user.branchId);
   }
 }
-

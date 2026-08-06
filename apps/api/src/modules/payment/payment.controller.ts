@@ -8,7 +8,13 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBody } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiQuery,
+  ApiBody,
+} from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -33,7 +39,10 @@ export class PaymentController {
 
   @Post('initialize')
   @Throttle({ default: { limit: 10, ttl: 60000 } })
-  @ApiOperation({ summary: 'Get payment instructions for a self-service tab (no auth, tracking code required)' })
+  @ApiOperation({
+    summary:
+      'Get payment instructions for a self-service tab (no auth, tracking code required)',
+  })
   @ApiBody({
     schema: {
       type: 'object',
@@ -54,8 +63,10 @@ export class PaymentController {
 
     const tab = await this.tabRepo.findOne({ where: { id: body.tab_id } });
     if (!tab) throw new NotFoundException('Tab not found');
-    if (tab.tracking_code !== body.tracking_code) throw new ForbiddenException('Invalid tracking code');
-    if (tab.status !== 'open' && tab.status !== 'billed') throw new BadRequestException('Tab is not payable');
+    if (tab.tracking_code !== body.tracking_code)
+      throw new ForbiddenException('Invalid tracking code');
+    if (tab.status !== 'open' && tab.status !== 'billed')
+      throw new BadRequestException('Tab is not payable');
 
     const orders = await this.orderRepo.find({ where: { tab_id: tab.id } });
     if (orders.length === 0) throw new BadRequestException('Tab has no orders');
@@ -63,7 +74,9 @@ export class PaymentController {
     const subtotalKobo = orders.reduce((sum, o) => sum + o.subtotal_kobo, 0);
     const serviceChargeKobo = Math.round(subtotalKobo * 0.1);
 
-    let bill = await this.billRepo.findOne({ where: { tab_id: tab.id, payment_status: 'pending' } });
+    let bill = await this.billRepo.findOne({
+      where: { tab_id: tab.id, payment_status: 'pending' },
+    });
     if (!bill) {
       bill = this.billRepo.create({
         tab_id: tab.id,
@@ -84,7 +97,7 @@ export class PaymentController {
 
     const paymentMethods: any[] = [];
 
-    const transferTerminal = activeTerminals.find(t => t.account_number);
+    const transferTerminal = activeTerminals.find((t) => t.account_number);
     if (transferTerminal) {
       paymentMethods.push({
         type: 'transfer',
@@ -96,7 +109,7 @@ export class PaymentController {
     if (activeTerminals.length > 0) {
       paymentMethods.push({
         type: 'pos',
-        terminals: activeTerminals.map(t => ({ id: t.id, label: t.label })),
+        terminals: activeTerminals.map((t) => ({ id: t.id, label: t.label })),
       });
     }
 
@@ -120,13 +133,18 @@ export class PaymentController {
     @Query('tab_id') tabId: string,
     @Query('tracking_code') trackingCode: string,
   ) {
-    if (!tabId || !trackingCode) throw new BadRequestException('tab_id and tracking_code are required');
+    if (!tabId || !trackingCode)
+      throw new BadRequestException('tab_id and tracking_code are required');
 
     const tab = await this.tabRepo.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
-    if (tab.tracking_code !== trackingCode) throw new ForbiddenException('Invalid tracking code');
+    if (tab.tracking_code !== trackingCode)
+      throw new ForbiddenException('Invalid tracking code');
 
-    const bill = await this.billRepo.findOne({ where: { tab_id: tabId }, order: { created_at: 'DESC' } });
+    const bill = await this.billRepo.findOne({
+      where: { tab_id: tabId },
+      order: { created_at: 'DESC' },
+    });
 
     return {
       tab_id: tab.id,

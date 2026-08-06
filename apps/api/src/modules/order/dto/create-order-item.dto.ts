@@ -1,4 +1,12 @@
-import { IsNotEmpty, IsString, IsNumber, IsOptional, IsArray, IsEnum, ValidateNested } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsString,
+  IsNumber,
+  IsOptional,
+  IsArray,
+  IsEnum,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { FulfillmentType } from '../../../common/shared';
@@ -24,7 +32,10 @@ export class ModifierSelectionDto {
 }
 
 export class CreateOrderItemDto {
-  @ApiProperty({ example: 'menu-item-uuid-123', description: 'UUID of the menu item' })
+  @ApiProperty({
+    example: 'menu-item-uuid-123',
+    description: 'UUID of the menu item',
+  })
   @IsNotEmpty()
   @IsString()
   menu_item_id: string;
@@ -34,7 +45,11 @@ export class CreateOrderItemDto {
   @IsNumber()
   quantity: number;
 
-  @ApiProperty({ example: 'No onions', description: 'Special instructions for this item', required: false })
+  @ApiProperty({
+    example: 'No onions',
+    description: 'Special instructions for this item',
+    required: false,
+  })
   @IsOptional()
   @IsString()
   notes?: string;
@@ -46,7 +61,13 @@ export class CreateOrderItemDto {
   @Type(() => ModifierSelectionDto)
   modifiers?: ModifierSelectionDto[];
 
-  @ApiProperty({ example: 'pack', enum: FulfillmentType, required: false, description: 'Override fulfillment type per item. Defaults based on tab type (pack for takeaway, serve for dine-in).' })
+  @ApiProperty({
+    example: 'pack',
+    enum: FulfillmentType,
+    required: false,
+    description:
+      'Override fulfillment type per item. Defaults based on tab type (pack for takeaway, serve for dine-in).',
+  })
   @IsOptional()
   @IsEnum(FulfillmentType)
   fulfillment_type?: FulfillmentType;

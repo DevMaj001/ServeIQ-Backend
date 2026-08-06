@@ -1,10 +1,28 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards, Request } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  Query,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
 import { DepartmentService } from './department.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../../common/shared';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+  ApiResponse,
+  ApiParam,
+} from '@nestjs/swagger';
 
 @ApiTags('Departments')
 @ApiBearerAuth('access-token')
@@ -14,13 +32,28 @@ export class DepartmentController {
   constructor(private readonly departmentService: DepartmentService) {}
 
   @Get()
-  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.WAITER, UserRole.CHEF, UserRole.CASHIER)
-  @ApiOperation({ summary: 'List departments (Owner/Manager/Supervisor/Waiter/Chef/Cashier)' })
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.WAITER,
+    UserRole.CHEF,
+    UserRole.CASHIER,
+  )
+  @ApiOperation({
+    summary: 'List departments (Owner/Manager/Supervisor/Waiter/Chef/Cashier)',
+  })
   @ApiQuery({ name: 'include_inactive', required: false, type: Boolean })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
-  async findAll(@Request() req: any, @Query('include_inactive') includeInactive?: string) {
-    return this.departmentService.findAll(req.user.branchId, includeInactive === 'true');
+  async findAll(
+    @Request() req: any,
+    @Query('include_inactive') includeInactive?: string,
+  ) {
+    return this.departmentService.findAll(
+      req.user.branchId,
+      includeInactive === 'true',
+    );
   }
 
   @Post()
@@ -38,7 +71,10 @@ export class DepartmentController {
   @ApiParam({ name: 'id', description: 'Department UUID' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
-  async update(@Param('id') id: string, @Body() data: { name?: string; is_active?: boolean }) {
+  async update(
+    @Param('id') id: string,
+    @Body() data: { name?: string; is_active?: boolean },
+  ) {
     return this.departmentService.update(id, data);
   }
 

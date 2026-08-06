@@ -1,17 +1,25 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateBaseTables1782000000000 implements MigrationInterface {
-    name = 'CreateBaseTables1782000000000'
+  name = 'CreateBaseTables1782000000000';
 
-    public async up(queryRunner: QueryRunner): Promise<void> {
-        // Create enum types (safe — IF NOT EXISTS)
-        await queryRunner.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'businesses_type_enum') THEN CREATE TYPE "public"."businesses_type_enum" AS ENUM('bar', 'lounge', 'restaurant', 'club', 'cafe'); END IF; END $$`);
-        await queryRunner.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'tables_status_enum') THEN CREATE TYPE "public"."tables_status_enum" AS ENUM('available', 'occupied', 'reserved'); END IF; END $$`);
-        await queryRunner.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'tabs_status_enum') THEN CREATE TYPE "public"."tabs_status_enum" AS ENUM('open', 'billed', 'paid', 'voided'); END IF; END $$`);
-        await queryRunner.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'bills_payment_method_enum') THEN CREATE TYPE "public"."bills_payment_method_enum" AS ENUM('cash', 'transfer', 'pos', 'card'); END IF; END $$`);
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    // Create enum types (safe — IF NOT EXISTS)
+    await queryRunner.query(
+      `DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'businesses_type_enum') THEN CREATE TYPE "public"."businesses_type_enum" AS ENUM('bar', 'lounge', 'restaurant', 'club', 'cafe'); END IF; END $$`,
+    );
+    await queryRunner.query(
+      `DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'tables_status_enum') THEN CREATE TYPE "public"."tables_status_enum" AS ENUM('available', 'occupied', 'reserved'); END IF; END $$`,
+    );
+    await queryRunner.query(
+      `DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'tabs_status_enum') THEN CREATE TYPE "public"."tabs_status_enum" AS ENUM('open', 'billed', 'paid', 'voided'); END IF; END $$`,
+    );
+    await queryRunner.query(
+      `DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'bills_payment_method_enum') THEN CREATE TYPE "public"."bills_payment_method_enum" AS ENUM('cash', 'transfer', 'pos', 'card'); END IF; END $$`,
+    );
 
-        // businesses
-        await queryRunner.query(`CREATE TABLE IF NOT EXISTS "businesses" (
+    // businesses
+    await queryRunner.query(`CREATE TABLE IF NOT EXISTS "businesses" (
             "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
             "name" character varying NOT NULL,
             "slug" character varying NOT NULL,
@@ -36,8 +44,8 @@ export class CreateBaseTables1782000000000 implements MigrationInterface {
             CONSTRAINT "UQ_businesses_slug" UNIQUE ("slug")
         )`);
 
-        // branches
-        await queryRunner.query(`CREATE TABLE IF NOT EXISTS "branches" (
+    // branches
+    await queryRunner.query(`CREATE TABLE IF NOT EXISTS "branches" (
             "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
             "business_id" uuid NOT NULL,
             "name" character varying NOT NULL,
@@ -50,10 +58,12 @@ export class CreateBaseTables1782000000000 implements MigrationInterface {
             "deleted_at" TIMESTAMP,
             CONSTRAINT "PK_branches" PRIMARY KEY ("id")
         )`);
-        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_branches_business_id" ON "branches" ("business_id")`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_branches_business_id" ON "branches" ("business_id")`,
+    );
 
-        // users
-        await queryRunner.query(`CREATE TABLE IF NOT EXISTS "users" (
+    // users
+    await queryRunner.query(`CREATE TABLE IF NOT EXISTS "users" (
             "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
             "business_id" uuid NOT NULL,
             "branch_id" uuid NOT NULL,
@@ -75,12 +85,18 @@ export class CreateBaseTables1782000000000 implements MigrationInterface {
             CONSTRAINT "PK_users" PRIMARY KEY ("id"),
             CONSTRAINT "UQ_users_email" UNIQUE ("email")
         )`);
-        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_users_business_id" ON "users" ("business_id")`);
-        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_users_branch_id" ON "users" ("branch_id")`);
-        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_users_role_id" ON "users" ("role_id")`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_users_business_id" ON "users" ("business_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_users_branch_id" ON "users" ("branch_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_users_role_id" ON "users" ("role_id")`,
+    );
 
-        // tables
-        await queryRunner.query(`CREATE TABLE IF NOT EXISTS "tables" (
+    // tables
+    await queryRunner.query(`CREATE TABLE IF NOT EXISTS "tables" (
             "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
             "branch_id" uuid NOT NULL,
             "table_number" character varying NOT NULL,
@@ -93,10 +109,12 @@ export class CreateBaseTables1782000000000 implements MigrationInterface {
             CONSTRAINT "PK_tables" PRIMARY KEY ("id"),
             CONSTRAINT "UQ_tables_branch_table" UNIQUE ("branch_id", "table_number")
         )`);
-        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_tables_branch_id" ON "tables" ("branch_id")`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_tables_branch_id" ON "tables" ("branch_id")`,
+    );
 
-        // tabs
-        await queryRunner.query(`CREATE TABLE IF NOT EXISTS "tabs" (
+    // tabs
+    await queryRunner.query(`CREATE TABLE IF NOT EXISTS "tabs" (
             "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
             "branch_id" uuid NOT NULL,
             "table_id" uuid NOT NULL,
@@ -115,13 +133,21 @@ export class CreateBaseTables1782000000000 implements MigrationInterface {
             CONSTRAINT "PK_tabs" PRIMARY KEY ("id"),
             CONSTRAINT "UQ_tabs_tab_number" UNIQUE ("tab_number")
         )`);
-        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_tabs_branch_id" ON "tabs" ("branch_id")`);
-        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_tabs_table_id" ON "tabs" ("table_id")`);
-        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_tabs_waiter_id" ON "tabs" ("waiter_id")`);
-        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_tabs_shift_id" ON "tabs" ("shift_id")`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_tabs_branch_id" ON "tabs" ("branch_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_tabs_table_id" ON "tabs" ("table_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_tabs_waiter_id" ON "tabs" ("waiter_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_tabs_shift_id" ON "tabs" ("shift_id")`,
+    );
 
-        // orders
-        await queryRunner.query(`CREATE TABLE IF NOT EXISTS "orders" (
+    // orders
+    await queryRunner.query(`CREATE TABLE IF NOT EXISTS "orders" (
             "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
             "tab_id" uuid NOT NULL,
             "menu_item_id" uuid NOT NULL,
@@ -153,15 +179,27 @@ export class CreateBaseTables1782000000000 implements MigrationInterface {
             "updated_at" TIMESTAMP NOT NULL DEFAULT now(),
             CONSTRAINT "PK_orders" PRIMARY KEY ("id")
         )`);
-        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_orders_tab_id" ON "orders" ("tab_id")`);
-        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_orders_menu_item_id" ON "orders" ("menu_item_id")`);
-        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_orders_assigned_department" ON "orders" ("assigned_department")`);
-        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_orders_order_status" ON "orders" ("order_status")`);
-        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_orders_timer_ends_at" ON "orders" ("timer_ends_at")`);
-        await queryRunner.query(`CREATE UNIQUE INDEX IF NOT EXISTS "IDX_orders_tracking_code" ON "orders" ("tracking_code")`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_orders_tab_id" ON "orders" ("tab_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_orders_menu_item_id" ON "orders" ("menu_item_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_orders_assigned_department" ON "orders" ("assigned_department")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_orders_order_status" ON "orders" ("order_status")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_orders_timer_ends_at" ON "orders" ("timer_ends_at")`,
+    );
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "IDX_orders_tracking_code" ON "orders" ("tracking_code")`,
+    );
 
-        // bills
-        await queryRunner.query(`CREATE TABLE IF NOT EXISTS "bills" (
+    // bills
+    await queryRunner.query(`CREATE TABLE IF NOT EXISTS "bills" (
             "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
             "tab_id" uuid NOT NULL,
             "payment_status" character varying(20) NOT NULL DEFAULT 'pending',
@@ -184,11 +222,15 @@ export class CreateBaseTables1782000000000 implements MigrationInterface {
             "updated_at" TIMESTAMP NOT NULL DEFAULT now(),
             CONSTRAINT "PK_bills" PRIMARY KEY ("id")
         )`);
-        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_bills_tab_id" ON "bills" ("tab_id")`);
-        await queryRunner.query(`CREATE UNIQUE INDEX IF NOT EXISTS "UQ_bills_idempotency_key" ON "bills" ("idempotency_key")`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_bills_tab_id" ON "bills" ("tab_id")`,
+    );
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "UQ_bills_idempotency_key" ON "bills" ("idempotency_key")`,
+    );
 
-        // menu_items
-        await queryRunner.query(`CREATE TABLE IF NOT EXISTS "menu_items" (
+    // menu_items
+    await queryRunner.query(`CREATE TABLE IF NOT EXISTS "menu_items" (
             "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
             "branch_id" uuid NOT NULL,
             "name" character varying NOT NULL,
@@ -210,27 +252,41 @@ export class CreateBaseTables1782000000000 implements MigrationInterface {
             "deleted_at" TIMESTAMP,
             CONSTRAINT "PK_menu_items" PRIMARY KEY ("id")
         )`);
-        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_menu_items_branch_id" ON "menu_items" ("branch_id")`);
-        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_menu_items_supplier_id" ON "menu_items" ("supplier_id")`);
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_menu_items_branch_id" ON "menu_items" ("branch_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_menu_items_supplier_id" ON "menu_items" ("supplier_id")`,
+    );
 
-        // FK constraints (safe — IF NOT EXISTS style via DO block)
-        await queryRunner.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_branches_business_id') THEN ALTER TABLE "branches" ADD CONSTRAINT "FK_branches_business_id" FOREIGN KEY ("business_id") REFERENCES "businesses"("id") ON DELETE CASCADE; END IF; END $$`);
-        await queryRunner.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_users_business_id') THEN ALTER TABLE "users" ADD CONSTRAINT "FK_users_business_id" FOREIGN KEY ("business_id") REFERENCES "businesses"("id") ON DELETE CASCADE; END IF; END $$`);
-    }
+    // FK constraints (safe — IF NOT EXISTS style via DO block)
+    await queryRunner.query(
+      `DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_branches_business_id') THEN ALTER TABLE "branches" ADD CONSTRAINT "FK_branches_business_id" FOREIGN KEY ("business_id") REFERENCES "businesses"("id") ON DELETE CASCADE; END IF; END $$`,
+    );
+    await queryRunner.query(
+      `DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'FK_users_business_id') THEN ALTER TABLE "users" ADD CONSTRAINT "FK_users_business_id" FOREIGN KEY ("business_id") REFERENCES "businesses"("id") ON DELETE CASCADE; END IF; END $$`,
+    );
+  }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`DROP TABLE IF EXISTS "menu_items" CASCADE`);
-        await queryRunner.query(`DROP TABLE IF EXISTS "bills" CASCADE`);
-        await queryRunner.query(`DROP TABLE IF EXISTS "orders" CASCADE`);
-        await queryRunner.query(`DROP TABLE IF EXISTS "tabs" CASCADE`);
-        await queryRunner.query(`DROP TABLE IF EXISTS "tables" CASCADE`);
-        await queryRunner.query(`DROP TABLE IF EXISTS "users" CASCADE`);
-        await queryRunner.query(`DROP TABLE IF EXISTS "branches" CASCADE`);
-        await queryRunner.query(`DROP TABLE IF EXISTS "businesses" CASCADE`);
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`DROP TABLE IF EXISTS "menu_items" CASCADE`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "bills" CASCADE`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "orders" CASCADE`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "tabs" CASCADE`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "tables" CASCADE`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "users" CASCADE`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "branches" CASCADE`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "businesses" CASCADE`);
 
-        await queryRunner.query(`DROP TYPE IF EXISTS "public"."bills_payment_method_enum"`);
-        await queryRunner.query(`DROP TYPE IF EXISTS "public"."tabs_status_enum"`);
-        await queryRunner.query(`DROP TYPE IF EXISTS "public"."tables_status_enum"`);
-        await queryRunner.query(`DROP TYPE IF EXISTS "public"."businesses_type_enum"`);
-    }
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "public"."bills_payment_method_enum"`,
+    );
+    await queryRunner.query(`DROP TYPE IF EXISTS "public"."tabs_status_enum"`);
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "public"."tables_status_enum"`,
+    );
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "public"."businesses_type_enum"`,
+    );
+  }
 }

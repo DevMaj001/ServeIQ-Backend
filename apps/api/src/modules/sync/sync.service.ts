@@ -25,22 +25,32 @@ export class SyncService {
     private dataSource: DataSource,
   ) {}
 
-  async queueOperation(branchId: string, entityType: string, operation: string, payload: any, clientKey?: string) {
+  async queueOperation(
+    branchId: string,
+    entityType: string,
+    operation: string,
+    payload: any,
+    clientKey?: string,
+  ) {
     if (clientKey) {
-      const existing = await this.syncQueueRepo.findOne({ where: { client_idempotency_key: clientKey } });
+      const existing = await this.syncQueueRepo.findOne({
+        where: { client_idempotency_key: clientKey },
+      });
       if (existing) {
         return existing;
       }
     }
 
-    return this.syncQueueRepo.save(this.syncQueueRepo.create({
-      branch_id: branchId,
-      entity_type: entityType,
-      operation,
-      entity_id: payload.id,
-      payload,
-      client_idempotency_key: clientKey,
-    }));
+    return this.syncQueueRepo.save(
+      this.syncQueueRepo.create({
+        branch_id: branchId,
+        entity_type: entityType,
+        operation,
+        entity_id: payload.id,
+        payload,
+        client_idempotency_key: clientKey,
+      }),
+    );
   }
 
   async getPending(branchId: string) {
@@ -77,20 +87,24 @@ export class SyncService {
     return this.dataSource.transaction(async (manager) => {
       switch (`${entity_type}.${operation}`) {
         case 'order.create': {
-          const existing = await manager.getRepository(Order).findOne({ where: { id: payload.id } });
+          const existing = await manager
+            .getRepository(Order)
+            .findOne({ where: { id: payload.id } });
           if (existing) {
             existing.quantity = payload.quantity;
             existing.notes = payload.notes ?? existing.notes;
             await manager.getRepository(Order).save(existing);
           } else {
-            await manager.getRepository(Order).save(
-              manager.getRepository(Order).create(payload),
-            );
+            await manager
+              .getRepository(Order)
+              .save(manager.getRepository(Order).create(payload));
           }
           break;
         }
         default:
-          this.logger.warn(`Unknown sync operation: ${entity_type}.${operation}`);
+          this.logger.warn(
+            `Unknown sync operation: ${entity_type}.${operation}`,
+          );
       }
 
       entry.status = 'processed';
@@ -100,16 +114,26 @@ export class SyncService {
   }
 
   async getSyncStatus(branchId: string) {
-    const pending = await this.syncQueueRepo.count({ where: { branch_id: branchId, status: 'pending' } });
-    const failed = await this.syncQueueRepo.count({ where: { branch_id: branchId, status: 'failed' } });
-    const processed = await this.syncQueueRepo.count({ where: { branch_id: branchId, status: 'processed' } });
+    const pending = await this.syncQueueRepo.count({
+      where: { branch_id: branchId, status: 'pending' },
+    });
+    const failed = await this.syncQueueRepo.count({
+      where: { branch_id: branchId, status: 'failed' },
+    });
+    const processed = await this.syncQueueRepo.count({
+      where: { branch_id: branchId, status: 'processed' },
+    });
 
     return { pending, failed, processed };
   }
 
   async getFullSyncData(branchId: string) {
-    const menuItems = await this.menuItemRepo.find({ where: { branch_id: branchId } });
-    const openTabs = await this.tabRepo.find({ where: { branch_id: branchId, status: 'open' } });
+    const menuItems = await this.menuItemRepo.find({
+      where: { branch_id: branchId },
+    });
+    const openTabs = await this.tabRepo.find({
+      where: { branch_id: branchId, status: 'open' },
+    });
     return {
       menus: menuItems,
       tabs: openTabs,

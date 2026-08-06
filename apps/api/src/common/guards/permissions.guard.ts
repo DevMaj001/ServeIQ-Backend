@@ -1,4 +1,9 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -18,10 +23,9 @@ export class PermissionsGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const requiredPermissions = this.reflector.getAllAndOverride<PermissionCode[]>(PERMISSIONS_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    const requiredPermissions = this.reflector.getAllAndOverride<
+      PermissionCode[]
+    >(PERMISSIONS_KEY, [context.getHandler(), context.getClass()]);
     if (!requiredPermissions || requiredPermissions.length === 0) {
       return true;
     }
@@ -34,7 +38,9 @@ export class PermissionsGuard implements CanActivate {
 
     // User must have role_id — legacy fallback removed
     if (!user.role_id) {
-      throw new ForbiddenException('User role not linked to permission system. Contact admin to update your account.');
+      throw new ForbiddenException(
+        'User role not linked to permission system. Contact admin to update your account.',
+      );
     }
 
     const role = await this.roleRepo.findOne({
@@ -43,8 +49,8 @@ export class PermissionsGuard implements CanActivate {
     });
     if (!role) throw new ForbiddenException('Role not found');
 
-    const userPermissionCodes = new Set(role.permissions.map(p => p.code));
-    const hasAll = requiredPermissions.every(p => userPermissionCodes.has(p));
+    const userPermissionCodes = new Set(role.permissions.map((p) => p.code));
+    const hasAll = requiredPermissions.every((p) => userPermissionCodes.has(p));
     if (hasAll) return true;
     throw new ForbiddenException('Insufficient permissions');
   }

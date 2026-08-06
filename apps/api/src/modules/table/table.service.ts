@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+  Inject,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Table, TableStatus } from './entities/table.entity';
@@ -21,22 +27,36 @@ export class TableService {
 
     if (createDto.table_number) {
       const existing = await this.tableRepository.findOne({
-        where: { table_number: createDto.table_number, branch_id: createDto.branch_id },
+        where: {
+          table_number: createDto.table_number,
+          branch_id: createDto.branch_id,
+        },
       });
       if (existing) {
-        throw new BadRequestException(`Table number '${createDto.table_number}' already exists in this branch.`);
+        throw new BadRequestException(
+          `Table number '${createDto.table_number}' already exists in this branch.`,
+        );
       }
     }
     const table = this.tableRepository.create(createDto);
     return this.tableRepository.save(table);
   }
 
-  async findAllByBranch(branchId: string, pagination?: { page: number; per_page: number }) {
+  async findAllByBranch(
+    branchId: string,
+    pagination?: { page: number; per_page: number },
+  ) {
     const where = { branch_id: branchId };
-    const skip = pagination ? (pagination.page - 1) * pagination.per_page : undefined;
+    const skip = pagination
+      ? (pagination.page - 1) * pagination.per_page
+      : undefined;
     const take = pagination ? pagination.per_page : undefined;
 
-    const [data, total] = await this.tableRepository.findAndCount({ where, skip, take });
+    const [data, total] = await this.tableRepository.findAndCount({
+      where,
+      skip,
+      take,
+    });
     return { data, total };
   }
 
@@ -76,9 +96,16 @@ export class TableService {
     return this.tableRepository.remove(table);
   }
 
-  async release(id: string, branchId: string, currentUserId: string, currentUserRole: string) {
+  async release(
+    id: string,
+    branchId: string,
+    currentUserId: string,
+    currentUserRole: string,
+  ) {
     if (currentUserRole !== 'owner' && currentUserRole !== 'manager') {
-      throw new ForbiddenException('Only owners and managers can release a table');
+      throw new ForbiddenException(
+        'Only owners and managers can release a table',
+      );
     }
 
     const table = await this.findOne(id, branchId);
@@ -103,7 +130,9 @@ export class TableService {
         });
       }
 
-      await queryRunner.manager.update(Table, id, { status: TableStatus.AVAILABLE });
+      await queryRunner.manager.update(Table, id, {
+        status: TableStatus.AVAILABLE,
+      });
       await queryRunner.commitTransaction();
       return { success: true, message: 'Table released' };
     } catch (err) {

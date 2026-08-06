@@ -1,5 +1,21 @@
-import { Controller, Get, Put, Param, Body, UseGuards, Request, NotFoundException, BadRequestException } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Put,
+  Param,
+  Body,
+  UseGuards,
+  Request,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+} from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -28,10 +44,12 @@ export class RoleController {
   @ApiOperation({ summary: 'Get all permission codes for the current user' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
-  async getMyPermissions(@Request() req: any): Promise<{ permissions: string[] }> {
+  async getMyPermissions(
+    @Request() req: any,
+  ): Promise<{ permissions: string[] }> {
     if (req.user.role === 'superadmin' || req.user.role === 'owner') {
       const all = await this.permissionRepo.find({ select: { code: true } });
-      return { permissions: all.map(p => p.code) };
+      return { permissions: all.map((p) => p.code) };
     }
 
     if (!req.user.role_id) {
@@ -44,7 +62,7 @@ export class RoleController {
     });
     if (!role) return { permissions: [] };
 
-    return { permissions: role.permissions.map(p => p.code) };
+    return { permissions: role.permissions.map((p) => p.code) };
   }
 
   @Get()
@@ -64,11 +82,15 @@ export class RoleController {
   @Roles(UserRole.OWNER)
   @RequirePermissions(PERMISSIONS.ASSIGN_ROLES)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'List all available permissions grouped by category' })
+  @ApiOperation({
+    summary: 'List all available permissions grouped by category',
+  })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
   async listPermissions(): Promise<Permission[]> {
-    return this.permissionRepo.find({ order: { category: 'ASC', code: 'ASC' } });
+    return this.permissionRepo.find({
+      order: { category: 'ASC', code: 'ASC' },
+    });
   }
 
   @Put(':id/permissions')
@@ -84,7 +106,10 @@ export class RoleController {
     @Param('id') id: string,
     @Body() body: { permission_ids: string[] },
   ): Promise<Role> {
-    const role = await this.roleRepo.findOne({ where: { id }, relations: { permissions: true } });
+    const role = await this.roleRepo.findOne({
+      where: { id },
+      relations: { permissions: true },
+    });
     if (!role) throw new NotFoundException('Role not found');
     if (role.is_system && role.name === 'Owner') {
       throw new BadRequestException(
@@ -92,7 +117,9 @@ export class RoleController {
       );
     }
 
-    const permissions = await this.permissionRepo.find({ where: body.permission_ids.map(id => ({ id })) });
+    const permissions = await this.permissionRepo.find({
+      where: body.permission_ids.map((id) => ({ id })),
+    });
     role.permissions = permissions;
     return this.roleRepo.save(role);
   }

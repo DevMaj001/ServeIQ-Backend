@@ -1,5 +1,9 @@
-
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+} from '@nestjs/common';
 
 @Injectable()
 export class BranchScopeGuard implements CanActivate {
@@ -12,7 +16,11 @@ export class BranchScopeGuard implements CanActivate {
 
     // If there's a branchId param, check it matches
     const branchIdFromParam = request.params.branchId || request.params.id;
-    if (branchIdFromParam && branchIdFromParam !== user.branchId && user.role !== 'owner') {
+    if (
+      branchIdFromParam &&
+      branchIdFromParam !== user.branchId &&
+      user.role !== 'owner'
+    ) {
       throw new ForbiddenException('Access to this branch is forbidden');
     }
 

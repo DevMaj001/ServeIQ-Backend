@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Observable, Subject } from 'rxjs';
@@ -32,26 +37,39 @@ export class PrinterService {
   // ── Printer CRUD ──
 
   async findAll(branchId: string) {
-    return this.printerRepo.find({ where: { branch_id: branchId }, order: { name: 'ASC' } });
+    return this.printerRepo.find({
+      where: { branch_id: branchId },
+      order: { name: 'ASC' },
+    });
   }
 
   async findOne(id: string, branchId: string) {
-    const printer = await this.printerRepo.findOne({ where: { id, branch_id: branchId } });
+    const printer = await this.printerRepo.findOne({
+      where: { id, branch_id: branchId },
+    });
     if (!printer) throw new NotFoundException('Printer not found');
     return printer;
   }
 
   async create(branchId: string, data: any) {
     if (data.is_default) {
-      await this.printerRepo.update({ branch_id: branchId, is_default: true }, { is_default: false });
+      await this.printerRepo.update(
+        { branch_id: branchId, is_default: true },
+        { is_default: false },
+      );
     }
-    return this.printerRepo.save(this.printerRepo.create({ ...data, branch_id: branchId }));
+    return this.printerRepo.save(
+      this.printerRepo.create({ ...data, branch_id: branchId }),
+    );
   }
 
   async update(id: string, branchId: string, data: any) {
     const printer = await this.findOne(id, branchId);
     if (data.is_default && !printer.is_default) {
-      await this.printerRepo.update({ branch_id: branchId, is_default: true }, { is_default: false });
+      await this.printerRepo.update(
+        { branch_id: branchId, is_default: true },
+        { is_default: false },
+      );
     }
     Object.assign(printer, data);
     return this.printerRepo.save(printer);
@@ -64,13 +82,20 @@ export class PrinterService {
 
   // ── Print Queue ──
 
-  async queuePrintJob(branchId: string, jobType: string, payload: any, printerId?: string) {
-    return this.printJobRepo.save(this.printJobRepo.create({
-      branch_id: branchId,
-      printer_id: printerId,
-      job_type: jobType,
-      payload,
-    }));
+  async queuePrintJob(
+    branchId: string,
+    jobType: string,
+    payload: any,
+    printerId?: string,
+  ) {
+    return this.printJobRepo.save(
+      this.printJobRepo.create({
+        branch_id: branchId,
+        printer_id: printerId,
+        job_type: jobType,
+        payload,
+      }),
+    );
   }
 
   async getPrintJobs(branchId: string, status?: string) {
@@ -80,17 +105,22 @@ export class PrinterService {
   }
 
   async printJob(branchId: string, jobId: string) {
-    const job = await this.printJobRepo.findOne({ where: { id: jobId, branch_id: branchId } });
+    const job = await this.printJobRepo.findOne({
+      where: { id: jobId, branch_id: branchId },
+    });
     if (!job) throw new NotFoundException('Print job not found');
 
     const printer = job.printer_id
       ? await this.printerRepo.findOne({ where: { id: job.printer_id } })
-      : await this.printerRepo.findOne({ where: { branch_id: branchId, is_default: true } });
+      : await this.printerRepo.findOne({
+          where: { branch_id: branchId, is_default: true },
+        });
 
     if (!printer) throw new BadRequestException('No printer configured');
 
     try {
-      const { ThermalPrinter, PrinterTypes, CharacterSet } = await import('node-thermal-printer');
+      const { ThermalPrinter, PrinterTypes, CharacterSet } =
+        await import('node-thermal-printer');
       const escpos = new ThermalPrinter({
         type: PrinterTypes.EPSON,
         interface: `tcp://${printer.ip_address}:${printer.port}`,
@@ -100,7 +130,9 @@ export class PrinterService {
 
       const isConnected = await escpos.isPrinterConnected();
       if (!isConnected) {
-        throw new Error(`Printer ${printer.name} at ${printer.ip_address}:${printer.port} not reachable`);
+        throw new Error(
+          `Printer ${printer.name} at ${printer.ip_address}:${printer.port} not reachable`,
+        );
       }
 
       if (job.job_type === 'receipt') {
@@ -125,7 +157,14 @@ export class PrinterService {
   }
 
   private async printReceipt(escpos: any, data: any) {
-    const { business_name, items, total_kobo, payment_method, paid_at, table_number } = data;
+    const {
+      business_name,
+      items,
+      total_kobo,
+      payment_method,
+      paid_at,
+      table_number,
+    } = data;
 
     escpos.alignCenter();
     escpos.bold(true);
@@ -137,7 +176,9 @@ export class PrinterService {
     if (table_number) escpos.println(`Table: ${table_number}`);
 
     for (const item of items || []) {
-      escpos.println(`${item.name} x${item.qty}  ${(item.subtotal / 100).toFixed(2)}`);
+      escpos.println(
+        `${item.name} x${item.qty}  ${(item.subtotal / 100).toFixed(2)}`,
+      );
     }
 
     escpos.println('---------------');
@@ -150,7 +191,14 @@ export class PrinterService {
   }
 
   private async printKitchenTicket(escpos: any, data: any) {
-    const { table_number, items, round_number, notes, waiter_name, ordered_at } = data;
+    const {
+      table_number,
+      items,
+      round_number,
+      notes,
+      waiter_name,
+      ordered_at,
+    } = data;
 
     escpos.setTextSize(1, 1);
     escpos.bold(true);
@@ -193,10 +241,15 @@ export class PrinterService {
     if (!tab) return;
 
     const table = await this.tableRepo.findOne({ where: { id: tab.table_id } });
-    const orders = await this.orderRepo.find({ where: { tab_id: tabId }, order: { created_at: 'ASC' } });
+    const orders = await this.orderRepo.find({
+      where: { tab_id: tabId },
+      order: { created_at: 'ASC' },
+    });
     const items = [];
     for (const order of orders) {
-      const menuItem = await this.menuItemRepo.findOne({ where: { id: order.menu_item_id } });
+      const menuItem = await this.menuItemRepo.findOne({
+        where: { id: order.menu_item_id },
+      });
       items.push({
         id: order.id,
         name: menuItem?.name || 'Unknown',
@@ -231,11 +284,17 @@ export class PrinterService {
     if (orderIds) where.id = In(orderIds);
     const orders = await this.orderRepo.find({ where });
     for (const order of orders) {
-      await this.orderRepo.update(order.id, { round_number: order.round_number + 1 });
+      await this.orderRepo.update(order.id, {
+        round_number: order.round_number + 1,
+      });
     }
     const subject = this.kdsSubjects.get(branchId);
     if (subject) {
-      subject.next({ type: 'order_fired', tab_id: tabId, order_ids: orderIds || orders.map(o => o.id) });
+      subject.next({
+        type: 'order_fired',
+        tab_id: tabId,
+        order_ids: orderIds || orders.map((o) => o.id),
+      });
     }
     return { fired: orders.length };
   }

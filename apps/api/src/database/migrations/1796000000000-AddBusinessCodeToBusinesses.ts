@@ -1,15 +1,23 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class AddBusinessCodeToBusinesses1796000000000 implements MigrationInterface {
-    name = 'AddBusinessCodeToBusinesses1796000000000'
+  name = 'AddBusinessCodeToBusinesses1796000000000';
 
-    public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE "businesses" ADD COLUMN IF NOT EXISTS "business_code" character varying(12)`);
-        await queryRunner.query(`CREATE UNIQUE INDEX IF NOT EXISTS "IDX_businesses_business_code" ON "businesses" ("business_code") WHERE "business_code" IS NOT NULL`);
-    }
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(
+      `ALTER TABLE "businesses" ADD COLUMN IF NOT EXISTS "business_code" character varying(12)`,
+    );
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "IDX_businesses_business_code" ON "businesses" ("business_code") WHERE "business_code" IS NOT NULL`,
+    );
+  }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`DROP INDEX IF EXISTS "IDX_businesses_business_code"`);
-        await queryRunner.query(`ALTER TABLE "businesses" DROP COLUMN IF EXISTS "business_code"`);
-    }
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_businesses_business_code"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "businesses" DROP COLUMN IF EXISTS "business_code"`,
+    );
+  }
 }

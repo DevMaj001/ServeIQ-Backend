@@ -1,5 +1,25 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Request, Query, Sse, MessageEvent } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiParam, ApiQuery, ApiResponse } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  Request,
+  Query,
+  Sse,
+  MessageEvent,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiParam,
+  ApiQuery,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { Observable, map } from 'rxjs';
 import { PrinterService } from './printer.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -46,11 +66,17 @@ export class PrinterController {
   @Patch('printers/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
-  @ApiOperation({ summary: 'Update printer configuration (Owner/Manager only)' })
+  @ApiOperation({
+    summary: 'Update printer configuration (Owner/Manager only)',
+  })
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async update(@Param('id') id: string, @Request() req: any, @Body() dto: UpdatePrinterDto) {
+  async update(
+    @Param('id') id: string,
+    @Request() req: any,
+    @Body() dto: UpdatePrinterDto,
+  ) {
     return this.printerService.update(id, req.user.branchId, dto);
   }
 
@@ -98,8 +124,16 @@ export class PrinterController {
   @ApiParam({ name: 'tabId' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async fireOrder(@Param('tabId') tabId: string, @Request() req: any, @Body() body?: { order_ids?: string[] }) {
-    return this.printerService.fireOrder(req.user.branchId, tabId, body?.order_ids);
+  async fireOrder(
+    @Param('tabId') tabId: string,
+    @Request() req: any,
+    @Body() body?: { order_ids?: string[] },
+  ) {
+    return this.printerService.fireOrder(
+      req.user.branchId,
+      tabId,
+      body?.order_ids,
+    );
   }
 
   @Post('tabs/:tabId/bump/:orderId')
@@ -108,7 +142,11 @@ export class PrinterController {
   @ApiParam({ name: 'orderId' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async bumpOrder(@Param('tabId') tabId: string, @Param('orderId') orderId: string, @Request() req: any) {
+  async bumpOrder(
+    @Param('tabId') tabId: string,
+    @Param('orderId') orderId: string,
+    @Request() req: any,
+  ) {
     await this.printerService.bumpOrder(req.user.branchId, tabId, orderId);
     return { success: true };
   }
@@ -119,8 +157,8 @@ export class PrinterController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @Sse()
   kdsStream(@Request() req: any): Observable<MessageEvent> {
-    return this.printerService.subscribeKds(req.user.branchId).pipe(
-      map(data => ({ data }) as MessageEvent),
-    );
+    return this.printerService
+      .subscribeKds(req.user.branchId)
+      .pipe(map((data) => ({ data })));
   }
 }

@@ -1,10 +1,28 @@
-import { Controller, Get, Post, Patch, Param, Body, Query, UseGuards, Request, NotFoundException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Param,
+  Body,
+  Query,
+  UseGuards,
+  Request,
+  NotFoundException,
+} from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../../common/shared';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery, ApiParam, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+  ApiParam,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { UpdateBusinessDto } from './dto/update-business.dto';
 import { ExtendBusinessSubscriptionDto } from './dto/extend-business-subscription.dto';
 
@@ -48,11 +66,16 @@ export class AdminController {
   }
 
   @Patch('businesses/:id')
-  @ApiOperation({ summary: 'Update a business (toggle active, change plan, etc.)' })
+  @ApiOperation({
+    summary: 'Update a business (toggle active, change plan, etc.)',
+  })
   @ApiParam({ name: 'id', description: 'Business UUID' })
   @ApiResponse({ status: 200, description: 'Business updated.' })
   @ApiResponse({ status: 404, description: 'Business not found.' })
-  async updateBusiness(@Param('id') id: string, @Body() dto: UpdateBusinessDto) {
+  async updateBusiness(
+    @Param('id') id: string,
+    @Body() dto: UpdateBusinessDto,
+  ) {
     const updated = await this.adminService.updateBusiness(id, dto);
     if (!updated) {
       throw new NotFoundException('Business not found');
@@ -61,7 +84,10 @@ export class AdminController {
   }
 
   @Post('businesses/extend')
-  @ApiOperation({ summary: 'Manually extend/grant a subscription for a business by ID (superadmin only)' })
+  @ApiOperation({
+    summary:
+      'Manually extend/grant a subscription for a business by ID (superadmin only)',
+  })
   @ApiResponse({ status: 200, description: 'Subscription extended.' })
   @ApiResponse({ status: 404, description: 'Business or branch not found.' })
   async extendBusinessSubscription(@Body() dto: ExtendBusinessSubscriptionDto) {

@@ -1,8 +1,24 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Request, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  UseGuards,
+  Request,
+  Query,
+} from '@nestjs/common';
 import { ShiftService } from './shift.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Throttle } from '@nestjs/throttler';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { OpenShiftDto } from './dto/open-shift.dto';
 import { CloseShiftDto } from './dto/close-shift.dto';
 
@@ -42,13 +58,24 @@ export class ShiftController {
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
-  async closeShift(@Param('id') id: string, @Request() req: any, @Body() dto: CloseShiftDto) {
-    return this.shiftService.closeShift(id, req.user.branchId, req.user.userId, dto);
+  async closeShift(
+    @Param('id') id: string,
+    @Request() req: any,
+    @Body() dto: CloseShiftDto,
+  ) {
+    return this.shiftService.closeShift(
+      id,
+      req.user.branchId,
+      req.user.userId,
+      dto,
+    );
   }
 
   @Get('reports/shifts')
   @Throttle({ default: { limit: 30, ttl: 60000 } })
-  @ApiOperation({ summary: 'Shift report with date range and reconciliation summary' })
+  @ApiOperation({
+    summary: 'Shift report with date range and reconciliation summary',
+  })
   @ApiQuery({ name: 'dateFrom', required: false })
   @ApiQuery({ name: 'dateTo', required: false })
   @ApiResponse({ status: 200 })
@@ -58,6 +85,10 @@ export class ShiftController {
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
   ) {
-    return this.shiftService.getShiftSummary(req.user.branchId, dateFrom, dateTo);
+    return this.shiftService.getShiftSummary(
+      req.user.branchId,
+      dateFrom,
+      dateTo,
+    );
   }
 }

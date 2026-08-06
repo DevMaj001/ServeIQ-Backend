@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 // WARNING: down() is data-lossy for several fields that have no equivalent in the old
 // inventory_items schema. Specifically:
@@ -10,10 +10,10 @@ import { MigrationInterface, QueryRunner } from "typeorm";
 //   - Quantity precision degrades: decimal(12,3) → integer rounding.
 // This is acceptable for development rollback; production recovery should use a backup.
 export class CreateIngredientsAndRecipes1784000000004 implements MigrationInterface {
-    name = 'CreateIngredientsAndRecipes1784000000004'
+  name = 'CreateIngredientsAndRecipes1784000000004';
 
-    public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`
             CREATE TABLE "ingredients" (
                 "id" uuid NOT NULL DEFAULT gen_random_uuid(),
                 "branch_id" uuid NOT NULL,
@@ -33,11 +33,17 @@ export class CreateIngredientsAndRecipes1784000000004 implements MigrationInterf
             )
         `);
 
-        await queryRunner.query(`CREATE INDEX "IDX_ingredients_branch_id" ON "ingredients" ("branch_id")`);
-        await queryRunner.query(`CREATE INDEX "IDX_ingredients_menu_item_id" ON "ingredients" ("menu_item_id")`);
-        await queryRunner.query(`CREATE INDEX "IDX_ingredients_supplier_id" ON "ingredients" ("supplier_id")`);
+    await queryRunner.query(
+      `CREATE INDEX "IDX_ingredients_branch_id" ON "ingredients" ("branch_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_ingredients_menu_item_id" ON "ingredients" ("menu_item_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_ingredients_supplier_id" ON "ingredients" ("supplier_id")`,
+    );
 
-        await queryRunner.query(`
+    await queryRunner.query(`
             CREATE TABLE "recipe_items" (
                 "id" uuid NOT NULL DEFAULT gen_random_uuid(),
                 "menu_item_id" uuid NOT NULL,
@@ -51,12 +57,18 @@ export class CreateIngredientsAndRecipes1784000000004 implements MigrationInterf
             )
         `);
 
-        await queryRunner.query(`CREATE INDEX "IDX_recipe_items_menu_item_id" ON "recipe_items" ("menu_item_id")`);
-        await queryRunner.query(`CREATE INDEX "IDX_recipe_items_ingredient_id" ON "recipe_items" ("ingredient_id")`);
-        await queryRunner.query(`CREATE UNIQUE INDEX "IDX_recipe_items_menu_ingredient" ON "recipe_items" ("menu_item_id", "ingredient_id")`);
+    await queryRunner.query(
+      `CREATE INDEX "IDX_recipe_items_menu_item_id" ON "recipe_items" ("menu_item_id")`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_recipe_items_ingredient_id" ON "recipe_items" ("ingredient_id")`,
+    );
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX "IDX_recipe_items_menu_ingredient" ON "recipe_items" ("menu_item_id", "ingredient_id")`,
+    );
 
-        // Migrate existing inventory_items to ingredients
-        await queryRunner.query(`
+    // Migrate existing inventory_items to ingredients
+    await queryRunner.query(`
             INSERT INTO "ingredients" (
                 "id", "branch_id", "name", "unit",
                 "quantity_in_stock", "reorder_level",
@@ -74,20 +86,20 @@ export class CreateIngredientsAndRecipes1784000000004 implements MigrationInterf
             LEFT JOIN "menu_items" mi ON mi.id = i.menu_item_id
         `);
 
-        // Update stock_movements: rename column and add type
-        await queryRunner.query(`
+    // Update stock_movements: rename column and add type
+    await queryRunner.query(`
             ALTER TABLE "stock_movements"
             RENAME COLUMN "inventory_item_id" TO "ingredient_id"
         `);
 
-        // Drop old movement_type enum and replace with type varchar
-        await queryRunner.query(`
+    // Drop old movement_type enum and replace with type varchar
+    await queryRunner.query(`
             ALTER TABLE "stock_movements"
             ADD COLUMN "type" varchar(25) NOT NULL DEFAULT 'manual_adjustment'
         `);
 
-        // Map old movement_type to new type
-        await queryRunner.query(`
+    // Map old movement_type to new type
+    await queryRunner.query(`
             UPDATE "stock_movements"
             SET "type" = CASE
                 WHEN "movement_type" = 'purchase' THEN 'purchase'
@@ -98,54 +110,54 @@ export class CreateIngredientsAndRecipes1784000000004 implements MigrationInterf
             END
         `);
 
-        await queryRunner.query(`
+    await queryRunner.query(`
             ALTER TABLE "stock_movements"
             DROP COLUMN "movement_type"
         `);
 
-        // Change quantity_change and quantity_after from integer to decimal(12,3)
-        await queryRunner.query(`
+    // Change quantity_change and quantity_after from integer to decimal(12,3)
+    await queryRunner.query(`
             ALTER TABLE "stock_movements"
             ALTER COLUMN "quantity_change" TYPE decimal(12,3)
         `);
 
-        await queryRunner.query(`
+    await queryRunner.query(`
             ALTER TABLE "stock_movements"
             ALTER COLUMN "quantity_after" TYPE decimal(12,3)
         `);
 
-        // Add order_id column
-        await queryRunner.query(`
+    // Add order_id column
+    await queryRunner.query(`
             ALTER TABLE "stock_movements"
             ADD COLUMN "order_id" uuid
         `);
 
-        // Partial unique index for idempotency: prevents duplicate order_consumption
-        // movements for the same (tab_id, ingredient_id) pair. Combined with the
-        // aggregation of deductions per ingredient within a tab, this ensures at
-        // most one consumption row per ingredient per tab. The application-level
-        // check in deductByTab() is the fast-path; this index is the correctness
-        // guarantee under concurrent retries.
-        await queryRunner.query(`
+    // Partial unique index for idempotency: prevents duplicate order_consumption
+    // movements for the same (tab_id, ingredient_id) pair. Combined with the
+    // aggregation of deductions per ingredient within a tab, this ensures at
+    // most one consumption row per ingredient per tab. The application-level
+    // check in deductByTab() is the fast-path; this index is the correctness
+    // guarantee under concurrent retries.
+    await queryRunner.query(`
             CREATE UNIQUE INDEX "IDX_stock_movements_dedup"
             ON "stock_movements" ("reference_id", "ingredient_id")
             WHERE "type" = 'order_consumption'
         `);
-    }
+  }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        // First revert stock_movements column changes
-        await queryRunner.query(`
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    // First revert stock_movements column changes
+    await queryRunner.query(`
             ALTER TABLE "stock_movements"
             RENAME COLUMN "ingredient_id" TO "inventory_item_id"
         `);
 
-        await queryRunner.query(`
+    await queryRunner.query(`
             ALTER TABLE "stock_movements"
             ADD COLUMN "movement_type" varchar(20) NOT NULL DEFAULT 'adjustment'
         `);
 
-        await queryRunner.query(`
+    await queryRunner.query(`
             UPDATE "stock_movements"
             SET "movement_type" = CASE
                 WHEN "type" = 'purchase' THEN 'purchase'
@@ -155,37 +167,37 @@ export class CreateIngredientsAndRecipes1784000000004 implements MigrationInterf
             END
         `);
 
-        await queryRunner.query(`
+    await queryRunner.query(`
             ALTER TABLE "stock_movements"
             DROP COLUMN "type"
         `);
 
-        await queryRunner.query(`
+    await queryRunner.query(`
             ALTER TABLE "stock_movements"
             ALTER COLUMN "quantity_change" TYPE integer USING "quantity_change"::integer
         `);
 
-        await queryRunner.query(`
+    await queryRunner.query(`
             ALTER TABLE "stock_movements"
             ALTER COLUMN "quantity_after" TYPE integer USING "quantity_after"::integer
         `);
 
-        await queryRunner.query(`
+    await queryRunner.query(`
             DROP INDEX IF EXISTS "IDX_stock_movements_dedup"
         `);
 
-        await queryRunner.query(`
+    await queryRunner.query(`
             ALTER TABLE "stock_movements"
             DROP COLUMN "order_id"
         `);
 
-        // Re-insert data from ingredients back to inventory_items
-        // Only delete the rows that were migrated (ID match), preserving any rows
-        // that may have been added independently.
-        await queryRunner.query(`
+    // Re-insert data from ingredients back to inventory_items
+    // Only delete the rows that were migrated (ID match), preserving any rows
+    // that may have been added independently.
+    await queryRunner.query(`
             DELETE FROM "inventory_items" WHERE "id" IN (SELECT "id" FROM "ingredients")
         `);
-        await queryRunner.query(`
+    await queryRunner.query(`
             INSERT INTO "inventory_items" ("id", "branch_id", "menu_item_id", "quantity_in_stock", "reorder_level", "created_at", "updated_at")
             SELECT i.id, i.branch_id, i.menu_item_id,
                    ROUND(i.quantity_in_stock)::integer,
@@ -194,8 +206,8 @@ export class CreateIngredientsAndRecipes1784000000004 implements MigrationInterf
             FROM "ingredients" i
         `);
 
-        // Drop the new tables last
-        await queryRunner.query(`DROP TABLE "recipe_items"`);
-        await queryRunner.query(`DROP TABLE "ingredients"`);
-    }
+    // Drop the new tables last
+    await queryRunner.query(`DROP TABLE "recipe_items"`);
+    await queryRunner.query(`DROP TABLE "ingredients"`);
+  }
 }

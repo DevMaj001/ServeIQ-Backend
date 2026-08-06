@@ -40,9 +40,9 @@ export class OrderScheduler {
 
     await this.orderRepo.save(expired);
 
-    const tabIds = [...new Set(expired.map(o => o.tab_id))];
+    const tabIds = [...new Set(expired.map((o) => o.tab_id))];
     const tabs = await this.tabRepo.find({ where: { id: In(tabIds) } });
-    const branchByTab = new Map(tabs.map(t => [t.id, t.branch_id]));
+    const branchByTab = new Map(tabs.map((t) => [t.id, t.branch_id]));
 
     for (const order of expired) {
       const branchId = branchByTab.get(order.tab_id);
@@ -56,7 +56,9 @@ export class OrderScheduler {
         data: { order_id: order.id, tab_id: order.tab_id },
       });
 
-      this.logger.log(`Order ${order.id}: timer expired → ready_for_pickup, notification sent`);
+      this.logger.log(
+        `Order ${order.id}: timer expired → ready_for_pickup, notification sent`,
+      );
     }
   }
 }

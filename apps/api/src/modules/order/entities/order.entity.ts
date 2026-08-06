@@ -52,7 +52,11 @@ export class Order {
   })
   fulfillment_type: string;
 
-  @Column({ type: 'varchar', length: 40, default: OrderStatus.PENDING_SUPERVISOR_APPROVAL })
+  @Column({
+    type: 'varchar',
+    length: 40,
+    default: OrderStatus.PENDING_SUPERVISOR_APPROVAL,
+  })
   order_status: string;
 
   @Column({ type: 'uuid', nullable: true })

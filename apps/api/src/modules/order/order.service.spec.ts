@@ -59,19 +59,21 @@ describe('OrderService', () => {
     const tabRepo = overrides.tabRepository ?? mockTabRepository();
     const deptRepo = overrides.departmentRepo ?? mockDepartmentRepo();
     const dataSource = overrides.dataSource ?? mockDataSource();
-    const ingredientService = overrides.ingredientService ?? mockIngredientService();
+    const ingredientService =
+      overrides.ingredientService ?? mockIngredientService();
     const auditService = overrides.auditService ?? mockAuditService();
-    const notificationService = overrides.notificationService ?? mockNotificationService();
+    const notificationService =
+      overrides.notificationService ?? mockNotificationService();
 
     return new OrderService(
-      orderRepo as any,
-      menuRepo as any,
-      tabRepo as any,
-      deptRepo as any,
-      dataSource as any,
-      ingredientService as any,
-      auditService as any,
-      notificationService as any,
+      orderRepo,
+      menuRepo,
+      tabRepo,
+      deptRepo,
+      dataSource,
+      ingredientService,
+      auditService,
+      notificationService,
     );
   };
 
@@ -82,7 +84,13 @@ describe('OrderService', () => {
 
       const menuRepo = mockMenuRepository();
       menuRepo.find.mockResolvedValue([
-        { id: 'menu-1', name: 'Jollof Rice', price_kobo: 5000, track_stock: true, quantity_in_stock: 10 },
+        {
+          id: 'menu-1',
+          name: 'Jollof Rice',
+          price_kobo: 5000,
+          track_stock: true,
+          quantity_in_stock: 10,
+        },
       ]);
 
       const ingredientService = mockIngredientService();
@@ -95,7 +103,11 @@ describe('OrderService', () => {
         auditService,
       });
 
-      const result = await service.addOrderItems('tab-1', [{ menu_item_id: 'menu-1', quantity: 3 }], 'user-1');
+      const result = await service.addOrderItems(
+        'tab-1',
+        [{ menu_item_id: 'menu-1', quantity: 3 }],
+        'user-1',
+      );
 
       expect(ingredientService.deductByTab).toHaveBeenCalledWith(
         { id: 'tab-1', branch_id: 'branch-1' },
@@ -113,20 +125,34 @@ describe('OrderService', () => {
       const service = buildService({ menuRepository: menuRepo });
 
       await expect(
-        service.addOrderItems('tab-1', [{ menu_item_id: 'unknown', quantity: 1 }], 'user-1'),
+        service.addOrderItems(
+          'tab-1',
+          [{ menu_item_id: 'unknown', quantity: 1 }],
+          'user-1',
+        ),
       ).rejects.toThrow('Menu item unknown not found');
     });
 
     it('throws on insufficient stock', async () => {
       const menuRepo = mockMenuRepository();
       menuRepo.find.mockResolvedValue([
-        { id: 'menu-1', name: 'Jollof Rice', price_kobo: 5000, track_stock: true, quantity_in_stock: 2 },
+        {
+          id: 'menu-1',
+          name: 'Jollof Rice',
+          price_kobo: 5000,
+          track_stock: true,
+          quantity_in_stock: 2,
+        },
       ]);
 
       const service = buildService({ menuRepository: menuRepo });
 
       await expect(
-        service.addOrderItems('tab-1', [{ menu_item_id: 'menu-1', quantity: 5 }], 'user-1'),
+        service.addOrderItems(
+          'tab-1',
+          [{ menu_item_id: 'menu-1', quantity: 5 }],
+          'user-1',
+        ),
       ).rejects.toThrow('Insufficient stock');
     });
 
@@ -136,31 +162,52 @@ describe('OrderService', () => {
 
       const menuRepo = mockMenuRepository();
       menuRepo.find.mockResolvedValue([
-        { id: 'menu-1', name: 'Pizza', price_kobo: 10000, track_stock: false, quantity_in_stock: 0 },
+        {
+          id: 'menu-1',
+          name: 'Pizza',
+          price_kobo: 10000,
+          track_stock: false,
+          quantity_in_stock: 0,
+        },
       ]);
 
-      const service = buildService({ tabRepository: tabRepo, menuRepository: menuRepo });
+      const service = buildService({
+        tabRepository: tabRepo,
+        menuRepository: menuRepo,
+      });
 
       const result = await service.addOrderItems(
         'tab-1',
-        [{ menu_item_id: 'menu-1', quantity: 2, modifiers: [{ name: 'Extra Cheese', price_kobo: 1500, qty: 1 }] }],
+        [
+          {
+            menu_item_id: 'menu-1',
+            quantity: 2,
+            modifiers: [{ name: 'Extra Cheese', price_kobo: 1500, qty: 1 }],
+          },
+        ],
         'user-1',
       );
 
       expect(result[0].subtotal_kobo).toBe(21500);
-      expect(result[0].modifiers).toEqual([{ name: 'Extra Cheese', price_kobo: 1500, qty: 1 }]);
+      expect(result[0].modifiers).toEqual([
+        { name: 'Extra Cheese', price_kobo: 1500, qty: 1 },
+      ]);
     });
   });
 
   describe('findByTab', () => {
     it('returns orders for a tab', async () => {
       const orderRepo = mockOrderRepository();
-      orderRepo.find.mockResolvedValue([{ id: 'o1', tab_id: 'tab-1', subtotal_kobo: 5000 }]);
+      orderRepo.find.mockResolvedValue([
+        { id: 'o1', tab_id: 'tab-1', subtotal_kobo: 5000 },
+      ]);
 
       const service = buildService({ orderRepository: orderRepo });
       const result = await service.findByTab('tab-1');
 
-      expect(orderRepo.find).toHaveBeenCalledWith({ where: { tab_id: 'tab-1' } });
+      expect(orderRepo.find).toHaveBeenCalledWith({
+        where: { tab_id: 'tab-1' },
+      });
       expect(result).toHaveLength(1);
     });
   });
@@ -180,7 +227,9 @@ describe('OrderService', () => {
       orderRepo.findOne.mockResolvedValue(null);
 
       const service = buildService({ orderRepository: orderRepo });
-      await expect(service.findOne('missing')).rejects.toThrow('Order item not found');
+      await expect(service.findOne('missing')).rejects.toThrow(
+        'Order item not found',
+      );
     });
   });
 
@@ -221,7 +270,11 @@ describe('OrderService', () => {
   describe('approve', () => {
     it('approves a pending order and creates notification', async () => {
       const deptRepo = mockDepartmentRepo();
-      deptRepo.findOne.mockResolvedValue({ id: 'dept-1', name: 'Kitchen', branch_id: 'branch-1' });
+      deptRepo.findOne.mockResolvedValue({
+        id: 'dept-1',
+        name: 'Kitchen',
+        branch_id: 'branch-1',
+      });
 
       const orderRepo = mockOrderRepository();
       orderRepo.findOne.mockResolvedValue({
@@ -234,7 +287,11 @@ describe('OrderService', () => {
       const notificationService = mockNotificationService();
 
       const tabRepo = mockTabRepository();
-      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1', tracking_code: 'SVQ-ABCD-123' });
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        tracking_code: 'SVQ-ABCD-123',
+      });
 
       const dataSource: any = {
         transaction: jest.fn(async (cb) => {
@@ -261,14 +318,19 @@ describe('OrderService', () => {
         notificationService,
       });
 
-      const result = await service.approve('o1', 'user-1', { department: 'dept-1', estimated_preparation_time_seconds: 600 });
+      const result = await service.approve('o1', 'user-1', {
+        department: 'dept-1',
+        estimated_preparation_time_seconds: 600,
+      });
 
       expect(result.order_status).toBe(OrderStatus.APPROVED);
       expect(result.approved_by).toBe('user-1');
       expect(auditService.log).toHaveBeenCalled();
-      expect(notificationService.create).toHaveBeenCalledWith(expect.objectContaining({
-        message: expect.stringContaining('Tracking: SVQ-ABCD-123'),
-      }));
+      expect(notificationService.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('Tracking: SVQ-ABCD-123'),
+        }),
+      );
     });
   });
 
@@ -298,9 +360,16 @@ describe('OrderService', () => {
 
       const auditService = mockAuditService();
 
-      const service = buildService({ orderRepository: orderRepo, tabRepository: tabRepo, dataSource, auditService });
+      const service = buildService({
+        orderRepository: orderRepo,
+        tabRepository: tabRepo,
+        dataSource,
+        auditService,
+      });
 
-      const result = await service.decline('o1', 'user-1', { decline_reason: 'Out of stock' });
+      const result = await service.decline('o1', 'user-1', {
+        decline_reason: 'Out of stock',
+      });
 
       expect(result.order_status).toBe(OrderStatus.DECLINED);
       expect(result.declined_by).toBe('user-1');
@@ -314,8 +383,16 @@ describe('OrderService', () => {
       const now = new Date();
       const orderRepo = mockOrderRepository();
       orderRepo.find.mockResolvedValue([
-        { id: 'o1', order_status: OrderStatus.APPROVED, timer_ends_at: new Date(now.getTime() - 1000) },
-        { id: 'o2', order_status: OrderStatus.APPROVED, timer_ends_at: new Date(now.getTime() - 5000) },
+        {
+          id: 'o1',
+          order_status: OrderStatus.APPROVED,
+          timer_ends_at: new Date(now.getTime() - 1000),
+        },
+        {
+          id: 'o2',
+          order_status: OrderStatus.APPROVED,
+          timer_ends_at: new Date(now.getTime() - 5000),
+        },
       ]);
       orderRepo.save.mockResolvedValue(undefined);
 
@@ -331,14 +408,27 @@ describe('OrderService', () => {
   describe('Order Round Logic', () => {
     it('ROUND-01: First order on tab gets round_number = 1 (default)', async () => {
       const tabRepo = mockTabRepository();
-      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1', tab_type: 'dine_in' });
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        tab_type: 'dine_in',
+      });
 
       const menuRepo = mockMenuRepository();
       menuRepo.find.mockResolvedValue([
-        { id: 'menu-1', name: 'Beer', price_kobo: 5000, track_stock: false, quantity_in_stock: 0 },
+        {
+          id: 'menu-1',
+          name: 'Beer',
+          price_kobo: 5000,
+          track_stock: false,
+          quantity_in_stock: 0,
+        },
       ]);
 
-      const service = buildService({ tabRepository: tabRepo, menuRepository: menuRepo });
+      const service = buildService({
+        tabRepository: tabRepo,
+        menuRepository: menuRepo,
+      });
 
       const result = await service.addOrderItems(
         'tab-1',
@@ -352,72 +442,142 @@ describe('OrderService', () => {
 
     it('ROUND-02: Orders without explicit round_number default to 1', async () => {
       const tabRepo = mockTabRepository();
-      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1', tab_type: 'dine_in' });
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        tab_type: 'dine_in',
+      });
 
       const menuRepo = mockMenuRepository();
       menuRepo.find.mockResolvedValue([
-        { id: 'menu-1', name: 'Beer', price_kobo: 5000, track_stock: false, quantity_in_stock: 0 },
+        {
+          id: 'menu-1',
+          name: 'Beer',
+          price_kobo: 5000,
+          track_stock: false,
+          quantity_in_stock: 0,
+        },
       ]);
 
-      const service = buildService({ tabRepository: tabRepo, menuRepository: menuRepo });
+      const service = buildService({
+        tabRepository: tabRepo,
+        menuRepository: menuRepo,
+      });
 
-      const result = await service.addOrderItems('tab-1', [{ menu_item_id: 'menu-1', quantity: 1 }], 'waiter-1');
+      const result = await service.addOrderItems(
+        'tab-1',
+        [{ menu_item_id: 'menu-1', quantity: 1 }],
+        'waiter-1',
+      );
 
       expect(result[0].round_number).toBe(1);
     });
 
     it('ROUND-03: Orders with explicit round_number are preserved', async () => {
       const tabRepo = mockTabRepository();
-      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1', tab_type: 'dine_in' });
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        tab_type: 'dine_in',
+      });
 
       const menuRepo = mockMenuRepository();
       menuRepo.find.mockResolvedValue([
-        { id: 'menu-1', name: 'Beer', price_kobo: 5000, track_stock: false, quantity_in_stock: 0 },
+        {
+          id: 'menu-1',
+          name: 'Beer',
+          price_kobo: 5000,
+          track_stock: false,
+          quantity_in_stock: 0,
+        },
       ]);
 
-      const service = buildService({ tabRepository: tabRepo, menuRepository: menuRepo });
+      const service = buildService({
+        tabRepository: tabRepo,
+        menuRepository: menuRepo,
+      });
 
-      const result = await service.addOrderItems('tab-1', [{ menu_item_id: 'menu-1', quantity: 1, round_number: 3 }], 'waiter-1');
+      const result = await service.addOrderItems(
+        'tab-1',
+        [{ menu_item_id: 'menu-1', quantity: 1, round_number: 3 }],
+        'waiter-1',
+      );
 
       expect(result[0].round_number).toBe(3);
     });
 
     it('ROUND-04: Subtotal equals quantity × unit_price_kobo + modifier total', async () => {
       const tabRepo = mockTabRepository();
-      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1', tab_type: 'dine_in' });
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        tab_type: 'dine_in',
+      });
 
       const menuRepo = mockMenuRepository();
       menuRepo.find.mockResolvedValue([
-        { id: 'menu-1', name: 'Pizza', price_kobo: 10000, track_stock: false, quantity_in_stock: 0 },
+        {
+          id: 'menu-1',
+          name: 'Pizza',
+          price_kobo: 10000,
+          track_stock: false,
+          quantity_in_stock: 0,
+        },
       ]);
 
-      const service = buildService({ tabRepository: tabRepo, menuRepository: menuRepo });
+      const service = buildService({
+        tabRepository: tabRepo,
+        menuRepository: menuRepo,
+      });
 
-      const result = await service.addOrderItems('tab-1', [
-        {
-          menu_item_id: 'menu-1',
-          quantity: 2,
-          round_number: 1,
-          modifiers: [{ name: 'Extra Cheese', price_kobo: 1500, qty: 1 }],
-        },
-      ], 'waiter-1');
+      const result = await service.addOrderItems(
+        'tab-1',
+        [
+          {
+            menu_item_id: 'menu-1',
+            quantity: 2,
+            round_number: 1,
+            modifiers: [{ name: 'Extra Cheese', price_kobo: 1500, qty: 1 }],
+          },
+        ],
+        'waiter-1',
+      );
 
       expect(result[0].subtotal_kobo).toBe(21500);
-      expect(result[0].modifiers).toEqual([{ name: 'Extra Cheese', price_kobo: 1500, qty: 1 }]);
+      expect(result[0].modifiers).toEqual([
+        { name: 'Extra Cheese', price_kobo: 1500, qty: 1 },
+      ]);
     });
 
     it('ROUND-05: Price snapshot is taken from menu at order creation, not re-fetched', async () => {
       const tabRepo = mockTabRepository();
-      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1', tab_type: 'dine_in' });
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        tab_type: 'dine_in',
+      });
 
       const menuRepo = mockMenuRepository();
       menuRepo.find.mockResolvedValue([
-        { id: 'menu-1', name: 'Beer', price_kobo: 5000, track_stock: false, quantity_in_stock: 0 },
+        {
+          id: 'menu-1',
+          name: 'Beer',
+          price_kobo: 5000,
+          track_stock: false,
+          quantity_in_stock: 0,
+        },
       ]);
 
-      const service = buildService({ tabRepository: tabRepo, menuRepository: menuRepo });
+      const service = buildService({
+        tabRepository: tabRepo,
+        menuRepository: menuRepo,
+      });
 
-      const result = await service.addOrderItems('tab-1', [{ menu_item_id: 'menu-1', quantity: 3 }], 'waiter-1');
+      const result = await service.addOrderItems(
+        'tab-1',
+        [{ menu_item_id: 'menu-1', quantity: 3 }],
+        'waiter-1',
+      );
 
       expect(result[0].unit_price_kobo).toBe(5000);
       expect(result[0].subtotal_kobo).toBe(15000);
@@ -425,20 +585,43 @@ describe('OrderService', () => {
 
     it('ROUND-06: Multiple items in same round get same round_number', async () => {
       const tabRepo = mockTabRepository();
-      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1', tab_type: 'dine_in' });
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        tab_type: 'dine_in',
+      });
 
       const menuRepo = mockMenuRepository();
       menuRepo.find.mockResolvedValue([
-        { id: 'menu-1', name: 'Beer', price_kobo: 5000, track_stock: false, quantity_in_stock: 0 },
-        { id: 'menu-2', name: 'Wine', price_kobo: 8000, track_stock: false, quantity_in_stock: 0 },
+        {
+          id: 'menu-1',
+          name: 'Beer',
+          price_kobo: 5000,
+          track_stock: false,
+          quantity_in_stock: 0,
+        },
+        {
+          id: 'menu-2',
+          name: 'Wine',
+          price_kobo: 8000,
+          track_stock: false,
+          quantity_in_stock: 0,
+        },
       ]);
 
-      const service = buildService({ tabRepository: tabRepo, menuRepository: menuRepo });
+      const service = buildService({
+        tabRepository: tabRepo,
+        menuRepository: menuRepo,
+      });
 
-      const result = await service.addOrderItems('tab-1', [
-        { menu_item_id: 'menu-1', quantity: 2, round_number: 1 },
-        { menu_item_id: 'menu-2', quantity: 1, round_number: 1 },
-      ], 'waiter-1');
+      const result = await service.addOrderItems(
+        'tab-1',
+        [
+          { menu_item_id: 'menu-1', quantity: 2, round_number: 1 },
+          { menu_item_id: 'menu-2', quantity: 1, round_number: 1 },
+        ],
+        'waiter-1',
+      );
 
       expect(result[0].round_number).toBe(1);
       expect(result[1].round_number).toBe(1);

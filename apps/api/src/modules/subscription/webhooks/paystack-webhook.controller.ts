@@ -15,9 +15,14 @@ export class PaystackWebhookController {
     const signature = req.headers['x-paystack-signature'] as string;
     const rawBody = JSON.stringify(req.body);
 
-    const isValid = await this.subscriptionService.verifyPaystackSignature(signature, rawBody);
+    const isValid = await this.subscriptionService.verifyPaystackSignature(
+      signature,
+      rawBody,
+    );
     if (!isValid) {
-      return res.status(HttpStatus.UNAUTHORIZED).json({ status: false, message: 'Invalid signature' });
+      return res
+        .status(HttpStatus.UNAUTHORIZED)
+        .json({ status: false, message: 'Invalid signature' });
     }
 
     const event = req.body;

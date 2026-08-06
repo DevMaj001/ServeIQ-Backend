@@ -36,7 +36,9 @@ export class MenuModifierService {
   }
 
   async createGroup(branchId: string, data: any) {
-    return this.groupRepo.save(this.groupRepo.create({ ...data, branch_id: branchId }));
+    return this.groupRepo.save(
+      this.groupRepo.create({ ...data, branch_id: branchId }),
+    );
   }
 
   async updateGroup(id: string, branchId: string, data: any) {
@@ -62,7 +64,9 @@ export class MenuModifierService {
   async createOption(groupId: string, data: any) {
     const group = await this.groupRepo.findOne({ where: { id: groupId } });
     if (!group) throw new NotFoundException('Modifier group not found');
-    return this.optionRepo.save(this.optionRepo.create({ ...data, modifier_group_id: groupId }));
+    return this.optionRepo.save(
+      this.optionRepo.create({ ...data, modifier_group_id: groupId }),
+    );
   }
 
   async updateOption(id: string, data: any) {
@@ -80,7 +84,11 @@ export class MenuModifierService {
 
   // ── Menu Item Linking ──
 
-  async linkGroupsToMenuItem(menuItemId: string, branchId: string, groupIds: string[]) {
+  async linkGroupsToMenuItem(
+    menuItemId: string,
+    branchId: string,
+    groupIds: string[],
+  ) {
     const menuItem = await this.menuItemRepo.findOne({
       where: { id: menuItemId, branch_id: branchId },
       relations: { modifierGroups: true },
@@ -99,7 +107,7 @@ export class MenuModifierService {
     });
     if (!menuItem) throw new NotFoundException('Menu item not found');
 
-    const groupIds = (menuItem.modifierGroups || []).map(g => g.id);
+    const groupIds = (menuItem.modifierGroups || []).map((g) => g.id);
     if (groupIds.length === 0) return [];
 
     const options = await this.optionRepo.find({
@@ -107,10 +115,10 @@ export class MenuModifierService {
       order: { sort_order: 'ASC', name: 'ASC' },
     });
 
-    return (menuItem.modifierGroups || []).map(group => ({
+    return (menuItem.modifierGroups || []).map((group) => ({
       ...group,
       menu_items: undefined,
-      options: options.filter(o => o.modifier_group_id === group.id),
+      options: options.filter((o) => o.modifier_group_id === group.id),
     }));
   }
 }

@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Index,
+} from 'typeorm';
 
 @Entity('menu_categories')
 export class MenuCategory {
@@ -24,4 +31,3 @@ export class MenuCategory {
   @UpdateDateColumn()
   updated_at: Date;
 }
-

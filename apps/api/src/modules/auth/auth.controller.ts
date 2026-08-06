@@ -1,4 +1,13 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Request, Response } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  HttpCode,
+  HttpStatus,
+  UseGuards,
+  Request,
+  Response,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RegisterDto } from './dto/register.dto';
@@ -10,7 +19,13 @@ import { LogoutDto } from './dto/logout.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ResolveBusinessCodeDto } from './dto/resolve-business-code.dto';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiBody,
+} from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 
 @ApiTags('Authentication')
@@ -18,7 +33,10 @@ import { Throttle } from '@nestjs/throttler';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  private setAuthCookies(res: any, tokens: { access_token: string; refresh_token: string | null }) {
+  private setAuthCookies(
+    res: any,
+    tokens: { access_token: string; refresh_token: string | null },
+  ) {
     res.cookie('access_token', tokens.access_token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -44,8 +62,14 @@ export class AuthController {
     description:
       'Creates a new business account with the owner user. Upload logo/CAC first via POST /api/upload and pass the returned URLs here.',
   })
-  @ApiResponse({ status: 201, description: 'Business and owner successfully created.' })
-  @ApiResponse({ status: 400, description: 'Validation error — check the request body.' })
+  @ApiResponse({
+    status: 201,
+    description: 'Business and owner successfully created.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Validation error — check the request body.',
+  })
   @ApiResponse({ status: 409, description: 'Email already registered.' })
   async register(@Body() registerDto: RegisterDto) {
     return this.authService.register(registerDto);
@@ -68,7 +92,10 @@ export class AuthController {
   })
   @ApiResponse({ status: 400, description: 'Validation error.' })
   @ApiResponse({ status: 401, description: 'Invalid credentials.' })
-  async login(@Body() loginDto: LoginDto, @Response({ passthrough: true }) res: any) {
+  async login(
+    @Body() loginDto: LoginDto,
+    @Response({ passthrough: true }) res: any,
+  ) {
     const tokens = await this.authService.login(loginDto);
     this.setAuthCookies(res, tokens);
     return tokens;
@@ -78,10 +105,21 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Refresh access token using a refresh token' })
-  @ApiResponse({ status: 200, description: 'New access token and refresh token issued.' })
-  @ApiResponse({ status: 401, description: 'Invalid or expired refresh token.' })
-  async refresh(@Body() refreshDto: RefreshDto, @Response({ passthrough: true }) res: any) {
-    const tokens = await this.authService.refreshToken(refreshDto.refresh_token);
+  @ApiResponse({
+    status: 200,
+    description: 'New access token and refresh token issued.',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid or expired refresh token.',
+  })
+  async refresh(
+    @Body() refreshDto: RefreshDto,
+    @Response({ passthrough: true }) res: any,
+  ) {
+    const tokens = await this.authService.refreshToken(
+      refreshDto.refresh_token,
+    );
     this.setAuthCookies(res, tokens);
     return tokens;
   }
@@ -90,7 +128,10 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Logout and invalidate refresh token' })
   @ApiResponse({ status: 200, description: 'Logged out successfully.' })
-  async logout(@Body() logoutDto: LogoutDto, @Response({ passthrough: true }) res: any) {
+  async logout(
+    @Body() logoutDto: LogoutDto,
+    @Response({ passthrough: true }) res: any,
+  ) {
     res.clearCookie('access_token', { path: '/' });
     res.clearCookie('refresh_token', { path: '/api/v1/auth' });
     return this.authService.logout(logoutDto.refresh_token);
@@ -138,8 +179,13 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 3, ttl: 3600000 } })
   @ApiOperation({ summary: 'One-time setup to create super admin account' })
-  @ApiResponse({ status: 200, description: 'Super admin created or already exists' })
-  async setupSuperAdmin(@Body() dto: { email: string; password: string; full_name?: string }) {
+  @ApiResponse({
+    status: 200,
+    description: 'Super admin created or already exists',
+  })
+  async setupSuperAdmin(
+    @Body() dto: { email: string; password: string; full_name?: string },
+  ) {
     return this.authService.setupSuperAdmin(dto);
   }
 
@@ -170,7 +216,8 @@ export class AuthController {
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({
     summary: 'Resolve a business code',
-    description: 'Takes a business code and returns the business ID and name. Used by waiter app to get business_id before PIN login.',
+    description:
+      'Takes a business code and returns the business ID and name. Used by waiter app to get business_id before PIN login.',
   })
   @ApiBody({ type: ResolveBusinessCodeDto })
   @ApiResponse({ status: 200, description: 'Business resolved successfully.' })
@@ -185,10 +232,14 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Impersonate a business (super admin only)',
-    description: 'Returns a JWT scoped to the given business/branch for super admin support access.',
+    description:
+      'Returns a JWT scoped to the given business/branch for super admin support access.',
   })
   @ApiResponse({ status: 200, description: 'OK' })
-  async impersonate(@Request() req: any, @Body() dto: { businessId: string; branchId?: string }) {
+  async impersonate(
+    @Request() req: any,
+    @Body() dto: { businessId: string; branchId?: string },
+  ) {
     return this.authService.impersonate(req.user, dto);
   }
 
@@ -200,7 +251,10 @@ export class AuthController {
     description:
       'First-time activation for a waiter. Validates email and password, activates the account, and returns a JWT.',
   })
-  @ApiResponse({ status: 200, description: 'Account activated — JWT returned.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Account activated — JWT returned.',
+  })
   @ApiResponse({ status: 400, description: 'Validation error.' })
   @ApiResponse({ status: 401, description: 'Invalid credentials.' })
   async activate(@Body() dto: ActivateDto) {

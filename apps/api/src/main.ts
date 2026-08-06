@@ -18,7 +18,10 @@ async function bootstrap() {
   });
 
   if (process.env.SENTRY_DSN) {
-    Sentry.init({ dsn: process.env.SENTRY_DSN, environment: process.env.NODE_ENV || 'development' });
+    Sentry.init({
+      dsn: process.env.SENTRY_DSN,
+      environment: process.env.NODE_ENV || 'development',
+    });
     app.useGlobalFilters(new SentryExceptionFilter(app.get(HttpAdapterHost)));
   }
 

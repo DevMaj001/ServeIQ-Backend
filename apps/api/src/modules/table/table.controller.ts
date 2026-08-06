@@ -1,10 +1,28 @@
-import { Controller, Get, Post, Body, Param, Patch, Delete, UseGuards, Request, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Patch,
+  Delete,
+  UseGuards,
+  Request,
+  Query,
+} from '@nestjs/common';
 import { TableService } from './table.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../../common/shared';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { CreateTableDto } from './dto/create-table.dto';
 import { UpdateTableDto } from './dto/update-table.dto';
 import { UpdateTableStatusDto } from './dto/update-table-status.dto';
@@ -22,7 +40,11 @@ export class TableController {
   @ApiOperation({ summary: 'Get all tables for the branch' })
   @ApiQuery({ name: 'page', required: false, example: '1' })
   @ApiQuery({ name: 'per_page', required: false, example: '50' })
-  @ApiResponse({ status: 200, description: 'List of tables with statuses.', type: [Table] })
+  @ApiResponse({
+    status: 200,
+    description: 'List of tables with statuses.',
+    type: [Table],
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async findAll(
     @Request() req: any,
@@ -30,7 +52,10 @@ export class TableController {
     @Query('per_page') per_page?: string,
   ) {
     const pagination = getPaginationParams({ page, per_page });
-    const { data, total } = await this.tableService.findAllByBranch(req.user.branchId, pagination);
+    const { data, total } = await this.tableService.findAllByBranch(
+      req.user.branchId,
+      pagination,
+    );
     return paginate(data, total, pagination);
   }
 
@@ -53,12 +78,13 @@ export class TableController {
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async create(@Request() req: any, @Body() createDto: CreateTableDto) {
     const data = { ...createDto };
-    
+
     // Defensive mapping for Waiter app or other clients that might send different field names
     if (!data.table_number) {
-      data.table_number = data.table_number || `T-${Math.floor(Math.random() * 1000)}`;
+      data.table_number =
+        data.table_number || `T-${Math.floor(Math.random() * 1000)}`;
     }
-    
+
     return this.tableService.create({
       ...data,
       branch_id: req.user.branchId,
@@ -82,7 +108,9 @@ export class TableController {
   }
 
   @Patch(':id/status')
-  @ApiOperation({ summary: 'Update table status (available/occupied/reserved)' })
+  @ApiOperation({
+    summary: 'Update table status (available/occupied/reserved)',
+  })
   @ApiParam({ name: 'id', description: 'Table UUID' })
   @ApiResponse({ status: 200, description: 'Table status updated.' })
   @ApiResponse({ status: 404, description: 'Table not found.' })
@@ -92,19 +120,33 @@ export class TableController {
     @Request() req: any,
     @Body() statusDto: UpdateTableStatusDto,
   ) {
-    return this.tableService.updateStatus(id, req.user.branchId, statusDto.status);
+    return this.tableService.updateStatus(
+      id,
+      req.user.branchId,
+      statusDto.status,
+    );
   }
 
   @Post(':id/release')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
-  @ApiOperation({ summary: 'Force-release a table and void its open tab (owner/manager only)' })
+  @ApiOperation({
+    summary: 'Force-release a table and void its open tab (owner/manager only)',
+  })
   @ApiParam({ name: 'id', description: 'Table UUID' })
   @ApiResponse({ status: 200, description: 'Table released.' })
-  @ApiResponse({ status: 403, description: 'Only owners and managers can release a table.' })
+  @ApiResponse({
+    status: 403,
+    description: 'Only owners and managers can release a table.',
+  })
   @ApiResponse({ status: 404, description: 'Table not found.' })
   async releaseTable(@Param('id') id: string, @Request() req: any) {
-    return this.tableService.release(id, req.user.branchId, req.user.userId, req.user.role);
+    return this.tableService.release(
+      id,
+      req.user.branchId,
+      req.user.userId,
+      req.user.role,
+    );
   }
 
   @Delete(':id')

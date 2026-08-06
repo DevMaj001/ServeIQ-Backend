@@ -63,7 +63,10 @@ export class MenuItem {
   @JoinTable({
     name: 'menu_item_modifier_groups',
     joinColumn: { name: 'menu_item_id', referencedColumnName: 'id' },
-    inverseJoinColumn: { name: 'modifier_group_id', referencedColumnName: 'id' },
+    inverseJoinColumn: {
+      name: 'modifier_group_id',
+      referencedColumnName: 'id',
+    },
   })
   modifierGroups: ModifierGroup[];
 

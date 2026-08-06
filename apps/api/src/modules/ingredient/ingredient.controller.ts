@@ -1,11 +1,32 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Request, Query, NotFoundException, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  Request,
+  Query,
+  NotFoundException,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { IngredientService } from './ingredient.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../../common/shared';
 import { Throttle } from '@nestjs/throttler';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { CreateInventoryItemDto } from './dto/create-inventory-item.dto';
 import { UpdateInventoryItemDto } from './dto/update-inventory-item.dto';
 
@@ -17,7 +38,9 @@ export class IngredientController {
   constructor(private readonly ingredientService: IngredientService) {}
 
   @Get('inventory')
-  @ApiOperation({ summary: 'List all inventory items with current stock levels' })
+  @ApiOperation({
+    summary: 'List all inventory items with current stock levels',
+  })
   @ApiResponse({ status: 200, description: 'List of inventory items.' })
   async findAll(@Request() req: any) {
     return this.ingredientService.findAll(req.user.branchId);
@@ -29,8 +52,16 @@ export class IngredientController {
   @ApiQuery({ name: 'dateTo', required: false })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getBestsellers(@Request() req: any, @Query('dateFrom') dateFrom?: string, @Query('dateTo') dateTo?: string) {
-    return this.ingredientService.getBestsellers(req.user.branchId, dateFrom, dateTo);
+  async getBestsellers(
+    @Request() req: any,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+  ) {
+    return this.ingredientService.getBestsellers(
+      req.user.branchId,
+      dateFrom,
+      dateTo,
+    );
   }
 
   @Get('inventory/alerts')
@@ -82,7 +113,10 @@ export class IngredientController {
   @ApiOperation({ summary: 'Create inventory item (Owner/Manager only)' })
   @ApiResponse({ status: 201, description: 'Item created.' })
   async create(@Request() req: any, @Body() dto: CreateInventoryItemDto) {
-    return this.ingredientService.create(req.user.branchId, { ...dto, created_by: req.user.userId });
+    return this.ingredientService.create(req.user.branchId, {
+      ...dto,
+      created_by: req.user.userId,
+    });
   }
 
   @Patch('inventory/:id')
@@ -92,7 +126,11 @@ export class IngredientController {
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async update(@Param('id') id: string, @Request() req: any, @Body() dto: UpdateInventoryItemDto) {
+  async update(
+    @Param('id') id: string,
+    @Request() req: any,
+    @Body() dto: UpdateInventoryItemDto,
+  ) {
     return this.ingredientService.update(id, req.user.branchId, dto);
   }
 
@@ -121,9 +159,22 @@ export class IngredientController {
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'Restock successful.' })
   @ApiResponse({ status: 422, description: 'Validation error.' })
-  async restock(@Param('id') id: string, @Request() req: any, @Body() body: { added_quantity: number; cost_price_kobo?: number; barcode?: string }) {
+  async restock(
+    @Param('id') id: string,
+    @Request() req: any,
+    @Body()
+    body: {
+      added_quantity: number;
+      cost_price_kobo?: number;
+      barcode?: string;
+    },
+  ) {
     try {
-      const data = await this.ingredientService.restock(id, req.user.branchId, body);
+      const data = await this.ingredientService.restock(
+        id,
+        req.user.branchId,
+        body,
+      );
       return { success: true, data };
     } catch (err) {
       if (err instanceof HttpException) throw err;
@@ -140,8 +191,18 @@ export class IngredientController {
   @ApiOperation({ summary: 'Reconcile inventory (Owner/Manager only)' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async reconcile(@Request() req: any, @Body() body: { reconciliation_id: string; counts: { menu_item_id: string; physical_count: number }[] }) {
-    const data = await this.ingredientService.reconcile(req.user.branchId, body);
+  async reconcile(
+    @Request() req: any,
+    @Body()
+    body: {
+      reconciliation_id: string;
+      counts: { menu_item_id: string; physical_count: number }[];
+    },
+  ) {
+    const data = await this.ingredientService.reconcile(
+      req.user.branchId,
+      body,
+    );
     return { success: true, data };
   }
 
@@ -161,7 +222,10 @@ export class IngredientController {
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getDailyTally(@Request() req: any, @Query('date') date?: string) {
-    const data = await this.ingredientService.getDailyTally(req.user.branchId, date);
+    const data = await this.ingredientService.getDailyTally(
+      req.user.branchId,
+      date,
+    );
     return { success: true, data };
   }
 
@@ -171,7 +235,9 @@ export class IngredientController {
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getRecipe() {
-    throw new NotFoundException('Recipe system has been removed. Stock is now tracked directly on menu items.');
+    throw new NotFoundException(
+      'Recipe system has been removed. Stock is now tracked directly on menu items.',
+    );
   }
 
   @Post('menu-items/:menuItemId/recipe')
@@ -179,7 +245,9 @@ export class IngredientController {
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async addRecipeItem() {
-    throw new NotFoundException('Recipe system has been removed. Stock is now tracked directly on menu items.');
+    throw new NotFoundException(
+      'Recipe system has been removed. Stock is now tracked directly on menu items.',
+    );
   }
 
   @Patch('menu-items/:menuItemId/recipe')
@@ -187,7 +255,9 @@ export class IngredientController {
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async patchRecipe() {
-    throw new NotFoundException('Recipe system has been removed. Stock is now tracked directly on menu items.');
+    throw new NotFoundException(
+      'Recipe system has been removed. Stock is now tracked directly on menu items.',
+    );
   }
 
   @Delete('menu-items/:menuItemId/recipe')
@@ -195,7 +265,9 @@ export class IngredientController {
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async deleteRecipe() {
-    throw new NotFoundException('Recipe system has been removed. Stock is now tracked directly on menu items.');
+    throw new NotFoundException(
+      'Recipe system has been removed. Stock is now tracked directly on menu items.',
+    );
   }
 
   @Patch('recipe-items/:id')
@@ -203,7 +275,9 @@ export class IngredientController {
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async updateRecipeItem() {
-    throw new NotFoundException('Recipe system has been removed. Stock is now tracked directly on menu items.');
+    throw new NotFoundException(
+      'Recipe system has been removed. Stock is now tracked directly on menu items.',
+    );
   }
 
   @Delete('recipe-items/:id')
@@ -211,6 +285,8 @@ export class IngredientController {
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async removeRecipeItem() {
-    throw new NotFoundException('Recipe system has been removed. Stock is now tracked directly on menu items.');
+    throw new NotFoundException(
+      'Recipe system has been removed. Stock is now tracked directly on menu items.',
+    );
   }
 }

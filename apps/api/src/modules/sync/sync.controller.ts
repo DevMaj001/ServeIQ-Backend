@@ -1,5 +1,19 @@
-import { Controller, Post, Get, Body, UseGuards, Request, Query } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  UseGuards,
+  Request,
+  Query,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { SyncService } from './sync.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
@@ -13,7 +27,16 @@ export class SyncController {
   @Post('queue')
   @ApiOperation({ summary: 'Queue an offline operation for sync' })
   @ApiResponse({ status: 200 })
-  async queueOperation(@Request() req: any, @Body() body: { entity_type: string; operation: string; payload: any; client_idempotency_key?: string }) {
+  async queueOperation(
+    @Request() req: any,
+    @Body()
+    body: {
+      entity_type: string;
+      operation: string;
+      payload: any;
+      client_idempotency_key?: string;
+    },
+  ) {
     return this.syncService.queueOperation(
       req.user.branchId,
       body.entity_type,

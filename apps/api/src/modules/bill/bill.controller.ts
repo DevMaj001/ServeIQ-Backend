@@ -1,11 +1,28 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Request, Res } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  UseGuards,
+  Request,
+  Res,
+} from '@nestjs/common';
 import { Response } from 'express';
 import { BillService } from './bill.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../../common/shared';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam, ApiBody, ApiProduces } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+  ApiBody,
+  ApiProduces,
+} from '@nestjs/swagger';
 import { ProcessPaymentDto } from './dto/process-payment.dto';
 import { GenerateBillDto } from './dto/generate-bill.dto';
 import { ApplyDiscountDto } from './dto/apply-discount.dto';
@@ -19,7 +36,11 @@ export class BillController {
 
   @Post('tab/:tabId/generate')
   @ApiOperation({ summary: 'Generate a bill for an open tab' })
-  @ApiParam({ name: 'tabId', description: 'Tab UUID', example: 'tab-uuid-here' })
+  @ApiParam({
+    name: 'tabId',
+    description: 'Tab UUID',
+    example: 'tab-uuid-here',
+  })
   @ApiBody({ type: GenerateBillDto, required: false })
   @ApiResponse({ status: 201, description: 'Bill generated successfully.' })
   @ApiResponse({ status: 404, description: 'Tab not found.' })
@@ -29,23 +50,38 @@ export class BillController {
     @Request() req: any,
     @Body() generateBillDto?: GenerateBillDto,
   ) {
-    return this.billService.generateBill(tabId, req.user.userId, req.user.role, generateBillDto);
+    return this.billService.generateBill(
+      tabId,
+      req.user.userId,
+      req.user.role,
+      generateBillDto,
+    );
   }
 
   @Post('tab/:tabId/apply-discount')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER)
-  @ApiOperation({ summary: 'Apply a discount to a bill (Supervisor/Manager/Owner only)' })
+  @ApiOperation({
+    summary: 'Apply a discount to a bill (Supervisor/Manager/Owner only)',
+  })
   @ApiParam({ name: 'tabId' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async applyDiscount(@Param('tabId') tabId: string, @Request() req: any, @Body() dto: ApplyDiscountDto) {
+  async applyDiscount(
+    @Param('tabId') tabId: string,
+    @Request() req: any,
+    @Body() dto: ApplyDiscountDto,
+  ) {
     return this.billService.applyDiscount(tabId, req.user.branchId, dto);
   }
 
   @Post('tab/:tabId/pay')
   @ApiOperation({ summary: 'Process payment for a tab bill' })
-  @ApiParam({ name: 'tabId', description: 'Tab UUID', example: 'tab-uuid-here' })
+  @ApiParam({
+    name: 'tabId',
+    description: 'Tab UUID',
+    example: 'tab-uuid-here',
+  })
   @ApiBody({ type: ProcessPaymentDto })
   @ApiResponse({ status: 200, description: 'Payment processed, tab closed.' })
   @ApiResponse({ status: 404, description: 'Tab not found.' })
@@ -55,7 +91,12 @@ export class BillController {
     @Request() req: any,
     @Body() paymentDto: ProcessPaymentDto,
   ) {
-    return this.billService.processPayment(tabId, req.user.userId, req.user.role, paymentDto);
+    return this.billService.processPayment(
+      tabId,
+      req.user.userId,
+      req.user.role,
+      paymentDto,
+    );
   }
 
   @Post('tab/:tabId/split-evenly')
@@ -63,8 +104,17 @@ export class BillController {
   @ApiParam({ name: 'tabId' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async splitEvenly(@Param('tabId') tabId: string, @Request() req: any, @Body() body: { splits: number }) {
-    return this.billService.splitEvenly(tabId, req.user.userId, req.user.role, body.splits);
+  async splitEvenly(
+    @Param('tabId') tabId: string,
+    @Request() req: any,
+    @Body() body: { splits: number },
+  ) {
+    return this.billService.splitEvenly(
+      tabId,
+      req.user.userId,
+      req.user.role,
+      body.splits,
+    );
   }
 
   @Post('tab/:tabId/split-by-item')
@@ -72,8 +122,17 @@ export class BillController {
   @ApiParam({ name: 'tabId' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async splitByItem(@Param('tabId') tabId: string, @Request() req: any, @Body() body: { allocations: { order_ids: string[]; label?: string }[] }) {
-    return this.billService.splitByItem(tabId, req.user.userId, req.user.role, body.allocations);
+  async splitByItem(
+    @Param('tabId') tabId: string,
+    @Request() req: any,
+    @Body() body: { allocations: { order_ids: string[]; label?: string }[] },
+  ) {
+    return this.billService.splitByItem(
+      tabId,
+      req.user.userId,
+      req.user.role,
+      body.allocations,
+    );
   }
 
   @Get('tab/:tabId/splits')
@@ -91,13 +150,28 @@ export class BillController {
   @ApiParam({ name: 'billId' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async paySplit(@Param('tabId') tabId: string, @Param('billId') billId: string, @Request() req: any, @Body() paymentDto: ProcessPaymentDto) {
-    return this.billService.processSplitPayment(tabId, billId, req.user.userId, req.user.role, paymentDto);
+  async paySplit(
+    @Param('tabId') tabId: string,
+    @Param('billId') billId: string,
+    @Request() req: any,
+    @Body() paymentDto: ProcessPaymentDto,
+  ) {
+    return this.billService.processSplitPayment(
+      tabId,
+      billId,
+      req.user.userId,
+      req.user.role,
+      paymentDto,
+    );
   }
 
   @Get('tab/:tabId/receipt')
   @ApiOperation({ summary: 'Get receipt details as JSON' })
-  @ApiParam({ name: 'tabId', description: 'Tab UUID', example: 'tab-uuid-here' })
+  @ApiParam({
+    name: 'tabId',
+    description: 'Tab UUID',
+    example: 'tab-uuid-here',
+  })
   @ApiResponse({ status: 200, description: 'Receipt details.' })
   @ApiResponse({ status: 404, description: 'Tab or bill not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
@@ -107,12 +181,20 @@ export class BillController {
 
   @Get('tab/:tabId/receipt/pdf')
   @ApiOperation({ summary: 'Download receipt as PDF' })
-  @ApiParam({ name: 'tabId', description: 'Tab UUID', example: 'tab-uuid-here' })
+  @ApiParam({
+    name: 'tabId',
+    description: 'Tab UUID',
+    example: 'tab-uuid-here',
+  })
   @ApiProduces('application/pdf')
   @ApiResponse({ status: 200, description: 'PDF receipt.' })
   @ApiResponse({ status: 404, description: 'Tab or bill not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async getReceiptPdf(@Param('tabId') tabId: string, @Request() req: any, @Res() res: Response) {
+  async getReceiptPdf(
+    @Param('tabId') tabId: string,
+    @Request() req: any,
+    @Res() res: Response,
+  ) {
     const pdf = await this.billService.getReceiptPdf(tabId, req.user.branchId);
     res.set({
       'Content-Type': 'application/pdf',
@@ -122,5 +204,3 @@ export class BillController {
     res.end(pdf);
   }
 }
-
-

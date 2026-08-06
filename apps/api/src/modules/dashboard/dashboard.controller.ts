@@ -2,7 +2,13 @@ import { Controller, Get, Query, UseGuards, Request } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Throttle } from '@nestjs/throttler';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+  ApiResponse,
+} from '@nestjs/swagger';
 
 @ApiTags('Dashboard')
 @ApiBearerAuth('access-token')
@@ -12,14 +18,18 @@ export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   @Get('dashboard/branch')
-  @ApiOperation({ summary: 'Branch overview — totals for tables, open tabs, today revenue' })
+  @ApiOperation({
+    summary: 'Branch overview — totals for tables, open tabs, today revenue',
+  })
   @ApiResponse({ status: 200, description: 'Branch overview stats.' })
   async getBranchOverview(@Request() req: any) {
     return this.dashboardService.getBranchOverview(req.user.branchId);
   }
 
   @Get('dashboard/waiters')
-  @ApiOperation({ summary: 'Waiter performance — tabs closed and revenue today by waiter' })
+  @ApiOperation({
+    summary: 'Waiter performance — tabs closed and revenue today by waiter',
+  })
   @ApiResponse({ status: 200, description: 'Waiter performance list.' })
   async getWaiterPerformance(@Request() req: any) {
     return this.dashboardService.getWaiterPerformance(req.user.branchId);
@@ -27,23 +37,44 @@ export class DashboardController {
 
   @Get('reports/sales')
   @Throttle({ default: { limit: 30, ttl: 60000 } })
-  @ApiOperation({ summary: 'Sales report with optional date range and payment method breakdown' })
-  @ApiQuery({ name: 'dateFrom', required: false, example: '2026-06-01', description: 'Start date (inclusive). Omit for all-time.' })
-  @ApiQuery({ name: 'dateTo', required: false, example: '2026-06-28', description: 'End date (inclusive). Omit for all-time.' })
-  @ApiResponse({ status: 200, description: 'Sales report data.', schema: {
-    example: {
-      total_revenue_kobo: 52692500,
-      transaction_count: 29,
-      average_bill_kobo: 1816982,
-      breakdown_by_method: { cash: 35000000, transfer: 17692500 },
+  @ApiOperation({
+    summary:
+      'Sales report with optional date range and payment method breakdown',
+  })
+  @ApiQuery({
+    name: 'dateFrom',
+    required: false,
+    example: '2026-06-01',
+    description: 'Start date (inclusive). Omit for all-time.',
+  })
+  @ApiQuery({
+    name: 'dateTo',
+    required: false,
+    example: '2026-06-28',
+    description: 'End date (inclusive). Omit for all-time.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Sales report data.',
+    schema: {
+      example: {
+        total_revenue_kobo: 52692500,
+        transaction_count: 29,
+        average_bill_kobo: 1816982,
+        breakdown_by_method: { cash: 35000000, transfer: 17692500 },
+      },
     },
-  } })
+  })
   async getSalesReport(
     @Request() req: any,
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
   ) {
-    return this.dashboardService.getSalesReport(req.user.branchId, dateFrom, dateTo);
+    return this.dashboardService.getSalesReport(
+      req.user.branchId,
+      dateFrom,
+      dateTo,
+    );
   }
 
   @Get('reports/peak-hours')
@@ -57,7 +88,11 @@ export class DashboardController {
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
   ) {
-    return this.dashboardService.getPeakHours(req.user.branchId, dateFrom, dateTo);
+    return this.dashboardService.getPeakHours(
+      req.user.branchId,
+      dateFrom,
+      dateTo,
+    );
   }
 
   @Get('reports/items')
@@ -71,13 +106,22 @@ export class DashboardController {
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
   ) {
-    return this.dashboardService.getTopItems(req.user.branchId, dateFrom, dateTo);
+    return this.dashboardService.getTopItems(
+      req.user.branchId,
+      dateFrom,
+      dateTo,
+    );
   }
 
   @Get('reports/table-velocity')
   @Throttle({ default: { limit: 30, ttl: 60000 } })
-  @ApiOperation({ summary: 'Average time between open and close per table (table velocity)' })
-  @ApiResponse({ status: 200, description: 'Table velocity list sorted by shortest avg duration.' })
+  @ApiOperation({
+    summary: 'Average time between open and close per table (table velocity)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Table velocity list sorted by shortest avg duration.',
+  })
   async getTableVelocity(@Request() req: any) {
     return this.dashboardService.getTableVelocity(req.user.branchId);
   }
@@ -87,13 +131,19 @@ export class DashboardController {
   @ApiOperation({ summary: 'Covers and avg duration grouped by hour of day' })
   @ApiQuery({ name: 'dateFrom', required: false, example: '2026-06-01' })
   @ApiQuery({ name: 'dateTo', required: false, example: '2026-06-28' })
-  @ApiResponse({ status: 200, description: 'Hourly efficiency breakdown (0-23).' })
+  @ApiResponse({
+    status: 200,
+    description: 'Hourly efficiency breakdown (0-23).',
+  })
   async getPeakEfficiency(
     @Request() req: any,
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
   ) {
-    return this.dashboardService.getPeakEfficiency(req.user.branchId, dateFrom, dateTo);
+    return this.dashboardService.getPeakEfficiency(
+      req.user.branchId,
+      dateFrom,
+      dateTo,
+    );
   }
 }
-

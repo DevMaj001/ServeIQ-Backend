@@ -1,5 +1,20 @@
-import { Controller, Post, Get, UseGuards, Body, Request, Query } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiBody, ApiQuery } from '@nestjs/swagger';
+import {
+  Controller,
+  Post,
+  Get,
+  UseGuards,
+  Body,
+  Request,
+  Query,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiBody,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { AiService } from './ai.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GenerateLogicDto } from './dto/generate-logic.dto';
@@ -13,9 +28,14 @@ export class AiController {
   constructor(private readonly aiService: AiService) {}
 
   @Post('generate-logic')
-  @ApiOperation({ summary: 'Generate perfect business logic using Nemotron AI' })
+  @ApiOperation({
+    summary: 'Generate perfect business logic using Nemotron AI',
+  })
   @ApiBody({ type: GenerateLogicDto })
-  @ApiResponse({ status: 200, description: 'Business logic generated successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Business logic generated successfully',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async generateLogic(
     @Request() req: any,
@@ -26,8 +46,13 @@ export class AiController {
   }
 
   @Get('analyze-api')
-  @ApiOperation({ summary: 'Analyze API pros and cons for admin and waiter apps' })
-  @ApiResponse({ status: 200, description: 'API analysis completed successfully' })
+  @ApiOperation({
+    summary: 'Analyze API pros and cons for admin and waiter apps',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'API analysis completed successfully',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async analyzeApi() {
     const result = await this.aiService.analyzeApiProsCons();
@@ -35,14 +60,14 @@ export class AiController {
   }
 
   @Post('report')
-  @ApiOperation({ summary: 'Natural language sales report — ask questions about your business data' })
+  @ApiOperation({
+    summary:
+      'Natural language sales report — ask questions about your business data',
+  })
   @ApiBody({ type: ReportQueryDto })
   @ApiResponse({ status: 200, description: 'AI-powered report generated' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getReport(
-    @Request() req: any,
-    @Body() dto: ReportQueryDto,
-  ) {
+  async getReport(@Request() req: any, @Body() dto: ReportQueryDto) {
     const result = await this.aiService.getSalesReport(
       req.user.branchId,
       dto.question,
@@ -53,7 +78,10 @@ export class AiController {
   }
 
   @Get('insights/wastage')
-  @ApiOperation({ summary: 'Analyze inventory wastage and slippage patterns from stock adjustments' })
+  @ApiOperation({
+    summary:
+      'Analyze inventory wastage and slippage patterns from stock adjustments',
+  })
   @ApiResponse({ status: 200, description: 'Wastage insights generated' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getWastageInsights(@Request() req: any) {
@@ -62,11 +90,19 @@ export class AiController {
   }
 
   @Get('insights/restock')
-  @ApiOperation({ summary: 'Get AI-powered restock recommendations based on current stock and usage' })
-  @ApiResponse({ status: 200, description: 'Restock recommendations generated' })
+  @ApiOperation({
+    summary:
+      'Get AI-powered restock recommendations based on current stock and usage',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Restock recommendations generated',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getRestockRecommendations(@Request() req: any) {
-    const result = await this.aiService.getRestockRecommendations(req.user.branchId);
+    const result = await this.aiService.getRestockRecommendations(
+      req.user.branchId,
+    );
     return { success: true, data: result };
   }
 }

@@ -1,4 +1,10 @@
-import { Inject, Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Tab } from './entities/tab.entity';
@@ -33,7 +39,11 @@ export class TabService {
     private trackingService: TrackingService,
   ) {}
 
-  async openTab(createDto: any, currentUserId?: string, currentUserRole?: string) {
+  async openTab(
+    createDto: any,
+    currentUserId?: string,
+    currentUserRole?: string,
+  ) {
     const tabType: TabType = createDto.tab_type || TabType.DINE_IN;
 
     // Require an open shift before opening a tab
@@ -41,7 +51,9 @@ export class TabService {
       where: { branch_id: createDto.branch_id, status: 'open' },
     });
     if (!openShift) {
-      throw new BadRequestException('No open shift for this branch. Please open a shift first.');
+      throw new BadRequestException(
+        'No open shift for this branch. Please open a shift first.',
+      );
     }
 
     let tableId = createDto.table_id;
@@ -66,11 +78,24 @@ export class TabService {
         where: { table_id: tableId, status: 'open' },
       });
       if (existingOpenTab) {
-        if (existingOpenTab.waiter_id && existingOpenTab.waiter_id !== currentUserId) {
-          throw new ForbiddenException('This table is being served by another waiter');
+        if (
+          existingOpenTab.waiter_id &&
+          existingOpenTab.waiter_id !== currentUserId
+        ) {
+          throw new ForbiddenException(
+            'This table is being served by another waiter',
+          );
         }
-        if (existingOpenTab.waiter_id === currentUserId || (!existingOpenTab.waiter_id && !currentUserId)) {
-          return this.findOne(existingOpenTab.id, createDto.branch_id, currentUserId, currentUserRole);
+        if (
+          existingOpenTab.waiter_id === currentUserId ||
+          (!existingOpenTab.waiter_id && !currentUserId)
+        ) {
+          return this.findOne(
+            existingOpenTab.id,
+            createDto.branch_id,
+            currentUserId,
+            currentUserRole,
+          );
         }
         throw new BadRequestException('This table already has an open tab');
       }
@@ -92,7 +117,9 @@ export class TabService {
         tracking_code: await this.trackingService.generateUniqueCode(),
         tracking_generated_at: new Date(),
       });
-      const savedTab = (await queryRunner.manager.save(newTab)) as unknown as Tab;
+      const savedTab = (await queryRunner.manager.save(
+        newTab,
+      )) as unknown as Tab;
 
       // Virtual tables never participate in occupancy logic — they are system records, not seatable tables.
       if (tabType !== TabType.TAKEAWAY) {
@@ -111,7 +138,12 @@ export class TabService {
     }
   }
 
-  async findOne(id: string, branchId: string, currentUserId?: string, currentUserRole?: string) {
+  async findOne(
+    id: string,
+    branchId: string,
+    currentUserId?: string,
+    currentUserRole?: string,
+  ) {
     const tab = await this.tabRepository.findOne({
       where: { id, branch_id: branchId },
     });
@@ -129,13 +161,24 @@ export class TabService {
       currentUserRole !== 'manager' &&
       currentUserRole !== 'cashier'
     ) {
-      throw new ForbiddenException('This table is being served by another waiter');
+      throw new ForbiddenException(
+        'This table is being served by another waiter',
+      );
     }
 
-    const table = await this.tableRepository.findOne({ where: { id: tab.table_id } });
-    const waiter = tab.waiter_id ? await this.userRepository.findOne({ where: { id: tab.waiter_id } }) : null;
-    const orders = await this.orderRepository.find({ where: { tab_id: tab.id } });
-    const totalKobo = orders.reduce((sum, order) => sum + order.subtotal_kobo, 0);
+    const table = await this.tableRepository.findOne({
+      where: { id: tab.table_id },
+    });
+    const waiter = tab.waiter_id
+      ? await this.userRepository.findOne({ where: { id: tab.waiter_id } })
+      : null;
+    const orders = await this.orderRepository.find({
+      where: { tab_id: tab.id },
+    });
+    const totalKobo = orders.reduce(
+      (sum, order) => sum + order.subtotal_kobo,
+      0,
+    );
 
     return {
       ...tab,
@@ -146,7 +189,12 @@ export class TabService {
     };
   }
 
-  async findAllByBranch(branchId: string, status?: string, waiterId?: string, pagination?: { page: number; per_page: number }) {
+  async findAllByBranch(
+    branchId: string,
+    status?: string,
+    waiterId?: string,
+    pagination?: { page: number; per_page: number },
+  ) {
     const where: any = { branch_id: branchId };
     if (status) {
       where.status = status;
@@ -154,8 +202,10 @@ export class TabService {
     if (waiterId) {
       where.waiter_id = waiterId;
     }
-    
-    const skip = pagination ? (pagination.page - 1) * pagination.per_page : undefined;
+
+    const skip = pagination
+      ? (pagination.page - 1) * pagination.per_page
+      : undefined;
     const take = pagination ? pagination.per_page : undefined;
 
     const [tabs, total] = await this.tabRepository.findAndCount({
@@ -167,11 +217,20 @@ export class TabService {
 
     const tabsWithDetails = [];
     for (const tab of tabs) {
-      const table = await this.tableRepository.findOne({ where: { id: tab.table_id } });
-      const waiter = tab.waiter_id ? await this.userRepository.findOne({ where: { id: tab.waiter_id } }) : null;
-      const orders = await this.orderRepository.find({ where: { tab_id: tab.id } });
-      const totalKobo = orders.reduce((sum, order) => sum + order.subtotal_kobo, 0);
-      
+      const table = await this.tableRepository.findOne({
+        where: { id: tab.table_id },
+      });
+      const waiter = tab.waiter_id
+        ? await this.userRepository.findOne({ where: { id: tab.waiter_id } })
+        : null;
+      const orders = await this.orderRepository.find({
+        where: { tab_id: tab.id },
+      });
+      const totalKobo = orders.reduce(
+        (sum, order) => sum + order.subtotal_kobo,
+        0,
+      );
+
       tabsWithDetails.push({
         ...tab,
         table,
@@ -192,7 +251,7 @@ export class TabService {
       .andWhere('tab.waiter_id IS NOT NULL')
       .getRawMany();
 
-    const ids = raw.map(r => r.waiter_id);
+    const ids = raw.map((r) => r.waiter_id);
     if (ids.length === 0) return [];
 
     const users = await this.userRepository
@@ -204,7 +263,12 @@ export class TabService {
     return users;
   }
 
-  async closeTab(id: string, branchId: string, currentUserId?: string, currentUserRole?: string) {
+  async closeTab(
+    id: string,
+    branchId: string,
+    currentUserId?: string,
+    currentUserRole?: string,
+  ) {
     const tab = await this.findOne(id, branchId);
 
     // Block other waiters from closing an occupied tab
@@ -217,7 +281,7 @@ export class TabService {
       currentUserRole !== 'manager' &&
       currentUserRole !== 'cashier'
     ) {
-      throw new ForbiddenException('You cannot close another waiter\'s tab');
+      throw new ForbiddenException("You cannot close another waiter's tab");
     }
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -231,7 +295,9 @@ export class TabService {
       });
 
       // Virtual tables never participate in occupancy logic — they are system records, not seatable tables.
-      const table = await this.tableRepository.findOne({ where: { id: tab.table_id } });
+      const table = await this.tableRepository.findOne({
+        where: { id: tab.table_id },
+      });
       if (table && !table.is_virtual) {
         await queryRunner.manager.update(Table, tab.table_id, {
           status: TableStatus.AVAILABLE,
@@ -254,7 +320,9 @@ export class TabService {
       throw new BadRequestException('Only open tabs can be transferred');
     }
 
-    const sourceTable = await this.tableRepository.findOne({ where: { id: tab.table_id } });
+    const sourceTable = await this.tableRepository.findOne({
+      where: { id: tab.table_id },
+    });
 
     // Block incompatible transfers: takeaway <-> physical, dine-in <-> virtual counter
     if (tab.tab_type === TabType.TAKEAWAY) {
@@ -263,7 +331,9 @@ export class TabService {
       );
     }
     // For dine-in tabs, ensure the target is a physical table (not virtual)
-    const targetTable = await this.tableRepository.findOne({ where: { id: targetTableId, branch_id: branchId } });
+    const targetTable = await this.tableRepository.findOne({
+      where: { id: targetTableId, branch_id: branchId },
+    });
     if (!targetTable) {
       throw new NotFoundException('Target table not found');
     }
@@ -287,8 +357,12 @@ export class TabService {
       const oldTableId = tab.table_id;
 
       await queryRunner.manager.update(Tab, id, { table_id: targetTableId });
-      await queryRunner.manager.update(Table, oldTableId, { status: TableStatus.AVAILABLE });
-      await queryRunner.manager.update(Table, targetTableId, { status: TableStatus.OCCUPIED });
+      await queryRunner.manager.update(Table, oldTableId, {
+        status: TableStatus.AVAILABLE,
+      });
+      await queryRunner.manager.update(Table, targetTableId, {
+        status: TableStatus.OCCUPIED,
+      });
 
       await queryRunner.commitTransaction();
       return this.findOne(id, branchId);
@@ -300,7 +374,13 @@ export class TabService {
     }
   }
 
-  async voidTab(id: string, branchId: string, currentUserId?: string, currentUserRole?: string, reason?: string) {
+  async voidTab(
+    id: string,
+    branchId: string,
+    currentUserId?: string,
+    currentUserRole?: string,
+    reason?: string,
+  ) {
     const tab = await this.findOne(id, branchId);
     if (tab.status !== 'open') {
       throw new BadRequestException('Only open tabs can be voided');
@@ -315,7 +395,7 @@ export class TabService {
       currentUserRole !== 'manager' &&
       currentUserRole !== 'cashier'
     ) {
-      throw new ForbiddenException('You cannot void another waiter\'s tab');
+      throw new ForbiddenException("You cannot void another waiter's tab");
     }
 
     // Double-reversal guard: if a void_reversal already exists for this tab, skip
@@ -336,7 +416,9 @@ export class TabService {
       });
 
       // Virtual tables never participate in occupancy logic — they are system records, not seatable tables.
-      const voidTable = await this.tableRepository.findOne({ where: { id: tab.table_id } });
+      const voidTable = await this.tableRepository.findOne({
+        where: { id: tab.table_id },
+      });
       if (voidTable && !voidTable.is_virtual) {
         await tableRepo.update(tab.table_id, { status: TableStatus.AVAILABLE });
       }
@@ -352,7 +434,10 @@ export class TabService {
       const reversalByItem = new Map<string, number>();
       for (const row of consumptions) {
         const qty = Math.abs(Number(row.quantity_change));
-        reversalByItem.set(row.menu_item_id, (reversalByItem.get(row.menu_item_id) || 0) + qty);
+        reversalByItem.set(
+          row.menu_item_id,
+          (reversalByItem.get(row.menu_item_id) || 0) + qty,
+        );
       }
 
       // Sort IDs to prevent deadlocks

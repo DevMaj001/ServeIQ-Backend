@@ -11,4 +11,3 @@ import { Unit } from './entities/unit.entity';
   exports: [UnitService],
 })
 export class UnitModule {}
-

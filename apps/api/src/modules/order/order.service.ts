@@ -1,11 +1,21 @@
-import { Inject, Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, In, LessThanOrEqual } from 'typeorm';
 import { Order } from './entities/order.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Tab } from '../tab/entities/tab.entity';
 import { IngredientService } from '../ingredient/ingredient.service';
-import { OrderStatus, UserRole, FulfillmentType, TabType } from '../../common/shared';
+import {
+  OrderStatus,
+  UserRole,
+  FulfillmentType,
+  TabType,
+} from '../../common/shared';
 import { AuditService } from '../../common/services/audit.service';
 import { Department } from '../department/entities/department.entity';
 import { ApproveOrderDto } from './dto/approve-order.dto';
@@ -32,15 +42,23 @@ export class OrderService {
   ) {}
 
   async addOrderItems(tabId: string, items: any[], userId: string) {
-    const ids = items.map(i => i.menu_item_id);
-    const menuItems = await this.menuRepository.find({ where: { id: In(ids) } });
-    const menuMap = new Map(menuItems.map(m => [m.id, m]));
+    const ids = items.map((i) => i.menu_item_id);
+    const menuItems = await this.menuRepository.find({
+      where: { id: In(ids) },
+    });
+    const menuMap = new Map(menuItems.map((m) => [m.id, m]));
 
     for (const item of items) {
       const menuItem = menuMap.get(item.menu_item_id);
-      if (!menuItem) throw new NotFoundException(`Menu item ${item.menu_item_id} not found`);
-      if (menuItem.track_stock && Number(menuItem.quantity_in_stock) < item.quantity) {
-        throw new BadRequestException(`Insufficient stock for "${menuItem.name}": ${Number(menuItem.quantity_in_stock)} available, ${item.quantity} requested`);
+      if (!menuItem)
+        throw new NotFoundException(`Menu item ${item.menu_item_id} not found`);
+      if (
+        menuItem.track_stock &&
+        Number(menuItem.quantity_in_stock) < item.quantity
+      ) {
+        throw new BadRequestException(
+          `Insufficient stock for "${menuItem.name}": ${Number(menuItem.quantity_in_stock)} available, ${item.quantity} requested`,
+        );
       }
     }
 
@@ -51,23 +69,29 @@ export class OrderService {
         throw new NotFoundException('Tab not found');
       }
 
-      const tabDefault = tab.tab_type === TabType.TAKEAWAY
-        ? FulfillmentType.PACK
-        : FulfillmentType.SERVE;
+      const tabDefault =
+        tab.tab_type === TabType.TAKEAWAY
+          ? FulfillmentType.PACK
+          : FulfillmentType.SERVE;
 
       for (const item of items) {
         const menuItem = menuMap.get(item.menu_item_id);
         if (!menuItem) {
-          throw new NotFoundException(`Menu item ${item.menu_item_id} not found`);
+          throw new NotFoundException(
+            `Menu item ${item.menu_item_id} not found`,
+          );
         }
 
-        const modifierTotal = (item.modifiers || []).reduce((sum: number, m: any) => sum + (m.price_kobo * m.qty), 0);
+        const modifierTotal = (item.modifiers || []).reduce(
+          (sum: number, m: any) => sum + m.price_kobo * m.qty,
+          0,
+        );
         const order = manager.getRepository(Order).create({
           tab_id: tabId,
           menu_item_id: item.menu_item_id,
           quantity: item.quantity,
           unit_price_kobo: menuItem.price_kobo,
-          subtotal_kobo: (item.quantity * menuItem.price_kobo) + modifierTotal,
+          subtotal_kobo: item.quantity * menuItem.price_kobo + modifierTotal,
           round_number: item.round_number || 1,
           created_by: userId,
           notes: item.notes,
@@ -80,7 +104,10 @@ export class OrderService {
 
       await this.ingredientService.deductByTab(
         { id: tabId, branch_id: tab.branch_id },
-        items.map(item => ({ menu_item_id: item.menu_item_id, quantity: item.quantity })),
+        items.map((item) => ({
+          menu_item_id: item.menu_item_id,
+          quantity: item.quantity,
+        })),
         manager,
       );
 
@@ -90,7 +117,9 @@ export class OrderService {
 
   async findByTab(tabId: string, branchId?: string) {
     if (branchId) {
-      const tab = await this.tabRepository.findOne({ where: { id: tabId, branch_id: branchId } });
+      const tab = await this.tabRepository.findOne({
+        where: { id: tabId, branch_id: branchId },
+      });
       if (!tab) throw new NotFoundException('Tab not found in this branch');
     }
     return this.orderRepository.find({
@@ -104,7 +133,9 @@ export class OrderService {
       throw new NotFoundException('Order item not found');
     }
     if (branchId) {
-      const tab = await this.tabRepository.findOne({ where: { id: order.tab_id, branch_id: branchId } });
+      const tab = await this.tabRepository.findOne({
+        where: { id: order.tab_id, branch_id: branchId },
+      });
       if (!tab) throw new NotFoundException('Order not found in this branch');
     }
     return order;
@@ -125,8 +156,12 @@ export class OrderService {
       order.notes = updateDto.notes;
     }
 
-    const modifierTotal = (order.modifiers || []).reduce((sum, m) => sum + (m.price_kobo * m.qty), 0);
-    order.subtotal_kobo = (order.quantity * order.unit_price_kobo) + modifierTotal;
+    const modifierTotal = (order.modifiers || []).reduce(
+      (sum, m) => sum + m.price_kobo * m.qty,
+      0,
+    );
+    order.subtotal_kobo =
+      order.quantity * order.unit_price_kobo + modifierTotal;
 
     return this.orderRepository.save(order);
   }
@@ -138,78 +173,119 @@ export class OrderService {
   }
 
   private async getTabForOrder(orderId: string, branchId?: string) {
-    const order = await this.orderRepository.findOne({ where: { id: orderId }, select: { id: true, tab_id: true } });
+    const order = await this.orderRepository.findOne({
+      where: { id: orderId },
+      select: { id: true, tab_id: true },
+    });
     if (!order) throw new NotFoundException('Order not found');
-    const tab = await this.tabRepository.findOne({ where: { id: order.tab_id } });
+    const tab = await this.tabRepository.findOne({
+      where: { id: order.tab_id },
+    });
     if (!tab) throw new NotFoundException('Tab not found');
-    if (branchId && tab.branch_id !== branchId) throw new NotFoundException('Order not found in this branch');
+    if (branchId && tab.branch_id !== branchId)
+      throw new NotFoundException('Order not found in this branch');
     return { order, tab };
   }
 
-  private async verifyBranchAccess(orderId: string, branchId: string): Promise<void> {
-    const order = await this.orderRepository.findOne({ where: { id: orderId }, select: { id: true, tab_id: true } });
+  private async verifyBranchAccess(
+    orderId: string,
+    branchId: string,
+  ): Promise<void> {
+    const order = await this.orderRepository.findOne({
+      where: { id: orderId },
+      select: { id: true, tab_id: true },
+    });
     if (!order) throw new NotFoundException('Order not found');
-    const tab = await this.tabRepository.findOne({ where: { id: order.tab_id, branch_id: branchId } });
+    const tab = await this.tabRepository.findOne({
+      where: { id: order.tab_id, branch_id: branchId },
+    });
     if (!tab) throw new NotFoundException('Order not found in this branch');
   }
 
-  async approve(id: string, userId: string, dto: ApproveOrderDto, branchId?: string) {
+  async approve(
+    id: string,
+    userId: string,
+    dto: ApproveOrderDto,
+    branchId?: string,
+  ) {
     const { tab } = await this.getTabForOrder(id, branchId);
     const alphaIds = [id].sort();
-    return this.dataSource.transaction(async (manager) => {
-      const order = await manager.getRepository(Order).findOne({
-        where: { id: alphaIds[0] },
-        lock: { mode: 'pessimistic_write' },
+    return this.dataSource
+      .transaction(async (manager) => {
+        const order = await manager.getRepository(Order).findOne({
+          where: { id: alphaIds[0] },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!order) throw new NotFoundException('Order not found');
+        if (order.order_status !== OrderStatus.PENDING_SUPERVISOR_APPROVAL) {
+          throw new BadRequestException('Order is not pending approval');
+        }
+
+        const departmentId = dto.department;
+        const dept = await this.departmentRepo.findOne({
+          where: { id: departmentId, branch_id: tab.branch_id },
+        });
+        if (!dept)
+          throw new NotFoundException('Department not found in this branch');
+
+        const now = new Date();
+        order.order_status = OrderStatus.APPROVED;
+        order.approved_by = userId;
+        order.approved_at = now;
+        // preparing_at intentionally set to the same timestamp as approved_at because there is
+        // no Chef-confirmed "cooking started" signal yet. When the planned Chef role (V1.2)
+        // adds a real PREPARING status transition, replace this line with the independent
+        // timestamp set at that actual transition point.
+        order.preparing_at = now;
+        order.assigned_department = departmentId;
+        order.estimated_preparation_time_seconds =
+          dto.estimated_preparation_time_seconds;
+        order.timer_started_at = now;
+        order.timer_ends_at = new Date(
+          now.getTime() + dto.estimated_preparation_time_seconds * 1000,
+        );
+
+        await manager.getRepository(Order).save(order);
+
+        await this.auditService.log({
+          branchId: tab.branch_id,
+          userId,
+          action: 'order.approve',
+          entityId: id,
+          entityType: 'order',
+          payload: {
+            department: departmentId,
+            estimated_time_seconds: dto.estimated_preparation_time_seconds,
+          },
+        });
+
+        return order;
+      })
+      .then(async (savedOrder) => {
+        const orderTab = await this.tabRepository.findOne({
+          where: { id: savedOrder.tab_id },
+        });
+        await this.notificationService.create({
+          branch_id: tab.branch_id,
+          type: NotificationType.ORDER_APPROVED,
+          title: 'Order Approved',
+          message: `Order ${savedOrder.id.slice(0, 8)}… approved. Tracking: ${orderTab?.tracking_code || 'N/A'}`,
+          data: {
+            order_id: savedOrder.id,
+            tab_id: savedOrder.tab_id,
+            tracking_code: orderTab?.tracking_code,
+          },
+        });
+        return savedOrder;
       });
-      if (!order) throw new NotFoundException('Order not found');
-      if (order.order_status !== OrderStatus.PENDING_SUPERVISOR_APPROVAL) {
-        throw new BadRequestException('Order is not pending approval');
-      }
-
-      const departmentId = dto.department;
-      const dept = await this.departmentRepo.findOne({ where: { id: departmentId, branch_id: tab.branch_id } });
-      if (!dept) throw new NotFoundException('Department not found in this branch');
-
-      const now = new Date();
-      order.order_status = OrderStatus.APPROVED;
-      order.approved_by = userId;
-      order.approved_at = now;
-      // preparing_at intentionally set to the same timestamp as approved_at because there is
-      // no Chef-confirmed "cooking started" signal yet. When the planned Chef role (V1.2)
-      // adds a real PREPARING status transition, replace this line with the independent
-      // timestamp set at that actual transition point.
-      order.preparing_at = now;
-      order.assigned_department = departmentId;
-      order.estimated_preparation_time_seconds = dto.estimated_preparation_time_seconds;
-      order.timer_started_at = now;
-      order.timer_ends_at = new Date(now.getTime() + dto.estimated_preparation_time_seconds * 1000);
-
-      await manager.getRepository(Order).save(order);
-
-      await this.auditService.log({
-        branchId: tab.branch_id,
-        userId,
-        action: 'order.approve',
-        entityId: id,
-        entityType: 'order',
-        payload: { department: departmentId, estimated_time_seconds: dto.estimated_preparation_time_seconds },
-      });
-
-      return order;
-    }).then(async (savedOrder) => {
-      const orderTab = await this.tabRepository.findOne({ where: { id: savedOrder.tab_id } });
-      await this.notificationService.create({
-        branch_id: tab.branch_id,
-        type: NotificationType.ORDER_APPROVED,
-        title: 'Order Approved',
-        message: `Order ${savedOrder.id.slice(0, 8)}… approved. Tracking: ${orderTab?.tracking_code || 'N/A'}`,
-        data: { order_id: savedOrder.id, tab_id: savedOrder.tab_id, tracking_code: orderTab?.tracking_code },
-      });
-      return savedOrder;
-    });
   }
 
-  async decline(id: string, userId: string, dto: DeclineOrderDto, branchId?: string) {
+  async decline(
+    id: string,
+    userId: string,
+    dto: DeclineOrderDto,
+    branchId?: string,
+  ) {
     const { tab } = await this.getTabForOrder(id, branchId);
     const alphaIds = [id].sort();
     return this.dataSource.transaction(async (manager) => {
@@ -280,7 +356,10 @@ export class OrderService {
         lock: { mode: 'pessimistic_write' },
       });
       if (!order) throw new NotFoundException('Order not found');
-      if (order.order_status !== OrderStatus.READY_FOR_PICKUP && order.order_status !== OrderStatus.OUT_FOR_DELIVERY) {
+      if (
+        order.order_status !== OrderStatus.READY_FOR_PICKUP &&
+        order.order_status !== OrderStatus.OUT_FOR_DELIVERY
+      ) {
         throw new BadRequestException('Order is not ready for pickup');
       }
 
@@ -309,9 +388,10 @@ export class OrderService {
     pagination?: { page: number; per_page: number },
     waiterId?: string,
   ) {
-    const orderClause = orderField === 'created_at'
-      ? 'o.created_at DESC'
-      : 'o.timer_ends_at ASC NULLS LAST';
+    const orderClause =
+      orderField === 'created_at'
+        ? 'o.created_at DESC'
+        : 'o.timer_ends_at ASC NULLS LAST';
 
     const params: any[] = [branchId, statuses];
     let waiterClause = '';
@@ -417,7 +497,11 @@ export class OrderService {
   async findPreparingByBranch(branchId: string) {
     const { data } = await this.findGroupedOrdersByBranch(
       branchId,
-      [OrderStatus.APPROVED, OrderStatus.ASSIGNED_TO_DEPARTMENT, OrderStatus.PREPARING],
+      [
+        OrderStatus.APPROVED,
+        OrderStatus.ASSIGNED_TO_DEPARTMENT,
+        OrderStatus.PREPARING,
+      ],
       'timer_ends_at',
     );
     return data;

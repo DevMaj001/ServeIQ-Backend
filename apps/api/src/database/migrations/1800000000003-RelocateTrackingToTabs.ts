@@ -1,13 +1,17 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class RelocateTrackingToTabs1800000000003 implements MigrationInterface {
-    name = 'RelocateTrackingToTabs1800000000003'
+  name = 'RelocateTrackingToTabs1800000000003';
 
-    public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE "tabs" ADD COLUMN IF NOT EXISTS "tracking_code" character varying(12)`);
-        await queryRunner.query(`ALTER TABLE "tabs" ADD COLUMN IF NOT EXISTS "tracking_generated_at" TIMESTAMP`);
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(
+      `ALTER TABLE "tabs" ADD COLUMN IF NOT EXISTS "tracking_code" character varying(12)`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "tabs" ADD COLUMN IF NOT EXISTS "tracking_generated_at" TIMESTAMP`,
+    );
 
-        await queryRunner.query(`
+    await queryRunner.query(`
             UPDATE "tabs" t
             SET
                 "tracking_code" = sub.tracking_code,
@@ -24,18 +28,30 @@ export class RelocateTrackingToTabs1800000000003 implements MigrationInterface {
             WHERE t.id = sub.tab_id
         `);
 
-        await queryRunner.query(`CREATE UNIQUE INDEX IF NOT EXISTS "IDX_tabs_tracking_code" ON "tabs" ("tracking_code") WHERE "tracking_code" IS NOT NULL`);
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "IDX_tabs_tracking_code" ON "tabs" ("tracking_code") WHERE "tracking_code" IS NOT NULL`,
+    );
 
-        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_orders_tracking_code"`);
-        await queryRunner.query(`ALTER TABLE "orders" DROP COLUMN IF EXISTS "tracking_code"`);
-        await queryRunner.query(`ALTER TABLE "orders" DROP COLUMN IF EXISTS "tracking_generated_at"`);
-    }
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "public"."IDX_orders_tracking_code"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "orders" DROP COLUMN IF EXISTS "tracking_code"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "orders" DROP COLUMN IF EXISTS "tracking_generated_at"`,
+    );
+  }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "tracking_code" character varying(12)`);
-        await queryRunner.query(`ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "tracking_generated_at" TIMESTAMP`);
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(
+      `ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "tracking_code" character varying(12)`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "tracking_generated_at" TIMESTAMP`,
+    );
 
-        await queryRunner.query(`
+    await queryRunner.query(`
             UPDATE "orders" o
             SET
                 "tracking_code" = sub.tracking_code,
@@ -51,9 +67,17 @@ export class RelocateTrackingToTabs1800000000003 implements MigrationInterface {
             WHERE o.tab_id = sub.tab_id
         `);
 
-        await queryRunner.query(`CREATE UNIQUE INDEX IF NOT EXISTS "IDX_orders_tracking_code" ON "orders" ("tracking_code")`);
-        await queryRunner.query(`DROP INDEX IF EXISTS "public"."IDX_tabs_tracking_code"`);
-        await queryRunner.query(`ALTER TABLE "tabs" DROP COLUMN IF EXISTS "tracking_code"`);
-        await queryRunner.query(`ALTER TABLE "tabs" DROP COLUMN IF EXISTS "tracking_generated_at"`);
-    }
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "IDX_orders_tracking_code" ON "orders" ("tracking_code")`,
+    );
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "public"."IDX_tabs_tracking_code"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "tabs" DROP COLUMN IF EXISTS "tracking_code"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "tabs" DROP COLUMN IF EXISTS "tracking_generated_at"`,
+    );
+  }
 }

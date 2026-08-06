@@ -6,7 +6,7 @@ import { Readable } from 'stream';
 export class CloudinaryService {
   async uploadImage(
     file: Express.Multer.File,
-    folder: string = 'serveiq'
+    folder: string = 'serveiq',
   ): Promise<string> {
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
@@ -15,7 +15,7 @@ export class CloudinaryService {
           if (error) return reject(error);
           if (!result) return reject(new Error('Upload returned no result'));
           resolve(result.secure_url);
-        }
+        },
       );
       Readable.from(file.buffer).pipe(uploadStream);
     });

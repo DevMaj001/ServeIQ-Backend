@@ -3,7 +3,12 @@ import { Injectable } from '@nestjs/common';
 const PDFDocument = require('pdfkit');
 
 export interface ReceiptData {
-  business?: { name?: string; address?: string; phone?: string; email?: string } | null;
+  business?: {
+    name?: string;
+    address?: string;
+    phone?: string;
+    email?: string;
+  } | null;
   branch?: { name?: string; address?: string } | null;
   tab?: { id: string; table_id: string } | null;
   table?: { label?: string } | null;
@@ -41,11 +46,19 @@ export class ReceiptService {
     const waiterName = data.waiter?.full_name || '';
 
     // Header
-    doc.fontSize(10).font('Helvetica-Bold').text(businessName, { align: 'center' });
-    if (branchName) doc.fontSize(8).font('Helvetica').text(branchName, { align: 'center' });
-    doc.fontSize(7).text(`Receipt: ${data.receipt_number}`, { align: 'center' });
+    doc
+      .fontSize(10)
+      .font('Helvetica-Bold')
+      .text(businessName, { align: 'center' });
+    if (branchName)
+      doc.fontSize(8).font('Helvetica').text(branchName, { align: 'center' });
+    doc
+      .fontSize(7)
+      .text(`Receipt: ${data.receipt_number}`, { align: 'center' });
     if (data.bill.paid_at) {
-      doc.fontSize(7).text(new Date(data.bill.paid_at).toLocaleString(), { align: 'center' });
+      doc.fontSize(7).text(new Date(data.bill.paid_at).toLocaleString(), {
+        align: 'center',
+      });
     }
     doc.moveDown(0.3);
 
@@ -77,7 +90,11 @@ export class ReceiptService {
 
       doc.fontSize(7);
       doc.text(truncated, { continued: true });
-      doc.text(`${order.quantity}`, { width: 30, align: 'right', continued: true });
+      doc.text(`${order.quantity}`, {
+        width: 30,
+        align: 'right',
+        continued: true,
+      });
       doc.text(koboToNaira(order.subtotal_kobo), { width: 55, align: 'right' });
     }
 
@@ -88,14 +105,23 @@ export class ReceiptService {
     // Totals
     doc.font('Helvetica');
     doc.fontSize(7).text(`Subtotal:`, { continued: true });
-    doc.text(koboToNaira(data.bill.subtotal_kobo), { width: 70, align: 'right' });
+    doc.text(koboToNaira(data.bill.subtotal_kobo), {
+      width: 70,
+      align: 'right',
+    });
 
     doc.fontSize(7).text(`Service Charge:`, { continued: true });
-    doc.text(koboToNaira(data.bill.service_charge_kobo), { width: 70, align: 'right' });
+    doc.text(koboToNaira(data.bill.service_charge_kobo), {
+      width: 70,
+      align: 'right',
+    });
 
     if (data.bill.discount_kobo > 0) {
       doc.fontSize(7).text(`Discount:`, { continued: true });
-      doc.text(`-${koboToNaira(data.bill.discount_kobo)}`, { width: 70, align: 'right' });
+      doc.text(`-${koboToNaira(data.bill.discount_kobo)}`, {
+        width: 70,
+        align: 'right',
+      });
     }
 
     doc.moveDown(0.2);
@@ -107,7 +133,9 @@ export class ReceiptService {
 
     // Payment info
     if (data.bill.payment_method) {
-      doc.text(`Paid via: ${data.bill.payment_method.toUpperCase()}`, { align: 'center' });
+      doc.text(`Paid via: ${data.bill.payment_method.toUpperCase()}`, {
+        align: 'center',
+      });
     }
     if (data.bill.payment_reference) {
       doc.text(`Ref: ${data.bill.payment_reference}`, { align: 'center' });

@@ -1,5 +1,21 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Request } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { MenuModifierService } from './menu-modifier.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateModifierGroupDto } from './dto/create-modifier-group.dto';
@@ -46,7 +62,11 @@ export class MenuModifierController {
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async updateGroup(@Param('id') id: string, @Request() req: any, @Body() dto: UpdateModifierGroupDto) {
+  async updateGroup(
+    @Param('id') id: string,
+    @Request() req: any,
+    @Body() dto: UpdateModifierGroupDto,
+  ) {
     return this.modifierService.updateGroup(id, req.user.branchId, dto);
   }
 
@@ -73,7 +93,10 @@ export class MenuModifierController {
   @ApiParam({ name: 'groupId' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async createOption(@Param('groupId') groupId: string, @Body() dto: CreateModifierOptionDto) {
+  async createOption(
+    @Param('groupId') groupId: string,
+    @Body() dto: CreateModifierOptionDto,
+  ) {
     return this.modifierService.createOption(groupId, dto);
   }
 
@@ -82,7 +105,10 @@ export class MenuModifierController {
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async updateOption(@Param('id') id: string, @Body() dto: UpdateModifierOptionDto) {
+  async updateOption(
+    @Param('id') id: string,
+    @Body() dto: UpdateModifierOptionDto,
+  ) {
     return this.modifierService.updateOption(id, dto);
   }
 
@@ -100,8 +126,16 @@ export class MenuModifierController {
   @ApiParam({ name: 'menuItemId' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async linkGroups(@Param('menuItemId') menuItemId: string, @Request() req: any, @Body() body: { group_ids: string[] }) {
-    return this.modifierService.linkGroupsToMenuItem(menuItemId, req.user.branchId, body.group_ids);
+  async linkGroups(
+    @Param('menuItemId') menuItemId: string,
+    @Request() req: any,
+    @Body() body: { group_ids: string[] },
+  ) {
+    return this.modifierService.linkGroupsToMenuItem(
+      menuItemId,
+      req.user.branchId,
+      body.group_ids,
+    );
   }
 
   @Get('menu-items/:menuItemId/modifiers')
@@ -109,7 +143,13 @@ export class MenuModifierController {
   @ApiParam({ name: 'menuItemId' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getMenuItemModifiers(@Param('menuItemId') menuItemId: string, @Request() req: any) {
-    return this.modifierService.getMenuItemModifiers(menuItemId, req.user.branchId);
+  async getMenuItemModifiers(
+    @Param('menuItemId') menuItemId: string,
+    @Request() req: any,
+  ) {
+    return this.modifierService.getMenuItemModifiers(
+      menuItemId,
+      req.user.branchId,
+    );
   }
 }

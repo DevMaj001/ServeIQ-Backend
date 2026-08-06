@@ -1,10 +1,10 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateMenuCategoriesTable1799000000000 implements MigrationInterface {
-    name = 'CreateMenuCategoriesTable1799000000000'
+  name = 'CreateMenuCategoriesTable1799000000000';
 
-    public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`
             CREATE TABLE IF NOT EXISTS "menu_categories" (
                 "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
                 "branch_id" uuid NOT NULL,
@@ -16,12 +16,15 @@ export class CreateMenuCategoriesTable1799000000000 implements MigrationInterfac
                 CONSTRAINT "PK_menu_categories_id" PRIMARY KEY ("id")
             )
         `);
-        await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_menu_categories_branch_id" ON "menu_categories" ("branch_id")`);
-    }
+    await queryRunner.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_menu_categories_branch_id" ON "menu_categories" ("branch_id")`,
+    );
+  }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`DROP INDEX IF EXISTS "IDX_menu_categories_branch_id"`);
-        await queryRunner.query(`DROP TABLE IF EXISTS "menu_categories"`);
-    }
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(
+      `DROP INDEX IF EXISTS "IDX_menu_categories_branch_id"`,
+    );
+    await queryRunner.query(`DROP TABLE IF EXISTS "menu_categories"`);
+  }
 }
-

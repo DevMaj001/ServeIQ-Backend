@@ -64,7 +64,7 @@ export class BranchService {
 
   async remove(id: string, businessId: string) {
     const branch = await this.findOne(id, businessId);
-    
+
     await this.auditService.log({
       branchId: branch.id,
       userId: undefined,
@@ -98,13 +98,21 @@ export class BranchService {
       tomorrow.setDate(tomorrow.getDate() + 1);
 
       // Tables stats — exclude virtual (system) tables
-      const totalTables = await this.tableRepository.count({ where: { branch_id: branchId, is_virtual: false } });
+      const totalTables = await this.tableRepository.count({
+        where: { branch_id: branchId, is_virtual: false },
+      });
       const activeTables = await this.tableRepository.count({
-        where: { branch_id: branchId, status: TableStatus.OCCUPIED, is_virtual: false },
+        where: {
+          branch_id: branchId,
+          status: TableStatus.OCCUPIED,
+          is_virtual: false,
+        },
       });
 
       // Tabs stats
-      const openTabs = await this.tabRepository.count({ where: { branch_id: branchId, status: 'open' } });
+      const openTabs = await this.tabRepository.count({
+        where: { branch_id: branchId, status: 'open' },
+      });
 
       // Today's bills
       const todayBills = await this.billRepository
@@ -116,11 +124,16 @@ export class BranchService {
 
         .getMany();
 
-      const dailyRevenue = todayBills.reduce((sum, bill) => sum + bill.total_kobo, 0);
+      const dailyRevenue = todayBills.reduce(
+        (sum, bill) => sum + bill.total_kobo,
+        0,
+      );
       const todayTabsCount = todayBills.length;
 
       // Waiter performance
-      const waiters = await this.userRepository.find({ where: { branch_id: branchId } });
+      const waiters = await this.userRepository.find({
+        where: { branch_id: branchId },
+      });
       const waiterPerformance = [];
 
       for (const waiter of waiters) {
@@ -134,7 +147,9 @@ export class BranchService {
 
         let waiterRevenue = 0;
         for (const tab of waiterTabs) {
-          const bill = await this.billRepository.findOne({ where: { tab_id: tab.id } });
+          const bill = await this.billRepository.findOne({
+            where: { tab_id: tab.id },
+          });
           if (bill) {
             waiterRevenue += bill.total_kobo;
           }

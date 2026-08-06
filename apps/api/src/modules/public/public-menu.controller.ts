@@ -39,14 +39,15 @@ export class PublicMenuController {
       order: { category: 'ASC', name: 'ASC' },
     });
 
-    const mapped = items.map(item => ({
+    const mapped = items.map((item) => ({
       id: item.id,
       name: item.name,
       category: item.category,
       price_kobo: item.price_kobo,
       description: undefined as string | undefined,
       image_url: item.image_url || undefined,
-      is_sold_out: item.track_stock === true && Number(item.quantity_in_stock) <= 0,
+      is_sold_out:
+        item.track_stock === true && Number(item.quantity_in_stock) <= 0,
     }));
 
     return {
@@ -61,7 +62,9 @@ export class PublicMenuController {
 
   @Get('ads/:branchId')
   @Throttle({ default: { limit: 20, ttl: 60000 } })
-  @ApiOperation({ summary: 'Get public advertisements for a branch (no auth required)' })
+  @ApiOperation({
+    summary: 'Get public advertisements for a branch (no auth required)',
+  })
   @ApiParam({ name: 'branchId', description: 'Branch UUID' })
   @ApiResponse({ status: 200, description: 'Public advertisements.' })
   @ApiResponse({ status: 404, description: 'Branch not found.' })
@@ -75,10 +78,16 @@ export class PublicMenuController {
         { branch_id: IsNull(), is_active: true },
       ],
       order: { sort_order: 'ASC', created_at: 'DESC' },
-      select: { id: true, image_url: true, link_url: true, title: true, sort_order: true },
+      select: {
+        id: true,
+        image_url: true,
+        link_url: true,
+        title: true,
+        sort_order: true,
+      },
     });
 
-    return ads.map(ad => ({
+    return ads.map((ad) => ({
       id: ad.id,
       imageUrl: ad.image_url,
       linkUrl: ad.link_url,

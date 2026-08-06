@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
 import { Shift } from './entities/shift.entity';
@@ -20,28 +24,46 @@ export class ShiftService {
   ) {}
 
   async findAll(branchId: string) {
-    const shifts = await this.shiftRepository.find({ where: { branch_id: branchId }, order: { opened_at: 'DESC' } });
-    return shifts.map(s => ({
+    const shifts = await this.shiftRepository.find({
+      where: { branch_id: branchId },
+      order: { opened_at: 'DESC' },
+    });
+    return shifts.map((s) => ({
       ...s,
-      variance_explanation: s.variance_kobo !== null
-        ? this.buildVarianceExplanation(s.starting_cash_kobo, s.expected_cash_kobo ?? 0, s.actual_cash_kobo ?? 0, s.variance_kobo)
-        : null,
+      variance_explanation:
+        s.variance_kobo !== null
+          ? this.buildVarianceExplanation(
+              s.starting_cash_kobo,
+              s.expected_cash_kobo ?? 0,
+              s.actual_cash_kobo ?? 0,
+              s.variance_kobo,
+            )
+          : null,
     }));
   }
 
   async findOne(id: string, branchId: string) {
-    const shift = await this.shiftRepository.findOne({ where: { id, branch_id: branchId } });
+    const shift = await this.shiftRepository.findOne({
+      where: { id, branch_id: branchId },
+    });
     if (!shift) throw new NotFoundException('Shift not found');
     return shift;
   }
 
   async findCurrent(branchId: string) {
-    return this.shiftRepository.findOne({ where: { branch_id: branchId, status: 'open' } });
+    return this.shiftRepository.findOne({
+      where: { branch_id: branchId, status: 'open' },
+    });
   }
 
-  async openShift(branchId: string, userId: string, dto: { starting_cash_kobo: number; note?: string }) {
+  async openShift(
+    branchId: string,
+    userId: string,
+    dto: { starting_cash_kobo: number; note?: string },
+  ) {
     const existing = await this.findCurrent(branchId);
-    if (existing) throw new BadRequestException('A shift is already open for this branch');
+    if (existing)
+      throw new BadRequestException('A shift is already open for this branch');
 
     const shift = this.shiftRepository.create({
       branch_id: branchId,
@@ -54,9 +76,15 @@ export class ShiftService {
     return this.shiftRepository.save(shift);
   }
 
-  async closeShift(id: string, branchId: string, userId: string, dto: { actual_cash_kobo: number; note?: string }) {
+  async closeShift(
+    id: string,
+    branchId: string,
+    userId: string,
+    dto: { actual_cash_kobo: number; note?: string },
+  ) {
     const shift = await this.findOne(id, branchId);
-    if (shift.status !== 'open') throw new BadRequestException('Shift is already closed');
+    if (shift.status !== 'open')
+      throw new BadRequestException('Shift is already closed');
 
     const now = new Date();
     shift.closed_by = userId;
@@ -79,7 +107,11 @@ export class ShiftService {
     shift.expected_cash_kobo = shift.starting_cash_kobo + cashSales;
     shift.variance_kobo = dto.actual_cash_kobo - shift.expected_cash_kobo;
 
-    await this.branchRepository.increment({ id: branchId }, 'staff_token_version', 1);
+    await this.branchRepository.increment(
+      { id: branchId },
+      'staff_token_version',
+      1,
+    );
 
     const saved = await this.shiftRepository.save(shift);
     const varianceExplanation = this.buildVarianceExplanation(
@@ -92,8 +124,12 @@ export class ShiftService {
   }
 
   async getShiftSummary(branchId: string, dateFrom?: string, dateTo?: string) {
-    const from = dateFrom ? new Date(dateFrom) : new Date(new Date().setHours(0, 0, 0, 0));
-    const to = dateTo ? new Date(dateTo) : new Date(new Date().setHours(23, 59, 59, 999));
+    const from = dateFrom
+      ? new Date(dateFrom)
+      : new Date(new Date().setHours(0, 0, 0, 0));
+    const to = dateTo
+      ? new Date(dateTo)
+      : new Date(new Date().setHours(23, 59, 59, 999));
     if (!dateFrom) from.setHours(0, 0, 0, 0);
 
     const shifts = await this.shiftRepository.find({
@@ -104,13 +140,26 @@ export class ShiftService {
     return {
       shifts,
       total_shifts: shifts.length,
-      closed_shifts: shifts.filter(s => s.status === 'closed').length,
-      total_cash_sales: shifts.filter(s => s.expected_cash_kobo).reduce((sum, s) => sum + (s.expected_cash_kobo - s.starting_cash_kobo), 0),
-      total_variance: shifts.reduce((sum, s) => sum + (s.variance_kobo || 0), 0),
+      closed_shifts: shifts.filter((s) => s.status === 'closed').length,
+      total_cash_sales: shifts
+        .filter((s) => s.expected_cash_kobo)
+        .reduce(
+          (sum, s) => sum + (s.expected_cash_kobo - s.starting_cash_kobo),
+          0,
+        ),
+      total_variance: shifts.reduce(
+        (sum, s) => sum + (s.variance_kobo || 0),
+        0,
+      ),
     };
   }
 
-  private buildVarianceExplanation(startingKobo: number, expectedKobo: number, actualKobo: number, varianceKobo: number): string {
+  private buildVarianceExplanation(
+    startingKobo: number,
+    expectedKobo: number,
+    actualKobo: number,
+    varianceKobo: number,
+  ): string {
     const starting = this.koboToNairaString(startingKobo);
     const expected = this.koboToNairaString(expectedKobo);
     const actual = this.koboToNairaString(actualKobo);
@@ -128,7 +177,10 @@ export class ShiftService {
 
   private koboToNairaString(kobo: number): string {
     const naira = kobo / 100;
-    const formatted = naira.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const formatted = naira.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
     return `₦${formatted}`;
   }
 }

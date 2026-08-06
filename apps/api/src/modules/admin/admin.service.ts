@@ -5,7 +5,10 @@ import { Business } from '../business/entities/business.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { User } from '../user/entities/user.entity';
 import { Bill } from '../bill/entities/bill.entity';
-import { Subscription, SubscriptionStatus } from '../subscription/entities/subscription.entity';
+import {
+  Subscription,
+  SubscriptionStatus,
+} from '../subscription/entities/subscription.entity';
 import { Plan } from '../subscription/entities/plan.entity';
 import { UserRole } from '../../common/shared';
 import { UpdateBusinessDto } from './dto/update-business.dto';
@@ -32,12 +35,22 @@ export class AdminService {
     const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
     const totalBusinesses = await this.businessRepo.count();
-    const activeBusinesses = await this.businessRepo.count({ where: { is_active: true } });
+    const activeBusinesses = await this.businessRepo.count({
+      where: { is_active: true },
+    });
     const totalBranches = await this.branchRepo.count();
-    const totalOwners = await this.userRepo.count({ where: { role: UserRole.OWNER } });
-    const totalManagers = await this.userRepo.count({ where: { role: UserRole.MANAGER } });
-    const totalWaiters = await this.userRepo.count({ where: { role: UserRole.WAITER } });
-    const totalCashiers = await this.userRepo.count({ where: { role: UserRole.CASHIER } });
+    const totalOwners = await this.userRepo.count({
+      where: { role: UserRole.OWNER },
+    });
+    const totalManagers = await this.userRepo.count({
+      where: { role: UserRole.MANAGER },
+    });
+    const totalWaiters = await this.userRepo.count({
+      where: { role: UserRole.WAITER },
+    });
+    const totalCashiers = await this.userRepo.count({
+      where: { role: UserRole.CASHIER },
+    });
 
     const revenueResult = await this.billRepo
       .createQueryBuilder('bill')
@@ -60,21 +73,24 @@ export class AdminService {
 
     const planBreakdown = await this.subscriptionRepo
       .createQueryBuilder('s')
-      .select('COALESCE(p.name, \'free_trial\')', 'plan')
+      .select("COALESCE(p.name, 'free_trial')", 'plan')
       .addSelect('COUNT(s.id)', 'count')
       .leftJoin('s.plan', 'p')
-      .groupBy('COALESCE(p.name, \'free_trial\')')
+      .groupBy("COALESCE(p.name, 'free_trial')")
       .getRawMany();
 
-    const totalSubscriptions = statusBreakdown.reduce((sum, r) => sum + Number(r.count), 0);
+    const totalSubscriptions = statusBreakdown.reduce(
+      (sum, r) => sum + Number(r.count),
+      0,
+    );
     const activeSubscriptions = statusBreakdown
-      .filter(r => r.status === 'active' || r.status === 'trialing')
+      .filter((r) => r.status === 'active' || r.status === 'trialing')
       .reduce((sum, r) => sum + Number(r.count), 0);
     const expiredSubscriptions = statusBreakdown
-      .filter(r => r.status === 'expired')
+      .filter((r) => r.status === 'expired')
       .reduce((sum, r) => sum + Number(r.count), 0);
     const pastDueSubscriptions = statusBreakdown
-      .filter(r => r.status === 'past_due')
+      .filter((r) => r.status === 'past_due')
       .reduce((sum, r) => sum + Number(r.count), 0);
 
     const recentBusinesses = await this.businessRepo.find({
@@ -101,8 +117,10 @@ export class AdminService {
       subscription_active: activeSubscriptions,
       subscription_expired: expiredSubscriptions,
       subscription_past_due: pastDueSubscriptions,
-      subscription_trialing: statusBreakdown.find(r => r.status === 'trialing')?.count || 0,
-      subscription_canceled: statusBreakdown.find(r => r.status === 'canceled')?.count || 0,
+      subscription_trialing:
+        statusBreakdown.find((r) => r.status === 'trialing')?.count || 0,
+      subscription_canceled:
+        statusBreakdown.find((r) => r.status === 'canceled')?.count || 0,
       subscription_breakdown: planBreakdown.map((r: any) => ({
         plan: r.plan || 'free_trial',
         count: Number(r.count),
@@ -111,7 +129,7 @@ export class AdminService {
         status: r.status,
         count: Number(r.count),
       })),
-      recent_businesses: recentBusinesses.map(b => ({
+      recent_businesses: recentBusinesses.map((b) => ({
         id: b.id,
         name: b.name,
         slug: b.slug,
@@ -131,13 +149,15 @@ export class AdminService {
     status?: string;
     plan?: string;
   }) {
-    const qb = this.businessRepo
-      .createQueryBuilder('b');
+    const qb = this.businessRepo.createQueryBuilder('b');
 
     if (params.search) {
-      qb.andWhere('(b.name ILIKE :search OR b.email ILIKE :search OR b.slug ILIKE :search)', {
-        search: `%${params.search}%`,
-      });
+      qb.andWhere(
+        '(b.name ILIKE :search OR b.email ILIKE :search OR b.slug ILIKE :search)',
+        {
+          search: `%${params.search}%`,
+        },
+      );
     }
 
     if (params.status === 'active') {
@@ -158,7 +178,7 @@ export class AdminService {
 
     const businesses = await qb.getMany();
 
-    const businessIds = businesses.map(b => b.id);
+    const businessIds = businesses.map((b) => b.id);
 
     const branchCounts: Record<string, number> = {};
     if (businessIds.length > 0) {
@@ -179,7 +199,10 @@ export class AdminService {
       .select(['u.id', 'u.full_name', 'u.email'])
       .where('u.role = :role AND u.business_id IN (:...ids)', {
         role: UserRole.OWNER,
-        ids: businessIds.length > 0 ? businessIds : ['00000000-0000-0000-0000-000000000000'],
+        ids:
+          businessIds.length > 0
+            ? businessIds
+            : ['00000000-0000-0000-0000-000000000000'],
       })
       .getMany();
     const ownerMap: Record<string, User> = {};
@@ -187,8 +210,12 @@ export class AdminService {
       ownerMap[o.business_id] = o;
     }
 
-    const branchSubscriptionMap: Record<string, { status: string; plan: string | null; expires_at: string | null }> = {};
-    const branchesByBusiness: Record<string, { id: string; name: string }[]> = {};
+    const branchSubscriptionMap: Record<
+      string,
+      { status: string; plan: string | null; expires_at: string | null }
+    > = {};
+    const branchesByBusiness: Record<string, { id: string; name: string }[]> =
+      {};
     if (businessIds.length > 0) {
       const branches = await this.branchRepo
         .createQueryBuilder('br')
@@ -196,24 +223,29 @@ export class AdminService {
         .where('br.business_id IN (:...ids)', { ids: businessIds })
         .getMany();
       for (const br of branches) {
-        if (!branchesByBusiness[br.business_id]) branchesByBusiness[br.business_id] = [];
+        if (!branchesByBusiness[br.business_id])
+          branchesByBusiness[br.business_id] = [];
         branchesByBusiness[br.business_id].push({ id: br.id, name: br.name });
       }
-      const branchIds = branches.map(br => br.id);
+      const branchIds = branches.map((br) => br.id);
       if (branchIds.length > 0) {
         const subscriptions = await this.subscriptionRepo
           .createQueryBuilder('s')
           .leftJoinAndSelect('s.plan', 'p')
           .where('s.branch_id IN (:...branchIds)', { branchIds })
           .getMany();
-        const branchToBusiness = new Map(branches.map(br => [br.id, br.business_id]));
+        const branchToBusiness = new Map(
+          branches.map((br) => [br.id, br.business_id]),
+        );
         for (const sub of subscriptions) {
           const businessId = branchToBusiness.get(sub.branch_id);
           if (businessId) {
             branchSubscriptionMap[businessId] = {
               status: sub.status,
               plan: sub.plan?.name || 'free_trial',
-              expires_at: sub.current_period_end ? sub.current_period_end.toISOString() : null,
+              expires_at: sub.current_period_end
+                ? sub.current_period_end.toISOString()
+                : null,
             };
           }
         }
@@ -221,7 +253,7 @@ export class AdminService {
     }
 
     return {
-      data: businesses.map(b => {
+      data: businesses.map((b) => {
         const sub = branchSubscriptionMap[b.id] || {};
         return {
           id: b.id,
@@ -256,18 +288,26 @@ export class AdminService {
 
     if (dto.name !== undefined) business.name = dto.name;
     if (dto.is_active !== undefined) business.is_active = dto.is_active;
-    if (dto.subscription_plan !== undefined) business.subscription_plan = dto.subscription_plan;
+    if (dto.subscription_plan !== undefined)
+      business.subscription_plan = dto.subscription_plan;
 
     return this.businessRepo.save(business);
   }
 
-  async extendBusinessSubscription(dto: { business_id: string; days?: number }) {
-    const business = await this.businessRepo.findOne({ where: { id: dto.business_id } });
+  async extendBusinessSubscription(dto: {
+    business_id: string;
+    days?: number;
+  }) {
+    const business = await this.businessRepo.findOne({
+      where: { id: dto.business_id },
+    });
     if (!business) {
       throw new NotFoundException('Business not found');
     }
 
-    const branch = await this.branchRepo.findOne({ where: { business_id: dto.business_id, is_active: true } });
+    const branch = await this.branchRepo.findOne({
+      where: { business_id: dto.business_id, is_active: true },
+    });
     if (!branch) {
       throw new NotFoundException('No active branch found for this business');
     }
@@ -275,7 +315,9 @@ export class AdminService {
     const days = dto.days ?? 30;
     const periodEnd = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 
-    let subscription = await this.subscriptionRepo.findOne({ where: { branch_id: branch.id } });
+    let subscription = await this.subscriptionRepo.findOne({
+      where: { branch_id: branch.id },
+    });
 
     if (subscription) {
       subscription.status = SubscriptionStatus.ACTIVE;
