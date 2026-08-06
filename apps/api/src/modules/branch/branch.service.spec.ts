@@ -27,17 +27,19 @@ describe('BranchService (cross-business data isolation)', () => {
   } as Branch;
 
   const branchRepository = {
-    findOne: jest.fn((options: any) => {
-      const { id, business_id } = options.where;
-      // Simulates a DB scoped to (id, business_id): the branch is only returned
-      // when BOTH the requested id and the caller's business_id match.
-      if (id === branchA.id && business_id === branchA.business_id)
-        return Promise.resolve(branchA);
-      if (id === branchB.id && business_id === branchB.business_id)
-        return Promise.resolve(branchB);
-      return Promise.resolve(null);
-    }),
-    find: jest.fn((options: any) => {
+    findOne: jest.fn(
+      (options: { where: { id: string; business_id: string } }) => {
+        const { id, business_id } = options.where;
+        // Simulates a DB scoped to (id, business_id): the branch is only returned
+        // when BOTH the requested id and the caller's business_id match.
+        if (id === branchA.id && business_id === branchA.business_id)
+          return Promise.resolve(branchA);
+        if (id === branchB.id && business_id === branchB.business_id)
+          return Promise.resolve(branchB);
+        return Promise.resolve(null);
+      },
+    ),
+    find: jest.fn((options: { where: { business_id: string | string[] } }) => {
       const businessIds = Array.isArray(options.where.business_id)
         ? options.where.business_id
         : [options.where.business_id];
@@ -45,8 +47,8 @@ describe('BranchService (cross-business data isolation)', () => {
       if (businessIds.includes(branchB.business_id)) rows.push(branchB);
       return Promise.resolve(rows);
     }),
-    save: jest.fn((e: any) => Promise.resolve(e)),
-    remove: jest.fn((e: any) => Promise.resolve(e)),
+    save: jest.fn((e: Branch) => Promise.resolve(e)),
+    remove: jest.fn((e: Branch) => Promise.resolve(e)),
   };
 
   const mockEntityRepo = () => ({

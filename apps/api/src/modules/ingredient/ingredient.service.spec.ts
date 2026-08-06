@@ -8,7 +8,6 @@ describe('IngredientService — direct stock deduction logic', () => {
 
   it('does not deduct for track_stock = false items', () => {
     const trackStock = false;
-    const stock = 10;
     // When track_stock is false, deduction is skipped entirely
     const shouldDeduct = trackStock;
     expect(shouldDeduct).toBe(false);

@@ -1,3 +1,11 @@
+import { Repository, DataSource } from 'typeorm';
+import { Order } from './entities/order.entity';
+import { MenuItem } from '../menu/entities/menu-item.entity';
+import { Tab } from '../tab/entities/tab.entity';
+import { Department } from '../department/entities/department.entity';
+import { IngredientService } from '../ingredient/ingredient.service';
+import { AuditService } from '../../common/services/audit.service';
+import { NotificationService } from '../notification/notification.service';
 import { OrderService } from './order.service';
 import { OrderStatus } from '../../common/shared';
 
@@ -25,7 +33,7 @@ describe('OrderService', () => {
   });
 
   const mockDataSource = () => ({
-    transaction: jest.fn(async (cb) => cb(manager)),
+    transaction: jest.fn((cb: (m: unknown) => unknown) => cb(manager)),
     query: jest.fn(),
   });
 
@@ -46,24 +54,30 @@ describe('OrderService', () => {
   beforeEach(() => {
     manager = {
       getRepository: jest.fn().mockReturnValue({
-        create: jest.fn((dto) => dto),
-        save: jest.fn(async (order) => ({ ...order, id: 'order-1' })),
+        create: jest.fn((dto: unknown) => dto),
+        save: jest.fn((order: Order) => ({ ...order, id: 'order-1' })),
         findOne: jest.fn(),
       }),
     };
   });
 
-  const buildService = (overrides: any = {}) => {
-    const orderRepo = overrides.orderRepository ?? mockOrderRepository();
-    const menuRepo = overrides.menuRepository ?? mockMenuRepository();
-    const tabRepo = overrides.tabRepository ?? mockTabRepository();
-    const deptRepo = overrides.departmentRepo ?? mockDepartmentRepo();
-    const dataSource = overrides.dataSource ?? mockDataSource();
-    const ingredientService =
-      overrides.ingredientService ?? mockIngredientService();
-    const auditService = overrides.auditService ?? mockAuditService();
-    const notificationService =
-      overrides.notificationService ?? mockNotificationService();
+  const buildService = (overrides: Record<string, unknown> = {}) => {
+    const orderRepo = (overrides.orderRepository ??
+      mockOrderRepository()) as unknown as Repository<Order>;
+    const menuRepo = (overrides.menuRepository ??
+      mockMenuRepository()) as unknown as Repository<MenuItem>;
+    const tabRepo = (overrides.tabRepository ??
+      mockTabRepository()) as unknown as Repository<Tab>;
+    const deptRepo = (overrides.departmentRepo ??
+      mockDepartmentRepo()) as unknown as Repository<Department>;
+    const dataSource = (overrides.dataSource ??
+      mockDataSource()) as unknown as DataSource;
+    const ingredientService = (overrides.ingredientService ??
+      mockIngredientService()) as unknown as IngredientService;
+    const auditService = (overrides.auditService ??
+      mockAuditService()) as unknown as AuditService;
+    const notificationService = (overrides.notificationService ??
+      mockNotificationService()) as unknown as NotificationService;
 
     return new OrderService(
       orderRepo,
@@ -243,7 +257,7 @@ describe('OrderService', () => {
         subtotal_kobo: 10000,
         modifiers: [],
       });
-      orderRepo.save.mockImplementation(async (o) => o);
+      orderRepo.save.mockImplementation((o: Order) => o);
 
       const service = buildService({ orderRepository: orderRepo });
       const result = await service.updateOrder('o1', { quantity: 3 });
@@ -293,8 +307,8 @@ describe('OrderService', () => {
         tracking_code: 'SVQ-ABCD-123',
       });
 
-      const dataSource: any = {
-        transaction: jest.fn(async (cb) => {
+      const dataSource = {
+        transaction: jest.fn((cb: (m: unknown) => unknown) => {
           const m = {
             getRepository: jest.fn().mockReturnValue({
               findOne: jest.fn().mockResolvedValue({
@@ -302,7 +316,7 @@ describe('OrderService', () => {
                 tab_id: 'tab-1',
                 order_status: OrderStatus.PENDING_SUPERVISOR_APPROVAL,
               }),
-              save: jest.fn(async (order) => ({ ...order, id: 'o1' })),
+              save: jest.fn((order: Order) => ({ ...order, id: 'o1' })),
             }),
           };
           return cb(m);
@@ -328,7 +342,7 @@ describe('OrderService', () => {
       expect(auditService.log).toHaveBeenCalled();
       expect(notificationService.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: expect.stringContaining('Tracking: SVQ-ABCD-123'),
+          message: expect.stringContaining('Tracking: SVQ-ABCD-123') as string,
         }),
       );
     });
@@ -342,8 +356,8 @@ describe('OrderService', () => {
       const tabRepo = mockTabRepository();
       tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
 
-      const dataSource: any = {
-        transaction: jest.fn(async (cb) => {
+      const dataSource = {
+        transaction: jest.fn((cb: (m: unknown) => unknown) => {
           const m = {
             getRepository: jest.fn().mockReturnValue({
               findOne: jest.fn().mockResolvedValue({
@@ -351,7 +365,7 @@ describe('OrderService', () => {
                 tab_id: 'tab-1',
                 order_status: OrderStatus.PENDING_SUPERVISOR_APPROVAL,
               }),
-              save: jest.fn(async (order) => order),
+              save: jest.fn((order: Order) => order),
             }),
           };
           return cb(m);

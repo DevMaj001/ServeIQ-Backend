@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  NotFoundException,
-} from '@nestjs/common';
-import { BillService } from './bill.service';
+﻿import { BillService } from './bill.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Bill } from './entities/bill.entity';
 import { Tab } from '../tab/entities/tab.entity';
@@ -13,63 +8,71 @@ import { MenuItem } from '../menu/entities/menu-item.entity';
 import { User } from '../user/entities/user.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { Business } from '../business/entities/business.entity';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource } from 'typeorm';
 import { IngredientService } from '../ingredient/ingredient.service';
 import { ReceiptService } from './receipt.service';
 import { CloudinaryService } from '../../cloudinary/cloudinary.service';
 import { Test, TestingModule } from '@nestjs/testing';
+import { GenerateBillDto } from './dto/generate-bill.dto';
 
-describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
+type MockRepoShape = {
+  findOne: jest.Mock;
+  find: jest.Mock;
+  create: jest.Mock;
+  save: jest.Mock;
+  update: jest.Mock;
+};
+
+describe('BillService â€” Billing Calculation Accuracy (50 scenarios)', () => {
   let service: BillService;
   let repos: {
-    billRepo: Repository<Bill>;
-    tabRepo: Repository<Tab>;
-    orderRepo: Repository<Order>;
-    tableRepo: Repository<Table>;
-    menuItemRepo: Repository<MenuItem>;
-    userRepo: Repository<User>;
-    branchRepo: Repository<Branch>;
-    businessRepo: Repository<Business>;
+    billRepo: MockRepoShape;
+    tabRepo: MockRepoShape;
+    orderRepo: MockRepoShape;
+    tableRepo: MockRepoShape;
+    menuItemRepo: MockRepoShape;
+    userRepo: MockRepoShape;
+    branchRepo: MockRepoShape;
+    businessRepo: MockRepoShape;
   };
-  let dataSource: DataSource;
-  let ingredientService: IngredientService;
-  let receiptService: ReceiptService;
-  let cloudinaryService: CloudinaryService;
 
-  const mockRepo = () => ({
+  const mockRepo = (): MockRepoShape => ({
     findOne: jest.fn(),
     find: jest.fn(),
-    create: jest.fn((dto) => dto),
-    save: jest.fn(async (entity) => ({
-      ...entity,
-      id: 'bill-1',
-      created_at: new Date(),
-      updated_at: new Date(),
-    })),
+    create: jest.fn((dto: unknown) => dto),
+    save: jest.fn(async (entity: object): Promise<Record<string, unknown>> => {
+      await Promise.resolve();
+      return {
+        ...entity,
+        id: 'bill-1',
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+    }),
     update: jest.fn(),
   });
 
   beforeEach(async () => {
-    const billRepo = mockRepo() as any;
-    const tabRepo = mockRepo() as any;
-    const orderRepo = mockRepo() as any;
-    const tableRepo = mockRepo() as any;
-    const menuItemRepo = mockRepo() as any;
-    const userRepo = mockRepo() as any;
-    const branchRepo = mockRepo() as any;
-    const businessRepo = mockRepo() as any;
+    const billRepo = mockRepo();
+    const tabRepo = mockRepo();
+    const orderRepo = mockRepo();
+    const tableRepo = mockRepo();
+    const menuItemRepo = mockRepo();
+    const userRepo = mockRepo();
+    const branchRepo = mockRepo();
+    const businessRepo = mockRepo();
 
     const mockDataSource = {
-      transaction: jest.fn(async (cb: any) =>
+      transaction: jest.fn(<T>(cb: (em: unknown) => Promise<T>) =>
         cb({
-          getRepository: jest.fn((entity: any) => {
-            if (entity === Order)
+          getRepository: jest.fn((_entity: unknown) => {
+            if (_entity === Order)
               return {
                 find: jest.fn().mockResolvedValue([]),
-                save: jest.fn(async (e: any) => e),
+                save: jest.fn((e: unknown) => Promise.resolve(e)),
               };
-            if (entity === Tab) return { update: jest.fn() };
-            if (entity === Table)
+            if (_entity === Tab) return { update: jest.fn() };
+            if (_entity === Table)
               return {
                 findOne: jest.fn().mockResolvedValue(null),
                 update: jest.fn(),
@@ -78,7 +81,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
           }),
         }),
       ),
-    } as any;
+    } as unknown as DataSource;
 
     const mockIngredientService = {
       deductByTab: jest.fn().mockResolvedValue(undefined),
@@ -121,10 +124,6 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
       branchRepo,
       businessRepo,
     };
-    dataSource = mockDataSource;
-    ingredientService = mockIngredientService;
-    receiptService = mockReceiptService;
-    cloudinaryService = mockCloudinaryService;
 
     repos.tabRepo.findOne.mockResolvedValue({
       id: 'tab-1',
@@ -172,7 +171,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
       tax_rate: tax_rate ?? 7.5,
     });
 
-    const dto: any = {};
+    const dto: GenerateBillDto = {};
     if (service_charge_percent !== undefined)
       dto.service_charge_percent = service_charge_percent;
     if (discount_kobo !== undefined) dto.discount_kobo = discount_kobo;
@@ -181,7 +180,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     return service.generateBill('tab-1', 'waiter-1', 'waiter', dto);
   };
 
-  it('S001 — single item, default 10% service, 7.5% tax, no discount', async () => {
+  it('S001 â€” single item, default 10% service, 7.5% tax, no discount', async () => {
     const result = await runScenario([{ subtotal_kobo: 10000 }], {});
     const exp = expectedTotal(10000, 10, 7.5, 0);
     expect(result.subtotal_kobo).toBe(10000);
@@ -190,7 +189,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(exp.total);
   });
 
-  it('S002 — single item, 0 service charge, 0 tax, no discount', async () => {
+  it('S002 â€” single item, 0 service charge, 0 tax, no discount', async () => {
     const result = await runScenario([{ subtotal_kobo: 10000 }], {
       service_charge_percent: 0,
       tax_rate: 0,
@@ -199,7 +198,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(exp.total);
   });
 
-  it('S003 — multiple items, no service, no tax, no discount', async () => {
+  it('S003 â€” multiple items, no service, no tax, no discount', async () => {
     const result = await runScenario(
       [
         { subtotal_kobo: 5000 },
@@ -213,7 +212,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(exp.total);
   });
 
-  it('S004 — 10% service, 7.5% tax, 2000 kobo discount', async () => {
+  it('S004 â€” 10% service, 7.5% tax, 2000 kobo discount', async () => {
     const result = await runScenario([{ subtotal_kobo: 50000 }], {
       discount_kobo: 2000,
     });
@@ -223,7 +222,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(50000 + 5000 + 3750 - 2000);
   });
 
-  it('S005 — 5% service, 5% tax, no discount', async () => {
+  it('S005 â€” 5% service, 5% tax, no discount', async () => {
     const result = await runScenario([{ subtotal_kobo: 20000 }], {
       service_charge_percent: 5,
       tax_rate: 5,
@@ -234,7 +233,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(exp.total);
   });
 
-  it('S006 — 15% service, 7.5% tax, 500 kobo discount', async () => {
+  it('S006 â€” 15% service, 7.5% tax, 500 kobo discount', async () => {
     const result = await runScenario([{ subtotal_kobo: 8000 }], {
       service_charge_percent: 15,
       discount_kobo: 500,
@@ -244,15 +243,14 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(8000 + 1200 + 600 - 500);
   });
 
-  it('S007 — subtotal 0 (all items free), service/tax still apply', async () => {
+  it('S007 â€” subtotal 0 (all items free), service/tax still apply', async () => {
     const result = await runScenario([{ subtotal_kobo: 0 }], {});
-    const exp = expectedTotal(0, 10, 7.5, 0);
     expect(result.total_kobo).toBe(0);
     expect(result.service_charge_kobo).toBe(0);
     expect(result.tax_kobo).toBe(0);
   });
 
-  it('S008 — large bill, precision: subtotal 1234567 kobo, 10% service', async () => {
+  it('S008 â€” large bill, precision: subtotal 1234567 kobo, 10% service', async () => {
     const result = await runScenario([{ subtotal_kobo: 1234567 }], {});
     const exp = expectedTotal(1234567, 10, 7.5, 0);
     expect(result.subtotal_kobo).toBe(1234567);
@@ -261,7 +259,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(exp.total);
   });
 
-  it('S009 — discount greater than subtotal+charges+tax (floor at 0)', async () => {
+  it('S009 â€” discount greater than subtotal+charges+tax (floor at 0)', async () => {
     const result = await runScenario([{ subtotal_kobo: 1000 }], {
       service_charge_percent: 0,
       discount_kobo: 2000,
@@ -270,18 +268,17 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(0);
   });
 
-  it('S010 — single item, 100% tax, 100% service charge', async () => {
+  it('S010 â€” single item, 100% tax, 100% service charge', async () => {
     const result = await runScenario([{ subtotal_kobo: 5000 }], {
       service_charge_percent: 100,
       tax_rate: 100,
     });
-    const exp = expectedTotal(5000, 100, 100, 0);
     expect(result.service_charge_kobo).toBe(5000);
     expect(result.tax_kobo).toBe(5000);
     expect(result.total_kobo).toBe(15000);
   });
 
-  it('S011 — three items, sum subtotal', async () => {
+  it('S011 â€” three items, sum subtotal', async () => {
     const result = await runScenario(
       [{ subtotal_kobo: 100 }, { subtotal_kobo: 200 }, { subtotal_kobo: 300 }],
       { service_charge_percent: 0, tax_rate: 0 },
@@ -290,7 +287,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(600);
   });
 
-  it('S012 — discount exactly equals subtotal+charges+tax (total = 0)', async () => {
+  it('S012 â€” discount exactly equals subtotal+charges+tax (total = 0)', async () => {
     const result = await runScenario([{ subtotal_kobo: 10000 }], {
       service_charge_percent: 0,
       tax_rate: 0,
@@ -299,7 +296,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(0);
   });
 
-  it('S013 — fractional tax rounding: subtotal 10500, 7.5% tax', async () => {
+  it('S013 â€” fractional tax rounding: subtotal 10500, 7.5% tax', async () => {
     const result = await runScenario([{ subtotal_kobo: 10500 }], {
       service_charge_percent: 0,
       tax_rate: 7.5,
@@ -308,7 +305,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.tax_kobo).toBe(788);
   });
 
-  it('S014 — fractional service charge rounding: subtotal 10200, 10% service', async () => {
+  it('S014 â€” fractional service charge rounding: subtotal 10200, 10% service', async () => {
     const result = await runScenario([{ subtotal_kobo: 10200 }], {
       service_charge_percent: 10,
       tax_rate: 0,
@@ -317,7 +314,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.service_charge_kobo).toBe(1020);
   });
 
-  it('S015 — fractional service + tax: subtotal 9999, 10% service, 7.5% tax', async () => {
+  it('S015 â€” fractional service + tax: subtotal 9999, 10% service, 7.5% tax', async () => {
     const result = await runScenario([{ subtotal_kobo: 9999 }], {});
     // 9999 * 0.10 = 999.9 -> rounds to 1000
     // 9999 * 0.075 = 749.925 -> rounds to 750
@@ -326,7 +323,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(9999 + 1000 + 750);
   });
 
-  it('S016 — empty orders list (zero subtotal)', async () => {
+  it('S016 â€” empty orders list (zero subtotal)', async () => {
     const result = await runScenario([], {
       service_charge_percent: 0,
       tax_rate: 0,
@@ -335,7 +332,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(0);
   });
 
-  it('S017 — single item with zero price', async () => {
+  it('S017 â€” single item with zero price', async () => {
     const result = await runScenario([{ subtotal_kobo: 0 }], {
       service_charge_percent: 0,
       tax_rate: 0,
@@ -343,7 +340,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(0);
   });
 
-  it('S018 — subtotal 1 kobo (minimum)', async () => {
+  it('S018 â€” subtotal 1 kobo (minimum)', async () => {
     const result = await runScenario([{ subtotal_kobo: 1 }], {
       service_charge_percent: 0,
       tax_rate: 0,
@@ -351,14 +348,14 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(1);
   });
 
-  it('S019 — subtotal 1 kobo with full charges', async () => {
+  it('S019 â€” subtotal 1 kobo with full charges', async () => {
     const result = await runScenario([{ subtotal_kobo: 1 }], {});
     expect(result.service_charge_kobo).toBe(0); // 0.1 rounds to 0
     expect(result.tax_kobo).toBe(0); // 0.075 rounds to 0
     expect(result.total_kobo).toBe(1);
   });
 
-  it('S020 — multiple items with varying prices, full charges', async () => {
+  it('S020 â€” multiple items with varying prices, full charges', async () => {
     const result = await runScenario(
       [
         { subtotal_kobo: 1500 },
@@ -372,7 +369,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(expectTotal.total);
   });
 
-  it('S021 — 10% service, no tax, 1000 kobo discount', async () => {
+  it('S021 â€” 10% service, no tax, 1000 kobo discount', async () => {
     const result = await runScenario([{ subtotal_kobo: 15000 }], {
       service_charge_percent: 10,
       tax_rate: 0,
@@ -382,7 +379,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(exp.total);
   });
 
-  it('S022 — 7.5% service, 7.5% tax, no discount', async () => {
+  it('S022 â€” 7.5% service, 7.5% tax, no discount', async () => {
     const result = await runScenario([{ subtotal_kobo: 1333 }], {
       service_charge_percent: 7.5,
       tax_rate: 7.5,
@@ -393,18 +390,17 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(1333 + 100 + 100);
   });
 
-  it('S023 — 12.5% service, 5% tax', async () => {
+  it('S023 â€” 12.5% service, 5% tax', async () => {
     const result = await runScenario([{ subtotal_kobo: 8000 }], {
       service_charge_percent: 12.5,
       tax_rate: 5,
     });
-    const exp = expectedTotal(8000, 12.5, 5, 0);
     expect(result.service_charge_kobo).toBe(1000);
     expect(result.tax_kobo).toBe(400);
     expect(result.total_kobo).toBe(9400);
   });
 
-  it('S024 — 0 items, default charges (empty tab)', async () => {
+  it('S024 â€” 0 items, default charges (empty tab)', async () => {
     repos.tabRepo.findOne.mockResolvedValue({
       id: 'tab-no-orders',
       branch_id: 'branch-1',
@@ -431,7 +427,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(0);
   });
 
-  it('S025 — custom 25% service charge', async () => {
+  it('S025 â€” custom 25% service charge', async () => {
     const result = await runScenario([{ subtotal_kobo: 4000 }], {
       service_charge_percent: 25,
       tax_rate: 0,
@@ -440,7 +436,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(5000);
   });
 
-  it('S026 — custom 17.5% tax rate', async () => {
+  it('S026 â€” custom 17.5% tax rate', async () => {
     const result = await runScenario([{ subtotal_kobo: 8000 }], {
       service_charge_percent: 0,
       tax_rate: 17.5,
@@ -449,7 +445,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(9400);
   });
 
-  it('S027 — 10% service, 7.5% tax, 50% discount on subtotal', async () => {
+  it('S027 â€” 10% service, 7.5% tax, 50% discount on subtotal', async () => {
     const result = await runScenario([{ subtotal_kobo: 20000 }], {
       discount_kobo: 10000,
     });
@@ -458,7 +454,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(20000 + 2000 + 1500 - 10000);
   });
 
-  it('S028 — 10% service, 0% tax', async () => {
+  it('S028 â€” 10% service, 0% tax', async () => {
     const result = await runScenario([{ subtotal_kobo: 10000 }], {
       service_charge_percent: 10,
       tax_rate: 0,
@@ -468,7 +464,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(11000);
   });
 
-  it('S029 — 0% service, 7.5% tax', async () => {
+  it('S029 â€” 0% service, 7.5% tax', async () => {
     const result = await runScenario([{ subtotal_kobo: 10000 }], {
       service_charge_percent: 0,
       tax_rate: 7.5,
@@ -478,7 +474,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(10750);
   });
 
-  it('S030 — fractional discount: discount 999 on 10035 kobo total', async () => {
+  it('S030 â€” fractional discount: discount 999 on 10035 kobo total', async () => {
     const result = await runScenario([{ subtotal_kobo: 10000 }], {
       service_charge_percent: 0,
       tax_rate: 0,
@@ -488,7 +484,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(9001);
   });
 
-  it('S031 — two items, same price, 10% service', async () => {
+  it('S031 â€” two items, same price, 10% service', async () => {
     const result = await runScenario(
       [{ subtotal_kobo: 5000 }, { subtotal_kobo: 5000 }],
       {},
@@ -498,7 +494,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(10000 + 1000 + 750);
   });
 
-  it('S032 — one item per round, 3 rounds simulated via separate order rows', async () => {
+  it('S032 â€” one item per round, 3 rounds simulated via separate order rows', async () => {
     const result = await runScenario(
       [
         { subtotal_kobo: 3000 },
@@ -513,7 +509,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(12000 + 1200 + 900);
   });
 
-  it('S033 — very large subtotal: 1,000,000 kobo (10,000 NGN)', async () => {
+  it('S033 â€” very large subtotal: 1,000,000 kobo (10,000 NGN)', async () => {
     const result = await runScenario([{ subtotal_kobo: 1000000 }], {});
     expect(result.subtotal_kobo).toBe(1000000);
     expect(result.service_charge_kobo).toBe(100000);
@@ -521,7 +517,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(1175000);
   });
 
-  it('S034 — discount larger than subtotal but less than total', async () => {
+  it('S034 â€” discount larger than subtotal but less than total', async () => {
     const result = await runScenario([{ subtotal_kobo: 1000 }], {
       service_charge_percent: 10,
       tax_rate: 7.5,
@@ -531,14 +527,14 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(0);
   });
 
-  it('S035 — 10% service, 7.5% tax, exact subtotal divisible by 100', async () => {
+  it('S035 â€” 10% service, 7.5% tax, exact subtotal divisible by 100', async () => {
     const result = await runScenario([{ subtotal_kobo: 40000 }], {});
     expect(result.service_charge_kobo).toBe(4000);
     expect(result.tax_kobo).toBe(3000);
     expect(result.total_kobo).toBe(47000);
   });
 
-  it('S036 — service charge 0%, tax 0%, discount 0% (pure subtotal)', async () => {
+  it('S036 â€” service charge 0%, tax 0%, discount 0% (pure subtotal)', async () => {
     const result = await runScenario([{ subtotal_kobo: 7777 }], {
       service_charge_percent: 0,
       tax_rate: 0,
@@ -547,7 +543,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(7777);
   });
 
-  it('S037 — service charge 0%, tax 7.5%, discount 0', async () => {
+  it('S037 â€” service charge 0%, tax 7.5%, discount 0', async () => {
     const result = await runScenario([{ subtotal_kobo: 22222 }], {
       service_charge_percent: 0,
       tax_rate: 7.5,
@@ -557,7 +553,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(22222 + 1667);
   });
 
-  it('S038 — 3.5% service charge on 50000', async () => {
+  it('S038 â€” 3.5% service charge on 50000', async () => {
     const result = await runScenario([{ subtotal_kobo: 50000 }], {
       service_charge_percent: 3.5,
       tax_rate: 0,
@@ -566,7 +562,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.service_charge_kobo).toBe(1750);
   });
 
-  it('S039 — 3.5% tax on 30000', async () => {
+  it('S039 â€” 3.5% tax on 30000', async () => {
     const result = await runScenario([{ subtotal_kobo: 30000 }], {
       service_charge_percent: 0,
       tax_rate: 3.5,
@@ -575,7 +571,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.tax_kobo).toBe(1050);
   });
 
-  it('S040 — 5 items, varying, 12% service, 5% tax, 300 kobo discount', async () => {
+  it('S040 â€” 5 items, varying, 12% service, 5% tax, 300 kobo discount', async () => {
     const result = await runScenario(
       [
         { subtotal_kobo: 1000 },
@@ -594,7 +590,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(exp.total);
   });
 
-  it('S041 — 1 kobo items x 99 (99 kobo total), 10% service', async () => {
+  it('S041 â€” 1 kobo items x 99 (99 kobo total), 10% service', async () => {
     const orders = Array(99).fill({ subtotal_kobo: 1 });
     const result = await runScenario(orders, {});
     expect(result.subtotal_kobo).toBe(99);
@@ -603,14 +599,14 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(99 + 10 + 7);
   });
 
-  it('S042 — subtotal 99 kobo, 10% service, 7.5% tax, 0 discount', async () => {
+  it('S042 â€” subtotal 99 kobo, 10% service, 7.5% tax, 0 discount', async () => {
     const result = await runScenario([{ subtotal_kobo: 99 }], {});
     expect(result.service_charge_kobo).toBe(10);
     expect(result.tax_kobo).toBe(7);
     expect(result.total_kobo).toBe(116);
   });
 
-  it('S043 — 12.34% service charge on odd subtotal', async () => {
+  it('S043 â€” 12.34% service charge on odd subtotal', async () => {
     const result = await runScenario([{ subtotal_kobo: 9999 }], {
       service_charge_percent: 12.34,
       tax_rate: 0,
@@ -619,7 +615,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.service_charge_kobo).toBe(1234);
   });
 
-  it('S044 — 8.25% tax on 80000', async () => {
+  it('S044 â€” 8.25% tax on 80000', async () => {
     const result = await runScenario([{ subtotal_kobo: 80000 }], {
       service_charge_percent: 0,
       tax_rate: 8.25,
@@ -628,7 +624,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.tax_kobo).toBe(6600);
   });
 
-  it('S045 — full calculation with 3 items, 10% service, 7.5% tax, 2000 kobo discount', async () => {
+  it('S045 â€” full calculation with 3 items, 10% service, 7.5% tax, 2000 kobo discount', async () => {
     const result = await runScenario(
       [
         { subtotal_kobo: 10000 },
@@ -642,7 +638,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(exp.total);
   });
 
-  it('S046 — tab with one 500 kobo item, 0% service, 0% tax, 0 discount', async () => {
+  it('S046 â€” tab with one 500 kobo item, 0% service, 0% tax, 0 discount', async () => {
     const result = await runScenario([{ subtotal_kobo: 500 }], {
       service_charge_percent: 0,
       tax_rate: 0,
@@ -650,7 +646,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(500);
   });
 
-  it('S047 — tab with one 500 kobo item, 10% service, 0% tax, 0 discount', async () => {
+  it('S047 â€” tab with one 500 kobo item, 10% service, 0% tax, 0 discount', async () => {
     const result = await runScenario([{ subtotal_kobo: 500 }], {
       service_charge_percent: 10,
       tax_rate: 0,
@@ -658,7 +654,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(550);
   });
 
-  it('S048 — tab with one 500 kobo item, 0% service, 7.5% tax, 0 discount', async () => {
+  it('S048 â€” tab with one 500 kobo item, 0% service, 7.5% tax, 0 discount', async () => {
     const result = await runScenario([{ subtotal_kobo: 500 }], {
       service_charge_percent: 0,
       tax_rate: 7.5,
@@ -668,7 +664,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(538);
   });
 
-  it('S049 — tab with one 500 kobo item, 10% service, 7.5% tax, 100 kobo discount', async () => {
+  it('S049 â€” tab with one 500 kobo item, 10% service, 7.5% tax, 100 kobo discount', async () => {
     const result = await runScenario([{ subtotal_kobo: 500 }], {
       discount_kobo: 100,
     });
@@ -676,7 +672,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(488);
   });
 
-  it('S050 — tab with one 500 kobo item, 10% service, 7.5% tax, 500 kobo discount (floor at 0)', async () => {
+  it('S050 â€” tab with one 500 kobo item, 10% service, 7.5% tax, 500 kobo discount (floor at 0)', async () => {
     const result = await runScenario([{ subtotal_kobo: 500 }], {
       discount_kobo: 500,
     });
@@ -684,7 +680,7 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
     expect(result.total_kobo).toBe(88);
   });
 
-  it('S051 — verify total always equals subtotal + service_charge + tax - discount (floored at 0)', async () => {
+  it('S051 â€” verify total always equals subtotal + service_charge + tax - discount (floored at 0)', async () => {
     const result = await runScenario(
       [{ subtotal_kobo: 10000 }, { subtotal_kobo: 20000 }],
       {},
@@ -700,16 +696,28 @@ describe('BillService — Billing Calculation Accuracy (50 scenarios)', () => {
   });
 });
 
-describe('BillService — Tab State Machine Transitions', () => {
+describe('BillService â€” Tab State Machine Transitions', () => {
   let service: BillService;
-  let repos: any;
-  let dataSource: any;
+  let repos: {
+    billRepo: MockRepoShape;
+    tabRepo: MockRepoShape;
+    orderRepo: MockRepoShape;
+    tableRepo: MockRepoShape;
+    menuItemRepo: MockRepoShape;
+    userRepo: MockRepoShape;
+    branchRepo: MockRepoShape;
+    businessRepo: MockRepoShape;
+  };
+  let dataSource: { transaction: jest.Mock };
 
-  const mockRepo = () => ({
+  const mockRepo = (): MockRepoShape => ({
     findOne: jest.fn(),
     find: jest.fn(),
-    create: jest.fn((dto) => dto),
-    save: jest.fn(async (entity) => ({ ...entity, id: 'bill-1' })),
+    create: jest.fn((dto: unknown) => dto),
+    save: jest.fn(async (entity: object): Promise<Record<string, unknown>> => {
+      await Promise.resolve();
+      return { ...entity, id: 'bill-1' };
+    }),
     update: jest.fn(),
   });
 
@@ -724,17 +732,17 @@ describe('BillService — Tab State Machine Transitions', () => {
     const businessRepo = mockRepo();
 
     const mockDataSource = {
-      transaction: jest.fn(async (cb: any) =>
+      transaction: jest.fn(<T>(cb: (em: unknown) => Promise<T>) =>
         cb({
-          getRepository: jest.fn((entity: any) => ({
+          getRepository: jest.fn(() => ({
             find: jest.fn().mockResolvedValue([]),
-            save: jest.fn(async (e: any) => e),
+            save: jest.fn((e: unknown) => Promise.resolve(e)),
             findOne: jest.fn(),
             update: jest.fn(),
           })),
         }),
       ),
-    };
+    } as unknown as DataSource;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -798,7 +806,7 @@ describe('BillService — Tab State Machine Transitions', () => {
     });
   });
 
-  it('TSM-01: open tab → generate bill → tab becomes "billed"', async () => {
+  it('TSM-01: open tab â†’ generate bill â†’ tab becomes "billed"', async () => {
     repos.tabRepo.findOne.mockResolvedValueOnce({
       id: 'tab-1',
       branch_id: 'b',
@@ -816,7 +824,7 @@ describe('BillService — Tab State Machine Transitions', () => {
     );
     expect(repos.tabRepo.update).toHaveBeenCalledWith(
       'tab-1',
-      expect.objectContaining({ billed_at: expect.any(Date) }),
+      expect.objectContaining({ billed_at: expect.any(Date) as Date }),
     );
   });
 
@@ -847,7 +855,7 @@ describe('BillService — Tab State Machine Transitions', () => {
     ).rejects.toThrow('Cannot modify a paid bill');
   });
 
-  it('TSM-04: processPayment on billed tab → tab becomes "paid", table becomes "available"', async () => {
+  it('TSM-04: processPayment on billed tab â†’ tab becomes "paid", table becomes "available"', async () => {
     repos.tabRepo.findOne.mockResolvedValue({
       id: 'tab-1',
       branch_id: 'branch-1',
@@ -923,7 +931,7 @@ describe('BillService — Tab State Machine Transitions', () => {
     });
   });
 
-  it('TSM-08: processSplitPayment → all split bills paid → tab "paid", table available', async () => {
+  it('TSM-08: processSplitPayment â†’ all split bills paid â†’ tab "paid", table available', async () => {
     const tab = { id: 'tab-1', table_id: 'table-1' };
     repos.tabRepo.findOne.mockResolvedValue(tab);
     repos.tableRepo.findOne.mockResolvedValue({
@@ -932,11 +940,11 @@ describe('BillService — Tab State Machine Transitions', () => {
     });
 
     // Override the transaction mock
-    dataSource.transaction = jest.fn(async (cb: any) =>
+    dataSource.transaction = jest.fn(<T>(cb: (em: unknown) => Promise<T>) =>
       cb({
-        getRepository: jest.fn((entity: any) => ({
+        getRepository: jest.fn(() => ({
           find: jest.fn().mockResolvedValue([]),
-          save: jest.fn(async (e: any) => e),
+          save: jest.fn((e: unknown) => Promise.resolve(e)),
           findOne: jest.fn(),
           update: jest.fn(),
         })),

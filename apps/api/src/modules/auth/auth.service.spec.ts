@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { DataSource } from 'typeorm';
 import { AuditService } from '../../common/services/audit.service';
 import { SubscriptionService } from '../subscription/subscription.service';
+import * as bcrypt from 'bcrypt';
 
 jest.mock('bcrypt', () => ({
   compare: jest.fn(),
@@ -11,13 +12,26 @@ jest.mock('bcrypt', () => ({
   hash: jest.fn().mockResolvedValue('hash'),
 }));
 
+type MockRepoShape = {
+  findOne: jest.Mock;
+  find: jest.Mock;
+  save: jest.Mock;
+  create: jest.Mock;
+  update: jest.Mock;
+  createQueryBuilder: jest.Mock;
+};
+
 describe('AuthService', () => {
   let service: AuthService;
-  let jwtService: any;
-  let dataSource: any;
-  let auditService: any;
-  let repoMock: any;
-  let bcryptMock: any;
+  let jwtService: { sign: jest.Mock };
+  let dataSource: { getRepository: jest.Mock; createQueryRunner: jest.Mock };
+  let auditService: { log: jest.Mock };
+  let repoMock: MockRepoShape;
+  let bcryptMock: {
+    compare: jest.Mock;
+    genSalt: jest.Mock;
+    hash: jest.Mock;
+  };
 
   const mockUser = {
     id: 'user-1',
@@ -34,7 +48,7 @@ describe('AuthService', () => {
   };
 
   beforeEach(async () => {
-    bcryptMock = require('bcrypt') as {
+    bcryptMock = bcrypt as {
       compare: jest.Mock;
       genSalt: jest.Mock;
       hash: jest.Mock;
@@ -44,8 +58,8 @@ describe('AuthService', () => {
     repoMock = {
       findOne: jest.fn(),
       find: jest.fn(),
-      save: jest.fn(async (e: any) => e),
-      create: jest.fn((dto: any) => dto),
+      save: jest.fn((e: unknown) => Promise.resolve(e)),
+      create: jest.fn((dto: unknown) => dto),
       update: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue({
         select: jest.fn().mockReturnThis(),
@@ -66,7 +80,7 @@ describe('AuthService', () => {
     jwtService = { sign: jest.fn().mockReturnValue('jwt-token') };
 
     dataSource = {
-      getRepository: jest.fn().mockImplementation((entity?: any) => {
+      getRepository: jest.fn().mockImplementation((entity?: unknown) => {
         if (
           entity &&
           typeof entity === 'function' &&
@@ -83,8 +97,10 @@ describe('AuthService', () => {
         rollbackTransaction: jest.fn(),
         release: jest.fn(),
         manager: {
-          create: jest.fn((_entity: any, dto: any) => dto),
-          save: jest.fn(async (e: any) => ({ ...e, id: 'new-id' })),
+          create: jest.fn((_entity: unknown, dto: unknown) => dto),
+          save: jest.fn((e: unknown) =>
+            Promise.resolve({ ...e, id: 'new-id' }),
+          ),
         },
       }),
       query: jest.fn(),
@@ -210,9 +226,7 @@ describe('AuthService', () => {
   describe('waiterLogin', () => {
     it('returns tokens for valid PIN', async () => {
       repoMock.find.mockResolvedValue([mockUser]);
-      bcryptMock.compare.mockImplementation(
-        async (pin: string) => pin === '1234',
-      );
+      bcryptMock.compare.mockImplementation((pin: string) => pin === '1234');
 
       const result = await service.waiterLogin({
         pin: '1234',

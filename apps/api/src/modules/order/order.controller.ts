@@ -58,7 +58,8 @@ export class OrderController {
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async addItems(
     @Param('tabId') tabId: string,
-    @Request() req: { user: { userId: string; branchId: string; role: string } },
+    @Request()
+    req: { user: { userId: string; branchId: string; role: string } },
     @Body() items: CreateOrderItemDto[],
   ) {
     return this.orderService.addOrderItems(tabId, items, req.user.userId);
@@ -80,7 +81,8 @@ export class OrderController {
       'Paginated pending orders list (waiter-scoped for waiter role).',
   })
   async findPending(
-    @Request() req: { user: { userId: string; branchId: string; role: string } },
+    @Request()
+    req: { user: { userId: string; branchId: string; role: string } },
     @Query('page') page?: string,
     @Query('per_page') per_page?: string,
   ) {
@@ -101,7 +103,12 @@ export class OrderController {
     summary: 'Get currently preparing orders with active countdowns',
   })
   @ApiResponse({ status: 200, description: 'Preparing orders list.' })
-  async findPreparing(@Request() req: { user: { userId: string; branchId: string; role: string } }) {
+  async findPreparing(
+    @Request()
+    req: {
+      user: { userId: string; branchId: string; role: string };
+    },
+  ) {
     return this.orderService.findPreparingByBranch(req.user.branchId);
   }
 
@@ -110,7 +117,12 @@ export class OrderController {
   @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER, UserRole.WAITER)
   @ApiOperation({ summary: 'Get orders ready for pickup (timer expired)' })
   @ApiResponse({ status: 200, description: 'Ready for pickup orders list.' })
-  async findReadyForPickup(@Request() req: { user: { userId: string; branchId: string; role: string } }) {
+  async findReadyForPickup(
+    @Request()
+    req: {
+      user: { userId: string; branchId: string; role: string };
+    },
+  ) {
     return this.orderService.findReadyForPickupByBranch(req.user.branchId);
   }
 
@@ -127,7 +139,11 @@ export class OrderController {
     type: [Order],
   })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async findByTab(@Param('tabId') tabId: string, @Request() req: { user: { userId: string; branchId: string; role: string } }) {
+  async findByTab(
+    @Param('tabId') tabId: string,
+    @Request()
+    req: { user: { userId: string; branchId: string; role: string } },
+  ) {
     return this.orderService.findByTab(tabId, req.user.branchId);
   }
 
@@ -138,7 +154,11 @@ export class OrderController {
   @ApiResponse({ status: 200, description: 'Order item details.' })
   @ApiResponse({ status: 404, description: 'Order item not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async findOne(@Param('id') id: string, @Request() req: { user: { userId: string; branchId: string; role: string } }) {
+  async findOne(
+    @Param('id') id: string,
+    @Request()
+    req: { user: { userId: string; branchId: string; role: string } },
+  ) {
     return this.orderService.findOne(id, req.user.branchId);
   }
 
@@ -154,7 +174,8 @@ export class OrderController {
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async update(
     @Param('id') id: string,
-    @Request() req: { user: { userId: string; branchId: string; role: string } },
+    @Request()
+    req: { user: { userId: string; branchId: string; role: string } },
     @Body() updateDto: UpdateOrderDto,
   ) {
     return this.orderService.updateOrder(id, updateDto, req.user.branchId);
@@ -170,7 +191,11 @@ export class OrderController {
   @ApiResponse({ status: 200, description: 'Order item removed.' })
   @ApiResponse({ status: 404, description: 'Order item not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async remove(@Param('id') id: string, @Request() req: { user: { userId: string; branchId: string; role: string } }) {
+  async remove(
+    @Param('id') id: string,
+    @Request()
+    req: { user: { userId: string; branchId: string; role: string } },
+  ) {
     return this.orderService.removeOrder(id, req.user.branchId);
   }
 
@@ -191,7 +216,8 @@ export class OrderController {
   @ApiResponse({ status: 404, description: 'Order not found.' })
   async approve(
     @Param('id') id: string,
-    @Request() req: { user: { userId: string; branchId: string; role: string } },
+    @Request()
+    req: { user: { userId: string; branchId: string; role: string } },
     @Body() dto: ApproveOrderDto,
   ) {
     return this.orderService.approve(
@@ -215,7 +241,8 @@ export class OrderController {
   @ApiResponse({ status: 404, description: 'Order not found.' })
   async decline(
     @Param('id') id: string,
-    @Request() req: { user: { userId: string; branchId: string; role: string } },
+    @Request()
+    req: { user: { userId: string; branchId: string; role: string } },
     @Body() dto: DeclineOrderDto,
   ) {
     return this.orderService.decline(
@@ -240,7 +267,11 @@ export class OrderController {
   })
   @ApiResponse({ status: 400, description: 'Order is not ready for pickup.' })
   @ApiResponse({ status: 404, description: 'Order not found.' })
-  async confirmPickup(@Param('id') id: string, @Request() req: { user: { userId: string; branchId: string; role: string } }) {
+  async confirmPickup(
+    @Param('id') id: string,
+    @Request()
+    req: { user: { userId: string; branchId: string; role: string } },
+  ) {
     return this.orderService.confirmPickup(
       id,
       req.user.userId,
@@ -258,7 +289,11 @@ export class OrderController {
   @ApiResponse({ status: 200, description: 'Order marked as delivered.' })
   @ApiResponse({ status: 400, description: 'Order is not ready for pickup.' })
   @ApiResponse({ status: 404, description: 'Order not found.' })
-  async deliver(@Param('id') id: string, @Request() req: { user: { userId: string; branchId: string; role: string } }) {
+  async deliver(
+    @Param('id') id: string,
+    @Request()
+    req: { user: { userId: string; branchId: string; role: string } },
+  ) {
     return this.orderService.deliver(id, req.user.userId, req.user.branchId);
   }
 }

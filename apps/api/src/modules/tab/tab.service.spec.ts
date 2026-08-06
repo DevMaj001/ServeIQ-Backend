@@ -12,34 +12,59 @@ import { DataSource } from 'typeorm';
 import { TrackingService } from '../tracking/tracking.service';
 import { TabType } from '../../common/shared';
 
+type MockRepoShape = {
+  findOne: jest.Mock;
+  find: jest.Mock;
+  create: jest.Mock;
+  save: jest.Mock;
+  update: jest.Mock;
+  findAndCount: jest.Mock;
+};
+
 describe('TabService — Tab State Machine Transitions', () => {
   let service: TabService;
-  let repos: any;
-  let dataSource: any;
-  let trackingService: any;
+  let repos: {
+    tabRepo: MockRepoShape;
+    tableRepo: MockRepoShape;
+    userRepo: MockRepoShape;
+    orderRepo: MockRepoShape;
+    stockMovementRepo: MockRepoShape;
+    menuItemRepo: MockRepoShape;
+    shiftRepo: MockRepoShape;
+  };
+  let dataSource: {
+    createQueryBuilder: jest.Mock;
+    createQueryRunner: jest.Mock;
+    transaction: jest.Mock;
+    query: jest.Mock;
+  };
+  let trackingService: { generateUniqueCode: jest.Mock };
 
-  const mockRepo = () => ({
+  const mockRepo = (): MockRepoShape => ({
     findOne: jest.fn(),
     find: jest.fn().mockResolvedValue([]),
-    create: jest.fn((dto) => dto),
-    save: jest.fn(async (entity) => ({
-      ...entity,
-      id: 'tab-1',
-      created_at: new Date(),
-      updated_at: new Date(),
-    })),
+    create: jest.fn((dto: unknown) => dto),
+    save: jest.fn(async (entity: object): Promise<Record<string, unknown>> => {
+      await Promise.resolve();
+      return {
+        ...entity,
+        id: 'tab-1',
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+    }),
     update: jest.fn(),
     findAndCount: jest.fn().mockResolvedValue([[], 0]),
   });
 
   const buildMockManager = () => ({
-    getRepository: jest.fn((entity: any) => ({
-      save: jest.fn(async (e: any) => ({ ...e, id: 'saved-1' })),
+    getRepository: jest.fn(() => ({
+      save: jest.fn((e: unknown) => Promise.resolve({ ...e, id: 'saved-1' })),
       update: jest.fn(),
       findOne: jest.fn(),
       find: jest.fn().mockResolvedValue([]),
     })),
-    save: jest.fn(async (e: any) => ({ ...e, id: 'saved-1' })),
+    save: jest.fn((e: unknown) => Promise.resolve({ ...e, id: 'saved-1' })),
     update: jest.fn(),
     findOne: jest.fn(),
   });
@@ -71,7 +96,7 @@ describe('TabService — Tab State Machine Transitions', () => {
         release: jest.fn(),
         manager: mockManager,
       }),
-      transaction: jest.fn(async (cb: any) => cb(mockManager)),
+      transaction: jest.fn((cb: (m: unknown) => unknown) => cb(mockManager)),
       query: jest.fn(),
     };
 
