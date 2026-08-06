@@ -19,7 +19,7 @@ The backend is feature-complete, deployed on Render (`serveiq-backend.onrender.c
 
 **Remaining blockers (4/10):**
 - S1: Frontend uses role strings (`role === 'supervisor'`) instead of permission checks — requires frontend PR in `DennisMajestie/serveIQ`
-- T2: E2e tests mock `DataSource` entirely — no real DB-backed integration tests
+- T2: Real-DB e2e rewritten (self-gating on `TEST_DATABASE_URL`, boots app + runs 25 migrations) and wired to the CI Postgres 16 service — **resolved pending first green CI run**
 - T4: No load test evidence (100 concurrent sessions < 500ms p95)
 - T5: Receipt rendering not validated on 5 screen sizes
 - A7: V1 feature cut line vs deployed V2+ features not documented
@@ -70,7 +70,7 @@ The backend is feature-complete, deployed on Render (`serveiq-backend.onrender.c
 | # | Item | Evidence | Status |
 |---|---|---|---|
 | T1 | Thin unit coverage | 14 `.spec.ts` files in `apps/api`; no billing/tab-state-machine/round-logic suites | **COMPLETED:** Added `bill.calculation.spec.ts` (50 billing accuracy scenarios S001–S051), `tab.service.spec.ts` (10 tab state machine tests TSM-01–TSM-10), extended `order.service.spec.ts` with order round logic tests ROUND-01–ROUND-06 (25 new total tests, 131 tests across 16 suites) |
-| T2 | No DB e2e suite run | `test:e2e` script exists (`apps/api/package.json:20`) but no CI to run it | Wire e2e into CI with a Postgres service container — NOW IN `.github/workflows/ci.yml` (PG 16 service `serveiq_test` + `test:e2e` step); current e2e spec mocks the DataSource, so it passes without live schema |
+| T2 | No DB e2e suite run | `test:e2e` script exists (`apps/api/package.json:20`) but no CI to run it | **RENOVATED:** `test/app.e2e-spec.ts` rewritten as a real-DB integration suite — it booted the full `AppModule` against a live Postgres, runs all 25 registered migrations (`migrationsRun: true`), then asserts the `/` route, a `migrations`-table count > 0 (proves schema built from scratch), a live `SELECT` round-trip, and DataSource init. Gated on explicit `TEST_DATABASE_URL` (never falls back to `.env`'s shared dev DB); fast `pg` probe short-circuits the skip path; all three control paths verified green locally (unset / unreachable / auth-fail). CI sets `TEST_DATABASE_URL` to its PG 16 service (`.github/workflows/ci.yml`). **Resolved pending first green CI run** |
 | T3 | No CI pipeline in repo | No `.github` workflows in this repository | Added `.github/workflows/ci.yml`: lint (non-blocking, see H4) → unit (`--runInBand --no-cache`) → build → e2e on every PR push. **Remaining:** verify green end-to-end on a real PR, then add deploy-on-merge/tag |
 | T4 | No load test evidence | Checklist 5.2 "Load test: 100 concurrent sessions < 500ms p95" unchecked | Run and record k6/artillery results |
 | T5 | Receipt rendering not validated | Checklist 6.3 "Receipt PDF renders on 5 screen sizes" unchecked | QA on target devices/sizes |
@@ -105,7 +105,7 @@ The backend is feature-complete, deployed on Render (`serveiq-backend.onrender.c
 - [x] B1 legal finalized (placeholder address replaced, entity/jurisdiction confirmed); B2 (frontend links) pending verification in frontend repo
 - [x] D1/D2/D3 ensure-tables consolidated into migration `1800000000005`; `main.ts` call removed + stub deleted; `tsc` build clean
 - [ ] S1–S4 authorization verified by automated tests (S2 throttles done, S3 login lockout done, S4 cross-branch spec passing; S1 frontend routing open)
-- [x] T1 test suites green (billing 50-scenario accuracy, tab state machine, order round logic — 131 tests across 16 suites); T2/T3 CI wired (lint non-blocking); T4/T5 load test + receipt QA not yet done
+- [x] T1 test suites green (billing 50-scenario accuracy, tab state machine, order round logic — 131 tests across 16 suites); T2 real-DB e2e rewritten + wired to CI PG service (pending first green CI run); T3 CI wired (lint non-blocking); T4/T5 load test + receipt QA not yet done
 - [x] H1 README fixed; H2/H3 reconcile checklist vs deployed scope — OPEN; H4 lint debt tracked (CI lint non-blocking)
 - [ ] Phase 6 launch acceptance checklist (MASTER_CHECKLIST §6.3) fully checked
 
