@@ -5,10 +5,22 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 
+interface AuthenticatedRequest extends Request {
+  user?: {
+    branchId: string;
+    role?: string;
+  };
+  branchId?: string;
+  params: {
+    branchId?: string;
+    id?: string;
+  };
+}
+
 @Injectable()
 export class BranchScopeGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const user = request.user;
     if (!user || !user.branchId) {
       throw new ForbiddenException('Branch access required');
