@@ -20,7 +20,8 @@ export class RolesGuard implements CanActivate {
     const user = request.user;
 
     // Prefer roleEntity.name (PBAC) over legacy role string
-    const userRole = user?.roleEntity?.name || user?.role;
-    return requiredRoles.some((role: string) => userRole === role);
+    // Case-insensitive comparison since DB has "Owner" but enum is "owner"
+    const userRole = (user?.roleEntity?.name || user?.role || '').toLowerCase();
+    return requiredRoles.some((role: string) => userRole === role.toLowerCase());
   }
 }
