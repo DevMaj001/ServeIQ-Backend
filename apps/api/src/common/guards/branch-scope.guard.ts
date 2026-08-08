@@ -4,6 +4,7 @@ import {
   ExecutionContext,
   ForbiddenException,
 } from '@nestjs/common';
+import { Request } from 'express';
 
 interface AuthenticatedRequest extends Request {
   user?: {
