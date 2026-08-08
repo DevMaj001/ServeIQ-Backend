@@ -21,6 +21,7 @@ import {
   ApiParam,
   ApiResponse,
 } from '@nestjs/swagger';
+import { AdminFeedbackUpdateStatusDto } from './dto/update-feedback-status.dto';
 
 @ApiTags('Admin Feedback')
 @ApiBearerAuth('access-token')
@@ -51,12 +52,12 @@ export class AdminFeedbackController {
   @ApiResponse({ status: 404, description: 'Feedback not found.' })
   async updateStatus(
     @Param('id') id: string,
-    @Body() body: { status: string; admin_notes?: string },
+    @Body() dto: AdminFeedbackUpdateStatusDto,
   ) {
     const updated = await this.feedbackService.updateStatus(
       id,
-      body.status,
-      body.admin_notes,
+      dto.status,
+      dto.admin_notes,
     );
     if (!updated) throw new NotFoundException('Feedback not found');
     return updated;

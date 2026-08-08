@@ -22,6 +22,7 @@ import { CreateModifierGroupDto } from './dto/create-modifier-group.dto';
 import { UpdateModifierGroupDto } from './dto/update-modifier-group.dto';
 import { CreateModifierOptionDto } from './dto/create-modifier-option.dto';
 import { UpdateModifierOptionDto } from './dto/update-modifier-option.dto';
+import { MenuModifierLinkGroupsDto } from './dto/link-groups.dto';
 
 @ApiTags('Menu Modifiers')
 @ApiBearerAuth('access-token')
@@ -129,12 +130,12 @@ export class MenuModifierController {
   async linkGroups(
     @Param('menuItemId') menuItemId: string,
     @Request() req: any,
-    @Body() body: { group_ids: string[] },
+    @Body() dto: MenuModifierLinkGroupsDto,
   ) {
     return this.modifierService.linkGroupsToMenuItem(
       menuItemId,
       req.user.branchId,
-      body.group_ids,
+      dto.group_ids,
     );
   }
 

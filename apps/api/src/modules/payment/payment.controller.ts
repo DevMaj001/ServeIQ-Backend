@@ -30,6 +30,7 @@ import { Branch } from '../branch/entities/branch.entity';
 import { BillService } from '../bill/bill.service';
 import { ProcessPaymentDto } from '../bill/dto/process-payment.dto';
 import { PaymentMethod } from '../../common/shared';
+import { PaymentVerificationDto } from './dto/payment-verification.dto';
 import * as crypto from 'crypto';
 
 interface PaymentProviderConfig {
@@ -63,27 +64,16 @@ export class PaymentController {
     summary:
       'Get payment instructions for a self-service tab (no auth, tracking code required)',
   })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      required: ['tab_id', 'tracking_code'],
-      properties: {
-        tab_id: { type: 'string' },
-        tracking_code: { type: 'string' },
-      },
-    },
-  })
+  @ApiBody({ type: PaymentVerificationDto })
   @ApiResponse({ status: 200, description: 'Payment instruction details.' })
-  async initializePayment(
-    @Body() body: { tab_id: string; tracking_code: string },
-  ) {
-    if (!body.tab_id || !body.tracking_code) {
+  async initializePayment(@Body() dto: PaymentVerificationDto) {
+    if (!dto.tab_id || !dto.tracking_code) {
       throw new BadRequestException('tab_id and tracking_code are required');
     }
 
-    const tab = await this.tabRepo.findOne({ where: { id: body.tab_id } });
+    const tab = await this.tabRepo.findOne({ where: { id: dto.tab_id } });
     if (!tab) throw new NotFoundException('Tab not found');
-    if (tab.tracking_code !== body.tracking_code)
+    if (tab.tracking_code !== dto.tracking_code)
       throw new ForbiddenException('Invalid tracking code');
     if (tab.status !== 'open' && tab.status !== 'billed')
       throw new BadRequestException('Tab is not payable');

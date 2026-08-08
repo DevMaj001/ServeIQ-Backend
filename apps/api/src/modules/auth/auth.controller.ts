@@ -19,6 +19,7 @@ import { LogoutDto } from './dto/logout.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ResolveBusinessCodeDto } from './dto/resolve-business-code.dto';
+import { VerifyEmailDto, SetupSuperAdminDto, ImpersonateDto } from './dto/auth.dto';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -171,8 +172,8 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify email with OTP code' })
   @ApiResponse({ status: 200, description: 'OK' })
-  async verifyEmail(@Request() req: any, @Body() body: { otp: string }) {
-    return this.authService.verifyEmail(req.user.userId, body.otp);
+  async verifyEmail(@Request() req: any, @Body() dto: VerifyEmailDto) {
+    return this.authService.verifyEmail(req.user.userId, dto.otp);
   }
 
   @Post('setup-super-admin')
@@ -183,9 +184,7 @@ export class AuthController {
     status: 200,
     description: 'Super admin created or already exists',
   })
-  async setupSuperAdmin(
-    @Body() dto: { email: string; password: string; full_name?: string },
-  ) {
+  async setupSuperAdmin(@Body() dto: SetupSuperAdminDto) {
     return this.authService.setupSuperAdmin(dto);
   }
 
@@ -236,10 +235,7 @@ export class AuthController {
       'Returns a JWT scoped to the given business/branch for super admin support access.',
   })
   @ApiResponse({ status: 200, description: 'OK' })
-  async impersonate(
-    @Request() req: any,
-    @Body() dto: { businessId: string; branchId?: string },
-  ) {
+  async impersonate(@Request() req: any, @Body() dto: ImpersonateDto) {
     return this.authService.impersonate(req.user, dto);
   }
 

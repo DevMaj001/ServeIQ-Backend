@@ -22,11 +22,12 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { UserRole } from '../../common/shared';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { PERMISSIONS } from './permission-codes';
+import { UserRole } from '../../common/shared';
 import { Role } from './entities/role.entity';
 import { Permission } from './entities/permission.entity';
+import { UpdateRolePermissionsDto } from './dto/update-role-permissions.dto';
 
 @ApiTags('Roles & Permissions')
 @Controller('roles')
@@ -104,7 +105,7 @@ export class RoleController {
   @ApiResponse({ status: 404, description: 'Role not found.' })
   async updateRolePermissions(
     @Param('id') id: string,
-    @Body() body: { permission_ids: string[] },
+    @Body() dto: UpdateRolePermissionsDto,
   ): Promise<Role> {
     const role = await this.roleRepo.findOne({
       where: { id },
@@ -118,7 +119,7 @@ export class RoleController {
     }
 
     const permissions = await this.permissionRepo.find({
-      where: body.permission_ids.map((id) => ({ id })),
+      where: dto.permission_ids.map((id) => ({ id })),
     });
     role.permissions = permissions;
     return this.roleRepo.save(role);

@@ -26,6 +26,7 @@ import {
 import { ProcessPaymentDto } from './dto/process-payment.dto';
 import { GenerateBillDto } from './dto/generate-bill.dto';
 import { ApplyDiscountDto } from './dto/apply-discount.dto';
+import { BillSplitEvenlyDto, BillSplitByItemDto } from './dto/split-bill.dto';
 
 @ApiTags('Bills')
 @ApiBearerAuth('access-token')
@@ -107,13 +108,13 @@ export class BillController {
   async splitEvenly(
     @Param('tabId') tabId: string,
     @Request() req: any,
-    @Body() body: { splits: number },
+    @Body() dto: BillSplitEvenlyDto,
   ) {
     return this.billService.splitEvenly(
       tabId,
       req.user.userId,
       req.user.role,
-      body.splits,
+      dto.splits,
     );
   }
 
@@ -125,13 +126,13 @@ export class BillController {
   async splitByItem(
     @Param('tabId') tabId: string,
     @Request() req: any,
-    @Body() body: { allocations: { order_ids: string[]; label?: string }[] },
+    @Body() dto: BillSplitByItemDto,
   ) {
     return this.billService.splitByItem(
       tabId,
       req.user.userId,
       req.user.role,
-      body.allocations,
+      dto.allocations,
     );
   }
 

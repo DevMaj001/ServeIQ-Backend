@@ -23,6 +23,7 @@ import {
   ApiResponse,
   ApiParam,
 } from '@nestjs/swagger';
+import { CreateDepartmentDto, UpdateDepartmentDto } from './dto/department.dto';
 
 interface RequestWithUser {
   user: {
@@ -67,8 +68,8 @@ export class DepartmentController {
   @ApiOperation({ summary: 'Create a new department' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
-  async create(@Request() req: RequestWithUser, @Body('name') name: string) {
-    return this.departmentService.create(req.user.branchId, name);
+  async create(@Request() req: RequestWithUser, @Body() dto: CreateDepartmentDto) {
+    return this.departmentService.create(req.user.branchId, dto.name);
   }
 
   @Patch(':id')
@@ -79,9 +80,9 @@ export class DepartmentController {
   @ApiResponse({ status: 401 })
   async update(
     @Param('id') id: string,
-    @Body() data: { name?: string; is_active?: boolean },
+    @Body() dto: UpdateDepartmentDto,
   ) {
-    return this.departmentService.update(id, data);
+    return this.departmentService.update(id, dto);
   }
 
   @Delete(':id')
