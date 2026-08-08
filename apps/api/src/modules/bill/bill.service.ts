@@ -235,6 +235,7 @@ export class BillService {
         bill.idempotency_key = paymentDto.idempotency_key;
       }
       bill.paid_at = new Date();
+      bill.payment_status = 'paid';
 
       await manager.getRepository(Bill).save(bill);
 
