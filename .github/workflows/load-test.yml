@@ -39,7 +39,7 @@ on:
 
 env:
   # Set these in GitHub repository secrets
-  STAGING_BASE_URL: 'https://serveiq-backend-staging.onrender.com'
+  STAGING_BASE_URL: 'https://serveiq-backend.onrender.com'
   PRODUCTION_BASE_URL: 'https://serveiq-backend.onrender.com'
   K6_CLOUD_TOKEN: ${{ secrets.K6_CLOUD_TOKEN }}
 
