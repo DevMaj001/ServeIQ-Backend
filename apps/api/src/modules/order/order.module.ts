@@ -12,6 +12,7 @@ import { AuditService } from '../../common/services/audit.service';
 import { IngredientModule } from '../ingredient/ingredient.module';
 import { NotificationModule } from '../notification/notification.module';
 import { TrackingModule } from '../tracking/tracking.module';
+import { GatewayModule } from '../gateway/gateway.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { TrackingModule } from '../tracking/tracking.module';
     IngredientModule,
     NotificationModule,
     TrackingModule,
+    GatewayModule,
   ],
   providers: [OrderService, OrderScheduler, AuditService],
   controllers: [OrderController],
