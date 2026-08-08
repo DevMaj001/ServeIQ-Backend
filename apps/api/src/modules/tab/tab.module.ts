@@ -9,7 +9,9 @@ import { Order } from '../order/entities/order.entity';
 import { StockMovement } from '../ingredient/entities/stock-movement.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Shift } from '../shift/entities/shift.entity';
+import { Bill } from '../bill/entities/bill.entity';
 import { TrackingModule } from '../tracking/tracking.module';
+import { GatewayModule } from '../gateway/gateway.module';
 
 @Module({
   imports: [
@@ -21,8 +23,10 @@ import { TrackingModule } from '../tracking/tracking.module';
       StockMovement,
       MenuItem,
       Shift,
+      Bill,
     ]),
     TrackingModule,
+    GatewayModule,
   ],
   providers: [TabService],
   controllers: [TabController],
