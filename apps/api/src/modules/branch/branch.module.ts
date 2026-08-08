@@ -10,12 +10,22 @@ import { Order } from '../order/entities/order.entity';
 import { User } from '../user/entities/user.entity';
 import { AuditLog } from '../../entities/audit-log.entity';
 import { AuditService } from '../../common/services/audit.service';
+import { PlatformPaymentProvider } from '../admin/entities/platform-payment-provider.entity';
 import { SubscriptionModule } from '../subscription/subscription.module';
 import { TableModule } from '../table/table.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Branch, Table, Tab, Bill, Order, User, AuditLog]),
+    TypeOrmModule.forFeature([
+      Branch,
+      Table,
+      Tab,
+      Bill,
+      Order,
+      User,
+      AuditLog,
+      PlatformPaymentProvider,
+    ]),
     SubscriptionModule,
     TableModule,
   ],

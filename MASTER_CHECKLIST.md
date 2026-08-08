@@ -64,7 +64,7 @@
 - [ ] Configure Capacitor plugins: Camera (receipt), Bluetooth (printer V2)
 
 ### 0.6 CI/CD & Hosting
-- [ ] Set up GitHub Actions pipeline: lint → test → build on PR
+- [x] Set up GitHub Actions pipeline: lint → test → build on PR
 - [ ] Configure Railway or Render for NestJS backend deployment
 - [ ] Configure Vercel for Angular admin deployment
 - [ ] Set up staging environment auto-deploy on `main` merge
@@ -376,13 +376,13 @@
 - [ ] Security test: cross-business data leakage (waiter from Business A cannot see Business B data)
 
 ### 5.2 Testing
-- [x] Unit tests: `AuthService` (login, register, refresh, lockout — 10 tests), `TabService` (state machine — 10 tests: TSM-01–TSM-10), `BillingService` (calculation accuracy — 51 scenarios: S001–S051), `OrderService` (price snapshot + round logic — 6 tests: ROUND-01–ROUND-06) — total 131 tests across 16 suites
-- [x] Integration tests: database round-trips for all modules (cross-branch security spec `branch.service.spec.ts`, 5 tests passing)
-- [ ] E2E test: full waiter flow (register → login → open tab → add 3 items → generate bill → pay → verify receipt totals) — CI runs e2e but tests are fully mocked (no real DB)
+- [ ] Unit tests: `AuthService`, `TabService` (state machine), `BillingService` (calculation accuracy), `OrderService` (price snapshot logic)
+- [ ] Integration tests: database round-trips for all modules
+- [ ] E2E test: full waiter flow (register → login → open tab → add 3 items → generate bill → pay → verify receipt totals)
 - [ ] E2E test: manager dashboard real-time update on tab close
-- [ ] Load test: 100 concurrent waiter sessions on single branch (target: < 500ms p95) — not yet run
-- [x] Billing calculation test: 50 automated scenarios with known expected totals — **DONE** (S001–S051)
-- [x] Security test: cross-branch data access with valid JWT (branch.service.spec.ts, 5 passing)
+- [ ] Load test: 100 concurrent waiter sessions on single branch (target: < 500ms p95)
+- [ ] Billing calculation test: 50 automated scenarios with known expected totals
+- [ ] Security test: attempt cross-branch data access with valid JWT from different branch
 
 ### 5.3 Performance
 - [ ] Dashboard API response < 500ms on standard connection
@@ -412,8 +412,8 @@
 - [ ] Fix all P0/P1 bugs before public launch
 
 ### 6.3 Launch Acceptance Checklist
-- [x] Zero billing calculation errors in automated test suite (51 billing accuracy scenarios S001–S051, all passing)
-- [x] Zero cross-business data leakage in security tests (branch.service.spec.ts, 5 passing)
+- [ ] Zero billing calculation errors in automated test suite
+- [ ] Zero cross-business data leakage in security tests
 - [ ] All Critical acceptance criteria from PRD checked off (see PRD §6)
 - [ ] App works on Android 8+ and iOS 14+
 - [ ] Offline sync tested on real device with airplane mode simulation
@@ -460,21 +460,6 @@
 - [ ] Push notifications: tab open > 3 hours, bill voided, stock below reorder
 - [ ] Waiter performance with voids and average tab value
 - [ ] Thermal Bluetooth printer pairing in app settings
-
-### 7.7 Department Routing & Kitchen Tickets
-> Routes a waiter's combined tab to the correct kitchen stations. Menu item owns the department (A) and the supervisor approves once per bundle while the system splits items into virtual tickets (C). No new table — a ticket is a grouping of orders by `tab_id + department_id + round_number`.
-
-- [ ] **Migration** — add `department_id` (nullable UUID FK → `departments`, indexed) to `menu_items`; backfill to NULL for existing items
-- [ ] Menu item CRUD accepts `department_id` (owner/manager only); null = no default routing
-- [ ] `addOrderItems` sets `assigned_department` on each order from its menu item at creation (null if unassigned)
-- [ ] Items with no department remain `pending_supervisor_approval` until supervisor picks one (existing manual flow)
-- [ ] `findGroupedOrdersByBranch`: add optional department filter; pending feed groups items by department (chips/sections) instead of flat per-tab
-- [ ] Supervisor approval per department bundle: approve all pending items of a tab+department in one call (not per line item); items still created as individual orders for billing
-- [ ] Virtual ticket grouping helper: `tab_id + department_id + round_number` → one ticket per department/station
-- [ ] Kitchen/ready-for-pickup views read tickets so each station sees only its own department's items
-- [ ] Waiter delivery view groups served items by department (pack per station)
-- [ ] Audit log entries for bundle approval; `branch_id` scoping on every new query
-- [ ] Tests: auto-routing inheritance, bundle approval, ticket grouping, department filter
 
 ---
 

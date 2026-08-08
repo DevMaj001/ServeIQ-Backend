@@ -6,7 +6,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, FindOptionsWhere } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { Tab } from './entities/tab.entity';
 import { Table, TableStatus } from '../table/entities/table.entity';
 import { User } from '../user/entities/user.entity';
@@ -14,8 +14,10 @@ import { Order } from '../order/entities/order.entity';
 import { StockMovement } from '../ingredient/entities/stock-movement.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Shift } from '../shift/entities/shift.entity';
+import { Bill } from '../bill/entities/bill.entity';
 import { StockMovementType, TabType } from '../../common/shared';
 import { TrackingService } from '../tracking/tracking.service';
+import { RealtimeService } from '../gateway/realtime.service';
 
 @Injectable()
 export class TabService {
@@ -32,23 +34,18 @@ export class TabService {
     private movementRepo: Repository<StockMovement>,
     @InjectRepository(MenuItem)
     private menuItemRepo: Repository<MenuItem>,
+    @InjectRepository(Bill)
+    private billRepository: Repository<Bill>,
     @InjectRepository(Shift)
     private shiftRepo: Repository<Shift>,
     @Inject(DataSource)
     private dataSource: DataSource,
     private trackingService: TrackingService,
+    private realtimeService: RealtimeService,
   ) {}
 
   async openTab(
-    createDto: {
-      table_id: string;
-      tab_type?: TabType;
-      branch_id: string;
-      waiter_id?: string;
-      customer_name?: string;
-      party_size?: number;
-      notes?: string;
-    },
+    createDto: any,
     currentUserId?: string,
     currentUserRole?: string,
   ) {
@@ -125,7 +122,9 @@ export class TabService {
         tracking_code: await this.trackingService.generateUniqueCode(),
         tracking_generated_at: new Date(),
       });
-      const savedTab = await queryRunner.manager.save(newTab);
+      const savedTab = (await queryRunner.manager.save(
+        newTab,
+      )) as unknown as Tab;
 
       // Virtual tables never participate in occupancy logic — they are system records, not seatable tables.
       if (tabType !== TabType.TAKEAWAY) {
@@ -135,6 +134,17 @@ export class TabService {
       }
 
       await queryRunner.commitTransaction();
+
+      // Emit real-time events
+      this.realtimeService.emitTabCreated(savedTab.branch_id, savedTab);
+      if (tabType !== TabType.TAKEAWAY) {
+        this.realtimeService.emitTableStatusChange(
+          savedTab.branch_id,
+          tableId,
+          TableStatus.OCCUPIED,
+        );
+      }
+
       return savedTab;
     } catch (err) {
       await queryRunner.rollbackTransaction();
@@ -201,7 +211,7 @@ export class TabService {
     waiterId?: string,
     pagination?: { page: number; per_page: number },
   ) {
-    const where: FindOptionsWhere<Tab> = { branch_id: branchId };
+    const where: any = { branch_id: branchId };
     if (status) {
       where.status = status;
     }
@@ -255,7 +265,7 @@ export class TabService {
       .select('DISTINCT tab.waiter_id', 'waiter_id')
       .where('tab.branch_id = :branchId', { branchId })
       .andWhere('tab.waiter_id IS NOT NULL')
-      .getRawMany<{ waiter_id: string }>();
+      .getRawMany();
 
     const ids = raw.map((r) => r.waiter_id);
     if (ids.length === 0) return [];
@@ -290,6 +300,17 @@ export class TabService {
       throw new ForbiddenException("You cannot close another waiter's tab");
     }
 
+    // Verify bill exists and is paid before closing
+    const bill = await this.billRepository.findOne({ where: { tab_id: id } });
+    if (!bill) {
+      throw new BadRequestException(
+        'Cannot close tab: no bill has been generated',
+      );
+    }
+    if (!bill.paid_at) {
+      throw new BadRequestException('Cannot close tab: bill has not been paid');
+    }
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -311,6 +332,20 @@ export class TabService {
       }
 
       await queryRunner.commitTransaction();
+
+      // Emit real-time events
+      this.realtimeService.emitTabClosed(branchId, id, tab.table_id);
+      const updatedTable = await this.tableRepository.findOne({
+        where: { id: tab.table_id },
+      });
+      if (updatedTable && !updatedTable.is_virtual) {
+        this.realtimeService.emitTableStatusChange(
+          branchId,
+          tab.table_id,
+          TableStatus.AVAILABLE,
+        );
+      }
+
       return this.findOne(id, branchId);
     } catch (err) {
       await queryRunner.rollbackTransaction();
@@ -325,6 +360,10 @@ export class TabService {
     if (tab.status !== 'open') {
       throw new BadRequestException('Only open tabs can be transferred');
     }
+
+    const sourceTable = await this.tableRepository.findOne({
+      where: { id: tab.table_id },
+    });
 
     // Block incompatible transfers: takeaway <-> physical, dine-in <-> virtual counter
     if (tab.tab_type === TabType.TAKEAWAY) {
@@ -367,6 +406,22 @@ export class TabService {
       });
 
       await queryRunner.commitTransaction();
+
+      // Emit real-time events
+      this.realtimeService.emitTableStatusChange(
+        branchId,
+        oldTableId,
+        TableStatus.AVAILABLE,
+      );
+      this.realtimeService.emitTableStatusChange(
+        branchId,
+        targetTableId,
+        TableStatus.OCCUPIED,
+      );
+      this.realtimeService.emitTabUpdate(branchId, id, {
+        table_id: targetTableId,
+      });
+
       return this.findOne(id, branchId);
     } catch (err) {
       await queryRunner.rollbackTransaction();
@@ -468,6 +523,19 @@ export class TabService {
         await movementRepo.save(movement);
       }
     });
+
+    // Emit real-time events
+    this.realtimeService.emitTabUpdate(branchId, id, { status: 'voided' });
+    const voidTable = await this.tableRepository.findOne({
+      where: { id: tab.table_id },
+    });
+    if (voidTable && !voidTable.is_virtual) {
+      this.realtimeService.emitTableStatusChange(
+        branchId,
+        tab.table_id,
+        TableStatus.AVAILABLE,
+      );
+    }
 
     return this.findOne(id, branchId);
   }

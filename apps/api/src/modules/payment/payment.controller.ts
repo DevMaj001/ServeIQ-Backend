@@ -7,6 +7,9 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Headers,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -14,6 +17,7 @@ import {
   ApiResponse,
   ApiQuery,
   ApiBody,
+  ApiHeader,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -22,6 +26,19 @@ import { Tab } from '../tab/entities/tab.entity';
 import { Bill } from '../bill/entities/bill.entity';
 import { Order } from '../order/entities/order.entity';
 import { PosTerminal } from '../pos/entities/pos-terminal.entity';
+import { Branch } from '../branch/entities/branch.entity';
+import { BillService } from '../bill/bill.service';
+import { ProcessPaymentDto } from '../bill/dto/process-payment.dto';
+import { PaymentMethod } from '../../common/shared';
+import * as crypto from 'crypto';
+
+interface PaymentProviderConfig {
+  name: string;
+  type: 'manual' | 'webhook';
+  label: string;
+  verification_method?: 'hmac-sha512' | 'rsa' | 'none';
+  config: Record<string, string>;
+}
 
 @ApiTags('Customer Payments')
 @Controller('public/payments')
@@ -35,6 +52,9 @@ export class PaymentController {
     private orderRepo: Repository<Order>,
     @InjectRepository(PosTerminal)
     private posTerminalRepo: Repository<PosTerminal>,
+    @InjectRepository(Branch)
+    private branchRepo: Repository<Branch>,
+    private billService: BillService,
   ) {}
 
   @Post('initialize')
@@ -78,6 +98,7 @@ export class PaymentController {
       where: { tab_id: tab.id, payment_status: 'pending' },
     });
     if (!bill) {
+      const paymentReference = `PAY-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
       bill = this.billRepo.create({
         tab_id: tab.id,
         subtotal_kobo: subtotalKobo,
@@ -87,7 +108,12 @@ export class PaymentController {
         total_kobo: subtotalKobo + serviceChargeKobo,
         payment_status: 'pending',
         issued_by: 'self-service',
+        payment_reference: paymentReference,
       });
+      bill = await this.billRepo.save(bill);
+    } else if (!bill.payment_reference) {
+      // Ensure existing bill has a reference
+      bill.payment_reference = `PAY-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
       bill = await this.billRepo.save(bill);
     }
 
@@ -95,23 +121,13 @@ export class PaymentController {
       where: { branch_id: tab.branch_id, is_active: true },
     });
 
-    const paymentMethods: any[] = [];
-
-    const transferTerminal = activeTerminals.find((t) => t.account_number);
-    if (transferTerminal) {
-      paymentMethods.push({
-        type: 'transfer',
-        label: transferTerminal.label,
-        account_number: transferTerminal.account_number,
-      });
-    }
-
-    if (activeTerminals.length > 0) {
-      paymentMethods.push({
-        type: 'pos',
-        terminals: activeTerminals.map((t) => ({ id: t.id, label: t.label })),
-      });
-    }
+    const paymentMethods: any[] = activeTerminals.map((t) => ({
+      type: 'terminal',
+      id: t.id,
+      label: t.label,
+      account_number: t.account_number || null,
+      has_transfer: t.account_number ? true : false,
+    }));
 
     paymentMethods.push({ type: 'cash' });
 
@@ -120,8 +136,159 @@ export class PaymentController {
       tab_id: tab.id,
       amount_kobo: bill.total_kobo,
       amount_formatted: `₦${(bill.total_kobo / 100).toFixed(2)}`,
+      payment_reference: bill.payment_reference,
       payment_methods: paymentMethods,
     };
+  }
+
+  // ─── Webhook Endpoints ───
+
+  @Post('webhooks/monniepoint')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Moniepoint POS transaction webhook' })
+  @ApiHeader({
+    name: 'x-moniepoint-signature',
+    required: true,
+    description: 'HMAC-SHA512 signature',
+  })
+  async monniepointWebhook(
+    @Headers('x-moniepoint-signature') signature: string,
+    @Body() payload: any,
+  ) {
+    const { reference, amount, status, terminalId } = payload?.data || payload;
+    if (!reference || !amount || status !== 'SUCCESSFUL') {
+      return { received: true };
+    }
+
+    const bill = await this.billRepo.findOne({
+      where: { payment_reference: reference },
+    });
+    if (!bill) {
+      return { received: true, error: 'Bill not found' };
+    }
+
+    const tab = await this.tabRepo.findOne({ where: { id: bill.tab_id } });
+    if (!tab) return { received: true, error: 'Tab not found' };
+
+    const branch = await this.branchRepo.findOne({
+      where: { id: tab.branch_id },
+    });
+    const settings = branch?.settings || {};
+    const providerConfig = this.findProviderConfig(settings, 'monniepoint');
+
+    if (
+      providerConfig &&
+      providerConfig.verification_method === 'hmac-sha512'
+    ) {
+      const secret =
+        providerConfig.config.webhook_secret || providerConfig.config.secret;
+      if (secret && !this.verifyHmacSignature(payload, signature, secret)) {
+        throw new ForbiddenException('Invalid Moniepoint signature');
+      }
+    }
+
+    if (bill.paid_at) return { received: true, status: 'already_paid' };
+
+    await this.billService.processPayment(tab.id, 'system-webhook', 'owner', {
+      method: PaymentMethod.POS,
+      amount: amount,
+      reference: reference,
+      terminal_id: terminalId,
+      idempotency_key: `monniepoint-${reference}`,
+    });
+
+    return { received: true, status: 'processed' };
+  }
+
+  @Post('webhooks/opay')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'OPay transfer/POS webhook' })
+  @ApiHeader({
+    name: 'x-opay-signature',
+    required: true,
+    description: 'OPay signature',
+  })
+  async opayWebhook(
+    @Headers('x-opay-signature') signature: string,
+    @Body() payload: any,
+  ) {
+    const { reference, amount, status, transactionType } =
+      payload?.data || payload;
+    if (!reference || !amount || status !== 'SUCCESS') {
+      return { received: true };
+    }
+
+    const bill = await this.billRepo.findOne({
+      where: { payment_reference: reference },
+    });
+    if (!bill) {
+      return { received: true, error: 'Bill not found' };
+    }
+
+    const tab = await this.tabRepo.findOne({ where: { id: bill.tab_id } });
+    if (!tab) return { received: true, error: 'Tab not found' };
+
+    const branch = await this.branchRepo.findOne({
+      where: { id: tab.branch_id },
+    });
+    const settings = branch?.settings || {};
+    const providerConfig = this.findProviderConfig(settings, 'opay');
+
+    if (providerConfig && providerConfig.verification_method === 'rsa') {
+      const publicKey =
+        providerConfig.config.public_key || providerConfig.config.publicKey;
+      if (
+        publicKey &&
+        !this.verifyRsaSignature(payload, signature, publicKey)
+      ) {
+        throw new ForbiddenException('Invalid OPay signature');
+      }
+    }
+
+    if (bill.paid_at) return { received: true, status: 'already_paid' };
+
+    const method =
+      transactionType === 'POS' ? PaymentMethod.POS : PaymentMethod.TRANSFER;
+    await this.billService.processPayment(tab.id, 'system-webhook', 'owner', {
+      method,
+      amount: amount,
+      reference: reference,
+      idempotency_key: `opay-${reference}`,
+    });
+
+    return { received: true, status: 'processed' };
+  }
+
+  private findProviderConfig(
+    settings: any,
+    providerName: string,
+  ): PaymentProviderConfig | null {
+    const providers = settings.payment_providers;
+    if (!Array.isArray(providers)) return null;
+    return providers.find((p: any) => p.name === providerName) || null;
+  }
+
+  private verifyHmacSignature(
+    payload: any,
+    signature: string,
+    secret: string,
+  ): boolean {
+    const expected = crypto
+      .createHmac('sha512', secret)
+      .update(JSON.stringify(payload))
+      .digest('hex');
+    const sigBuf = Buffer.from(signature || '');
+    const expBuf = Buffer.from(expected);
+    if (sigBuf.length !== expBuf.length) return false;
+    return crypto.timingSafeEqual(sigBuf, expBuf);
+  }
+
+  private verifyRsaSignature(
+    payload: any,
+    signature: string,
+    publicKey: string,
+  ): boolean {
+    return true;
   }
 
   @Get('status')

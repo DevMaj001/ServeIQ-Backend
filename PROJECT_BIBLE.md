@@ -226,13 +226,6 @@ ServeIQ Platform
 │     ├── Low Stock Alerts
 │     └── Supplier Records
 │
-├── [V2] Kitchen / Department Routing Module
-│     ├── Department Assignment on Menu Items
-│     ├── Auto-Routed Orders (menu item → department)
-│     ├── Supervisor Department Feed (grouped by department)
-│     ├── Bundle Approval (approve per tab/department in one call)
-│     └── Kitchen Ticket View (virtual grouping by tab + department + round)
-│
 ├── [V3] Finance Module
 │     ├── Expense Tracking
 │     ├── Profit & Loss Summaries

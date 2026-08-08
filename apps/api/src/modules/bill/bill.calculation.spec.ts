@@ -12,8 +12,14 @@ import { DataSource } from 'typeorm';
 import { IngredientService } from '../ingredient/ingredient.service';
 import { ReceiptService } from './receipt.service';
 import { CloudinaryService } from '../../cloudinary/cloudinary.service';
+import { RealtimeService } from '../gateway/realtime.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { GenerateBillDto } from './dto/generate-bill.dto';
+
+const mockRealtimeService = () => ({
+  emitBillUpdate: jest.fn(),
+  emitDashboardUpdate: jest.fn(),
+});
 
 type MockRepoShape = {
   findOne: jest.Mock;
@@ -70,6 +76,17 @@ describe('BillService â€” Billing Calculation Accuracy (50 scenarios)', () 
               return {
                 find: jest.fn().mockResolvedValue([]),
                 save: jest.fn((e: unknown) => Promise.resolve(e)),
+                createQueryBuilder: jest.fn().mockReturnValue({
+                  update: jest.fn().mockReturnValue({
+                    set: jest.fn().mockReturnValue({
+                      where: jest.fn().mockReturnValue({
+                        andWhere: jest.fn().mockReturnValue({
+                          execute: jest.fn().mockResolvedValue(undefined),
+                        }),
+                      }),
+                    }),
+                  }),
+                }),
               };
             if (_entity === Tab) return { update: jest.fn() };
             if (_entity === Table)
@@ -95,6 +112,11 @@ describe('BillService â€” Billing Calculation Accuracy (50 scenarios)', () 
         .mockResolvedValue({ secure_url: 'https://example.com/receipt.pdf' }),
     };
 
+    const mockRealtimeService = {
+      emitBillUpdate: jest.fn(),
+      emitDashboardUpdate: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BillService,
@@ -110,6 +132,7 @@ describe('BillService â€” Billing Calculation Accuracy (50 scenarios)', () 
         { provide: IngredientService, useValue: mockIngredientService },
         { provide: ReceiptService, useValue: mockReceiptService },
         { provide: CloudinaryService, useValue: mockCloudinaryService },
+        { provide: RealtimeService, useValue: mockRealtimeService },
       ],
     }).compile();
 
@@ -736,12 +759,36 @@ describe('BillService â€” Tab State Machine Transitions', () => {
     const mockDataSource = {
       transaction: jest.fn(<T>(cb: (em: unknown) => Promise<T>) =>
         cb({
-          getRepository: jest.fn(() => ({
-            find: jest.fn().mockResolvedValue([]),
-            save: jest.fn((e: unknown) => Promise.resolve(e)),
-            findOne: jest.fn(),
-            update: jest.fn(),
-          })),
+          getRepository: jest.fn((_entity: unknown) => {
+            if (_entity === Order)
+              return {
+                find: jest.fn().mockResolvedValue([]),
+                save: jest.fn((e: unknown) => Promise.resolve(e)),
+                createQueryBuilder: jest.fn().mockReturnValue({
+                  update: jest.fn().mockReturnValue({
+                    set: jest.fn().mockReturnValue({
+                      where: jest.fn().mockReturnValue({
+                        andWhere: jest.fn().mockReturnValue({
+                          execute: jest.fn().mockResolvedValue(undefined),
+                        }),
+                      }),
+                    }),
+                  }),
+                }),
+              };
+            if (_entity === Tab) return { update: jest.fn() };
+            if (_entity === Table)
+              return {
+                findOne: jest.fn().mockResolvedValue(null),
+                update: jest.fn(),
+              };
+            return {
+              find: jest.fn().mockResolvedValue([]),
+              save: jest.fn((e: unknown) => Promise.resolve(e)),
+              findOne: jest.fn(),
+              update: jest.fn(),
+            };
+          }),
         }),
       ),
     } as unknown as DataSource;
@@ -774,6 +821,7 @@ describe('BillService â€” Tab State Machine Transitions', () => {
             uploadFile: jest.fn().mockResolvedValue({ secure_url: 'url' }),
           },
         },
+        { provide: RealtimeService, useValue: mockRealtimeService() },
       ],
     }).compile();
 

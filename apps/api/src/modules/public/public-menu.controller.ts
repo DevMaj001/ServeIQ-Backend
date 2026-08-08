@@ -1,7 +1,6 @@
 import { Controller, Get, Param, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
-import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { Branch } from '../branch/entities/branch.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
@@ -20,7 +19,6 @@ export class PublicMenuController {
   ) {}
 
   @Get('menu/:branchId')
-  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @ApiOperation({ summary: 'Get public menu for a branch (no auth required)' })
   @ApiParam({ name: 'branchId', description: 'Branch UUID' })
   @ApiResponse({ status: 200, description: 'Public menu items.' })
@@ -61,7 +59,6 @@ export class PublicMenuController {
   }
 
   @Get('ads/:branchId')
-  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @ApiOperation({
     summary: 'Get public advertisements for a branch (no auth required)',
   })

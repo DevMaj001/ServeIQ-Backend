@@ -15,7 +15,6 @@ import {
   EntityManager,
 } from 'typeorm';
 import { MenuItem } from '../menu/entities/menu-item.entity';
-import { CreateInventoryItemDto } from './dto/create-inventory-item.dto';
 import { StockMovement } from './entities/stock-movement.entity';
 import { Tab } from '../tab/entities/tab.entity';
 import { Order } from '../order/entities/order.entity';
@@ -61,10 +60,7 @@ export class IngredientService {
     };
   }
 
-  async create(
-    branchId: string,
-    data: CreateInventoryItemDto & { created_by: string },
-  ) {
+  async create(branchId: string, data: any) {
     const item = this.menuItemRepo.create({
       branch_id: branchId,
       name: data.name,
@@ -353,7 +349,7 @@ export class IngredientService {
         } catch (err) {
           if (
             err instanceof QueryFailedError &&
-            (err.driverError as { code?: string }).code === '23505'
+            (err as any).code === '23505'
           ) {
             continue;
           }

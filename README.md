@@ -60,21 +60,6 @@ Here is everything the system can do, explained simply:
 
 ---
 
-## Legal & Data Protection
-
-ServeIQ maintains a complete set of legal and data-protection documents. These are standalone files in the repository that the wider ServeIQ frontend and marketing site can link to (a privacy policy and terms page should be exposed in the app footer).
-
-| Document | Purpose | Audience |
-|---|---|---|
-| [Privacy Policy](PRIVACY.md) | What personal data we collect, why, how it is stored, shared, and your rights. | End users, business owners, staff, customers |
-| [Terms of Service](TERMS_OF_SERVICE.md) | The binding agreement between ServeIQ and its users/businesses, including IP, liability, and dispute resolution. | Business owners, staff |
-| [Cookie Policy](COOKIE_POLICY.md) | How cookies and local storage are used (authentication, offline sync). | All website users |
-| [Data Processing Agreement](DATA_PROCESSING_AGREEMENT.md) | Processor/controller obligations between ServeIQ and its business customers (GDPR, NDPR, POPIA-aligned). | Business customers |
-
-> **Production note:** Legal documents are finalized with entity name (ServeIQ Technologies Ltd), registered address (Plot 12, Admiralty Road, Lekki Phase 1, Lagos 100001, Nigeria), jurisdiction (Federal Republic of Nigeria), and effective dates confirmed. Sections referencing features not yet shipped (Paystack V2+, AI/NVIDIA V4, Google Analytics, cross-border) should still be verified against the actual production stack before publishing.
-
----
-
 ## How the system is organized
 
 The project has two main parts:
@@ -216,16 +201,6 @@ To use authenticated endpoints, click the "Authorize" button at the top and past
 
 The backend is fully built and deployed. All 29 API modules are working and documented in Swagger. The system handles real businesses with real data on Render.
 
-### V1 Feature Scope (cut line)
-
-The original V1 (MVP) defined in `PRD_V1.md` and `VERSION_ROADMAP.md` focused on: Business registration, waiter auth (PIN/email), table management, tab management, order taking with rounds, bill generation/closing, receipt PDFs, dashboard, and offline sync.
-
-**V1-in-scope modules (in `apps/api/src/modules/`):** auth, business, branch, table, tab, order, bill, menu, dashboard, user, public, upload, sync, health.
-
-**V2+ modules already deployed (beyond V1 MVP scope):** subscription, shift, inventory (ingredient), supplier, department, printer, pos, report (built into dashboard/orders), notification, audit, role, menu-modifier, menu-category, unit, advertisement, tracking, ai, admin, payment.
-
-Beta customers may encounter V2+ features. These are gated behind role/permission checks and feature availability, but business owners should be informed that advanced modules (inventory, suppliers, shifts, POS terminals, AI) are present in the codebase and may be visible in Swagger but are not yet customer-facing in the V1 mobile app.
-
 Current focus areas:
 - Fixing bugs found during real-world testing
 - Improving the admin dashboard for troubleshooting
@@ -263,7 +238,7 @@ Current focus areas:
 5. Rebuild with `npm run build -w apps/api`
 
 ### How to run database migrations
-Schema changes are managed exclusively through TypeORM migrations (`synchronize: false`). On startup the app runs pending migrations automatically (`migrationsRun: true`) when you build and start. To generate a new migration from entity changes: `npm run migration:generate -w apps/api`, then run with `npm run migration:run -w apps/api`.
+The database is managed via TypeORM synchronize in development. In production, migrations are auto-synced on deploy.
 
 ### How to check logs
 - **Local:** Terminal output shows all logs

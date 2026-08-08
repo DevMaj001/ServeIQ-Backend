@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Param,
   Body,
   Query,
@@ -25,6 +26,10 @@ import {
 } from '@nestjs/swagger';
 import { UpdateBusinessDto } from './dto/update-business.dto';
 import { ExtendBusinessSubscriptionDto } from './dto/extend-business-subscription.dto';
+import {
+  CreatePlatformPaymentProviderDto,
+  UpdatePlatformPaymentProviderDto,
+} from './dto/platform-payment-provider.dto';
 
 @ApiTags('Admin')
 @ApiBearerAuth('access-token')
@@ -39,6 +44,67 @@ export class AdminController {
   @ApiResponse({ status: 200, description: 'Platform statistics.' })
   async getStats() {
     return this.adminService.getStats();
+  }
+
+  @Get('system/health')
+  @ApiOperation({
+    summary:
+      'Super admin — system health, database connectivity, sync queue status',
+  })
+  @ApiResponse({ status: 200, description: 'System health snapshot.' })
+  async getSystemHealth() {
+    return this.adminService.getSystemHealth();
+  }
+
+  @Get('revenue')
+  @ApiOperation({
+    summary:
+      'Super admin — platform MRR/ARR and monthly revenue/new-business trend',
+  })
+  @ApiQuery({ name: 'months', required: false, example: '12' })
+  @ApiResponse({ status: 200, description: 'Revenue breakdown.' })
+  async getRevenue(@Query('months') months?: string) {
+    return this.adminService.getRevenue({
+      months: months ? Number(months) : 12,
+    });
+  }
+
+  @Get('audit-logs')
+  @ApiOperation({
+    summary: 'Paginated platform-wide audit log entries (superadmin only)',
+  })
+  @ApiQuery({ name: 'action', required: false })
+  @ApiQuery({ name: 'user_id', required: false })
+  @ApiQuery({ name: 'entity_type', required: false })
+  @ApiQuery({ name: 'entity_id', required: false })
+  @ApiQuery({ name: 'business_id', required: false })
+  @ApiQuery({ name: 'date_from', required: false })
+  @ApiQuery({ name: 'date_to', required: false })
+  @ApiQuery({ name: 'page', required: false, example: '1' })
+  @ApiQuery({ name: 'limit', required: false, example: '50' })
+  @ApiResponse({ status: 200, description: 'Paginated audit log entries.' })
+  async getAuditLogs(
+    @Query('action') action?: string,
+    @Query('user_id') userId?: string,
+    @Query('entity_type') entityType?: string,
+    @Query('entity_id') entityId?: string,
+    @Query('business_id') businessId?: string,
+    @Query('date_from') dateFrom?: string,
+    @Query('date_to') dateTo?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.adminService.getAuditLogs({
+      action,
+      user_id: userId,
+      entity_type: entityType,
+      entity_id: entityId,
+      business_id: businessId,
+      date_from: dateFrom,
+      date_to: dateTo,
+      page: page ? Math.max(1, parseInt(page, 10) || 1) : 1,
+      limit: limit ? Math.min(100, Math.max(1, parseInt(limit, 10) || 50)) : 50,
+    });
   }
 
   @Get('businesses')
@@ -92,5 +158,52 @@ export class AdminController {
   @ApiResponse({ status: 404, description: 'Business or branch not found.' })
   async extendBusinessSubscription(@Body() dto: ExtendBusinessSubscriptionDto) {
     return this.adminService.extendBusinessSubscription(dto);
+  }
+
+  @Get('payment-providers')
+  @ApiOperation({
+    summary: 'List platform-wide payment providers (superadmin only)',
+  })
+  @ApiQuery({ name: 'include_inactive', required: false, type: Boolean })
+  @ApiResponse({ status: 200, description: 'Payment providers.' })
+  async listPaymentProviders(
+    @Query('include_inactive') includeInactive?: string,
+  ) {
+    return this.adminService.listPaymentProviders(includeInactive === 'true');
+  }
+
+  @Post('payment-providers')
+  @ApiOperation({
+    summary: 'Create a platform-wide payment provider (superadmin only)',
+  })
+  @ApiResponse({ status: 201, description: 'Payment provider created.' })
+  @ApiResponse({ status: 409, description: 'Provider name already exists.' })
+  async createPaymentProvider(@Body() dto: CreatePlatformPaymentProviderDto) {
+    return this.adminService.createPaymentProvider(dto);
+  }
+
+  @Patch('payment-providers/:id')
+  @ApiOperation({
+    summary: 'Update a platform-wide payment provider (superadmin only)',
+  })
+  @ApiParam({ name: 'id', description: 'Payment provider UUID' })
+  @ApiResponse({ status: 200, description: 'Payment provider updated.' })
+  @ApiResponse({ status: 404, description: 'Payment provider not found.' })
+  async updatePaymentProvider(
+    @Param('id') id: string,
+    @Body() dto: UpdatePlatformPaymentProviderDto,
+  ) {
+    return this.adminService.updatePaymentProvider(id, dto);
+  }
+
+  @Delete('payment-providers/:id')
+  @ApiOperation({
+    summary: 'Delete a platform-wide payment provider (superadmin only)',
+  })
+  @ApiParam({ name: 'id', description: 'Payment provider UUID' })
+  @ApiResponse({ status: 200, description: 'Payment provider deleted.' })
+  @ApiResponse({ status: 404, description: 'Payment provider not found.' })
+  async removePaymentProvider(@Param('id') id: string) {
+    return this.adminService.removePaymentProvider(id);
   }
 }

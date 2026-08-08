@@ -4,17 +4,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, LessThanOrEqual } from 'typeorm';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { StockMovement } from '../ingredient/entities/stock-movement.entity';
-import { StockMovementType } from '../../common/shared';
 import { Bill } from '../bill/entities/bill.entity';
 import { Order } from '../order/entities/order.entity';
 import { Tab } from '../tab/entities/tab.entity';
 import { User } from '../user/entities/user.entity';
-import type OpenAI from 'openai';
 
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
-  private openai: OpenAI | null = null;
+  private openai: any = null;
   private initPromise: Promise<void> | null = null;
 
   constructor(
@@ -33,7 +31,7 @@ export class AiService {
     private userRepo: Repository<User>,
   ) {}
 
-  private async getClient(): Promise<OpenAI | null> {
+  private async getClient(): Promise<any> {
     if (!this.openai) {
       if (!this.initPromise) {
         this.initPromise = this.initialize();
@@ -49,8 +47,8 @@ export class AiService {
 
     if (apiKey) {
       try {
-        const { default: OpenAIClient } = await import('openai');
-        this.openai = new OpenAIClient({ apiKey, baseURL });
+        const { default: OpenAI } = await import('openai');
+        this.openai = new OpenAI({ apiKey, baseURL });
       } catch (err) {
         this.logger.error('Failed to initialize OpenAI client', err);
       }
@@ -279,7 +277,7 @@ It serves two apps: Admin (web) and Waiter (mobile/tablet).`;
     const adjustments = await this.movementRepo.find({
       where: {
         branch_id: branchId,
-        type: StockMovementType.MANUAL_ADJUSTMENT,
+        type: 'manual_adjustment',
         quantity_change: LessThanOrEqual(0),
         created_at: Between(thirtyDaysAgo, new Date()),
       },
@@ -327,7 +325,7 @@ It serves two apps: Admin (web) and Waiter (mobile/tablet).`;
       {
         tracked_item_count: trackedItems.length,
         wastage_adjustments_last_30_days: Object.values(wastageByItem).sort(
-          (a, b) => b.total_lost - a.total_lost,
+          (a: any, b: any) => b.total_lost - a.total_lost,
         ),
         low_stock_items: lowStockItems,
       },
@@ -384,7 +382,7 @@ It serves two apps: Admin (web) and Waiter (mobile/tablet).`;
     const purchases = await this.movementRepo.find({
       where: {
         branch_id: branchId,
-        type: StockMovementType.PURCHASE,
+        type: 'purchase',
         created_at: Between(thirtyDaysAgo, new Date()),
       },
       order: { created_at: 'DESC' },

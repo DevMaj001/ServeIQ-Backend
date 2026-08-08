@@ -5,6 +5,7 @@ import {
   UseGuards,
   Body,
   Request,
+  Query,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -12,17 +13,13 @@ import {
   ApiOperation,
   ApiResponse,
   ApiBody,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { AiService } from './ai.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GenerateLogicDto } from './dto/generate-logic.dto';
 import { ReportQueryDto } from './dto/report-query.dto';
 
-interface RequestWithUser {
-  user: {
-    branchId: string;
-  };
-}
 @ApiTags('AI')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
@@ -41,7 +38,7 @@ export class AiController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async generateLogic(
-    @Request() req: RequestWithUser,
+    @Request() req: any,
     @Body() generateLogicDto: GenerateLogicDto,
   ) {
     const result = await this.aiService.generateLogic(generateLogicDto.prompt);
@@ -70,10 +67,7 @@ export class AiController {
   @ApiBody({ type: ReportQueryDto })
   @ApiResponse({ status: 200, description: 'AI-powered report generated' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getReport(
-    @Request() req: RequestWithUser,
-    @Body() dto: ReportQueryDto,
-  ) {
+  async getReport(@Request() req: any, @Body() dto: ReportQueryDto) {
     const result = await this.aiService.getSalesReport(
       req.user.branchId,
       dto.question,
@@ -90,7 +84,7 @@ export class AiController {
   })
   @ApiResponse({ status: 200, description: 'Wastage insights generated' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getWastageInsights(@Request() req: RequestWithUser) {
+  async getWastageInsights(@Request() req: any) {
     const result = await this.aiService.getWastageInsights(req.user.branchId);
     return { success: true, data: result };
   }
@@ -105,7 +99,7 @@ export class AiController {
     description: 'Restock recommendations generated',
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getRestockRecommendations(@Request() req: RequestWithUser) {
+  async getRestockRecommendations(@Request() req: any) {
     const result = await this.aiService.getRestockRecommendations(
       req.user.branchId,
     );

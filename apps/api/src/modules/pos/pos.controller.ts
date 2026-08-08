@@ -25,11 +25,6 @@ import { CreatePosTerminalDto } from './dto/create-pos-terminal.dto';
 import { UpdatePosTerminalDto } from './dto/update-pos-terminal.dto';
 import { PosTerminal } from './entities/pos-terminal.entity';
 
-interface RequestWithUser {
-  user: {
-    branchId: string;
-  };
-}
 @ApiTags('POS Terminals')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
@@ -45,7 +40,7 @@ export class PosController {
     type: [PosTerminal],
   })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async findAll(@Request() req: RequestWithUser) {
+  async findAll(@Request() req: any) {
     return this.posService.findAllByBranch(req.user.branchId);
   }
 
@@ -59,7 +54,7 @@ export class PosController {
     type: [PosTerminal],
   })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async findActive(@Request() req: RequestWithUser) {
+  async findActive(@Request() req: any) {
     return this.posService.findActiveByBranch(req.user.branchId);
   }
 
@@ -73,7 +68,7 @@ export class PosController {
   })
   @ApiResponse({ status: 404, description: 'POS terminal not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async findOne(@Param('id') id: string, @Request() req: RequestWithUser) {
+  async findOne(@Param('id') id: string, @Request() req: any) {
     return this.posService.findOne(id, req.user.branchId);
   }
 
@@ -84,10 +79,7 @@ export class PosController {
   @ApiResponse({ status: 201, description: 'POS terminal created.' })
   @ApiResponse({ status: 400, description: 'Validation error.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async create(
-    @Request() req: RequestWithUser,
-    @Body() createDto: CreatePosTerminalDto,
-  ) {
+  async create(@Request() req: any, @Body() createDto: CreatePosTerminalDto) {
     return this.posService.create(req.user.branchId, createDto);
   }
 
@@ -101,7 +93,7 @@ export class PosController {
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async update(
     @Param('id') id: string,
-    @Request() req: RequestWithUser,
+    @Request() req: any,
     @Body() updateDto: UpdatePosTerminalDto,
   ) {
     return this.posService.update(id, req.user.branchId, updateDto);
@@ -115,7 +107,7 @@ export class PosController {
   @ApiResponse({ status: 200, description: 'POS terminal deleted.' })
   @ApiResponse({ status: 404, description: 'POS terminal not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async remove(@Param('id') id: string, @Request() req: RequestWithUser) {
+  async remove(@Param('id') id: string, @Request() req: any) {
     return this.posService.remove(id, req.user.branchId);
   }
 }

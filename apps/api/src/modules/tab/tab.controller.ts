@@ -30,14 +30,6 @@ import { VoidTabDto } from './dto/void-tab.dto';
 import { Tab } from './entities/tab.entity';
 import { getPaginationParams, paginate } from '../../common/pagination';
 
-interface RequestWithUser {
-  user: {
-    branchId: string;
-    userId: string;
-    role: string;
-  };
-}
-
 @ApiTags('Tabs')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
@@ -73,7 +65,7 @@ export class TabController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async findAll(
-    @Request() req: RequestWithUser,
+    @Request() req: any,
     @Query('status') status?: string,
     @Query('waiter_id') waiterId?: string,
     @Query('page') page?: string,
@@ -105,7 +97,7 @@ export class TabController {
     },
   })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async getTabWaiters(@Request() req: RequestWithUser) {
+  async getTabWaiters(@Request() req: any) {
     return this.tabService.getTabWaiters(req.user.branchId);
   }
 
@@ -118,10 +110,7 @@ export class TabController {
   })
   @ApiResponse({ status: 400, description: 'Validation error.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async openTab(
-    @Request() req: RequestWithUser,
-    @Body() createDto: OpenTabDto,
-  ) {
+  async openTab(@Request() req: any, @Body() createDto: OpenTabDto) {
     return this.tabService.openTab(
       {
         ...createDto,
@@ -143,7 +132,7 @@ export class TabController {
   })
   @ApiResponse({ status: 404, description: 'Tab not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async findOne(@Param('id') id: string, @Request() req: RequestWithUser) {
+  async findOne(@Param('id') id: string, @Request() req: any) {
     return this.tabService.findOne(
       id,
       req.user.branchId,
@@ -158,7 +147,7 @@ export class TabController {
   @ApiResponse({ status: 200, description: 'Tab closed and bill generated.' })
   @ApiResponse({ status: 404, description: 'Tab not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async closeTab(@Param('id') id: string, @Request() req: RequestWithUser) {
+  async closeTab(@Param('id') id: string, @Request() req: any) {
     return this.tabService.closeTab(
       id,
       req.user.branchId,
@@ -177,7 +166,7 @@ export class TabController {
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async update(
     @Param('id') id: string,
-    @Request() req: RequestWithUser,
+    @Request() req: any,
     @Body() updateDto: UpdateTabDto,
   ) {
     return this.tabService.update(id, req.user.branchId, updateDto);
@@ -195,7 +184,7 @@ export class TabController {
   @ApiResponse({ status: 404, description: 'Tab or table not found.' })
   async transferTab(
     @Param('id') id: string,
-    @Request() req: RequestWithUser,
+    @Request() req: any,
     @Body() transferDto: TransferTabDto,
   ) {
     return this.tabService.transferTab(
@@ -217,7 +206,7 @@ export class TabController {
   @ApiResponse({ status: 404, description: 'Tab not found.' })
   async voidTab(
     @Param('id') id: string,
-    @Request() req: RequestWithUser,
+    @Request() req: any,
     @Body() voidDto: VoidTabDto,
   ) {
     return this.tabService.voidTab(
@@ -237,7 +226,7 @@ export class TabController {
   @ApiResponse({ status: 200, description: 'Tab deleted.' })
   @ApiResponse({ status: 404, description: 'Tab not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async remove(@Param('id') id: string, @Request() req: RequestWithUser) {
+  async remove(@Param('id') id: string, @Request() req: any) {
     return this.tabService.remove(id, req.user.branchId);
   }
 }

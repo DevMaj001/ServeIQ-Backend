@@ -4,7 +4,6 @@ import { JwtService } from '@nestjs/jwt';
 import { DataSource } from 'typeorm';
 import { AuditService } from '../../common/services/audit.service';
 import { SubscriptionService } from '../subscription/subscription.service';
-import * as bcrypt from 'bcrypt';
 
 jest.mock('bcrypt', () => ({
   compare: jest.fn(),
@@ -12,26 +11,13 @@ jest.mock('bcrypt', () => ({
   hash: jest.fn().mockResolvedValue('hash'),
 }));
 
-type MockRepoShape = {
-  findOne: jest.Mock;
-  find: jest.Mock;
-  save: jest.Mock;
-  create: jest.Mock;
-  update: jest.Mock;
-  createQueryBuilder: jest.Mock;
-};
-
 describe('AuthService', () => {
   let service: AuthService;
-  let jwtService: { sign: jest.Mock };
-  let dataSource: { getRepository: jest.Mock; createQueryRunner: jest.Mock };
-  let auditService: { log: jest.Mock };
-  let repoMock: MockRepoShape;
-  let bcryptMock: {
-    compare: jest.Mock;
-    genSalt: jest.Mock;
-    hash: jest.Mock;
-  };
+  let jwtService: any;
+  let dataSource: any;
+  let auditService: any;
+  let repoMock: any;
+  let bcryptMock: any;
 
   const mockUser = {
     id: 'user-1',
@@ -48,18 +34,13 @@ describe('AuthService', () => {
   };
 
   beforeEach(async () => {
-    bcryptMock = bcrypt as {
-      compare: jest.Mock;
-      genSalt: jest.Mock;
-      hash: jest.Mock;
-    };
-    bcryptMock.compare.mockClear();
+    bcryptMock = require('bcrypt');
 
     repoMock = {
       findOne: jest.fn(),
       find: jest.fn(),
-      save: jest.fn((e: unknown) => Promise.resolve(e)),
-      create: jest.fn((dto: unknown) => dto),
+      save: jest.fn(async (e: any) => e),
+      create: jest.fn((dto: any) => dto),
       update: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue({
         select: jest.fn().mockReturnThis(),
@@ -80,7 +61,7 @@ describe('AuthService', () => {
     jwtService = { sign: jest.fn().mockReturnValue('jwt-token') };
 
     dataSource = {
-      getRepository: jest.fn().mockImplementation((entity?: unknown) => {
+      getRepository: jest.fn().mockImplementation((entity?: any) => {
         if (
           entity &&
           typeof entity === 'function' &&
@@ -97,10 +78,8 @@ describe('AuthService', () => {
         rollbackTransaction: jest.fn(),
         release: jest.fn(),
         manager: {
-          create: jest.fn((_entity: unknown, dto: unknown) => dto),
-          save: jest.fn((e: unknown) =>
-            Promise.resolve({ ...e, id: 'new-id' }),
-          ),
+          create: jest.fn((_entity: any, dto: any) => dto),
+          save: jest.fn(async (e: any) => ({ ...e, id: 'new-id' })),
         },
       }),
       query: jest.fn(),
@@ -160,73 +139,14 @@ describe('AuthService', () => {
         service.login({ email: 'test@example.com', password: 'wrong' }),
       ).rejects.toThrow('Invalid credentials');
     });
-
-    it('locks the account after 5 failed attempts', async () => {
-      const lockedUser = {
-        ...mockUser,
-        failed_login_attempts: 0,
-        locked_until: null,
-      };
-      repoMock.findOne.mockResolvedValue(lockedUser);
-      bcryptMock.compare.mockResolvedValue(false);
-
-      for (let i = 0; i < 4; i++) {
-        await expect(
-          service.login({ email: 'test@example.com', password: 'wrong' }),
-        ).rejects.toThrow('Invalid credentials');
-      }
-
-      await expect(
-        service.login({ email: 'test@example.com', password: 'wrong' }),
-      ).rejects.toThrow('Too many failed attempts');
-
-      expect(lockedUser.failed_login_attempts).toBe(0);
-      expect(lockedUser.locked_until).toBeInstanceOf(Date);
-      expect(auditService.log).toHaveBeenCalledWith(
-        expect.objectContaining({
-          action: 'ACCOUNT_LOCKED',
-          entityId: 'user-1',
-        }),
-      );
-    });
-
-    it('rejects login while the account is locked', async () => {
-      repoMock.findOne.mockResolvedValue({
-        ...mockUser,
-        locked_until: new Date(Date.now() + 10 * 60 * 1000),
-      });
-
-      await expect(
-        service.login({ email: 'test@example.com', password: 'password' }),
-      ).rejects.toThrow('Account temporarily locked');
-
-      expect(bcryptMock.compare).not.toHaveBeenCalled();
-    });
-
-    it('clears lockout on a successful login after it expires', async () => {
-      const unlockedUser = {
-        ...mockUser,
-        failed_login_attempts: 2,
-        locked_until: new Date(Date.now() - 1000),
-      };
-      repoMock.findOne.mockResolvedValue(unlockedUser);
-      bcryptMock.compare.mockResolvedValue(true);
-
-      const result = await service.login({
-        email: 'test@example.com',
-        password: 'password',
-      });
-
-      expect(result.access_token).toBe('jwt-token');
-      expect(unlockedUser.failed_login_attempts).toBe(0);
-      expect(unlockedUser.locked_until).toBeNull();
-    });
   });
 
   describe('waiterLogin', () => {
     it('returns tokens for valid PIN', async () => {
       repoMock.find.mockResolvedValue([mockUser]);
-      bcryptMock.compare.mockImplementation((pin: string) => pin === '1234');
+      bcryptMock.compare.mockImplementation(
+        async (pin: string) => pin === '1234',
+      );
 
       const result = await service.waiterLogin({
         pin: '1234',

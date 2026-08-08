@@ -12,15 +12,6 @@ import { PermissionCode } from '../../modules/role/permission-codes';
 import { Role } from '../../modules/role/entities/role.entity';
 import { Permission } from '../../modules/role/entities/permission.entity';
 
-interface PermissionRequestUser {
-  role?: string;
-  role_id?: string;
-}
-
-interface PermissionRequest {
-  user?: PermissionRequestUser;
-}
-
 @Injectable()
 export class PermissionsGuard implements CanActivate {
   constructor(
@@ -39,11 +30,12 @@ export class PermissionsGuard implements CanActivate {
       return true;
     }
 
-    const { user } = context.switchToHttp().getRequest<PermissionRequest>();
+    const { user } = context.switchToHttp().getRequest();
     if (!user) return false;
 
     // super_admin and owner bypass all permission checks
-    if (user.role === 'superadmin' || user.role === 'owner') return true;
+    const userRole = user?.roleEntity?.name || user?.role;
+    if (userRole === 'Owner' || userRole === 'Super Admin') return true;
 
     // User must have role_id — legacy fallback removed
     if (!user.role_id) {

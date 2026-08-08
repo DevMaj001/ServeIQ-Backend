@@ -24,11 +24,6 @@ import {
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { UpdateSupplierDto } from './dto/update-supplier.dto';
 
-interface RequestWithUser {
-  user: {
-    branchId: string;
-  };
-}
 @ApiTags('Suppliers')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
@@ -43,7 +38,7 @@ export class SupplierController {
     description: 'Supplier retrieved/created/updated/deleted',
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async findAll(@Request() req: RequestWithUser) {
+  async findAll(@Request() req: any) {
     return this.supplierService.findAll(req.user.branchId);
   }
 
@@ -55,7 +50,7 @@ export class SupplierController {
     description: 'Supplier retrieved/created/updated/deleted',
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async findOne(@Param('id') id: string, @Request() req: RequestWithUser) {
+  async findOne(@Param('id') id: string, @Request() req: any) {
     return this.supplierService.findOne(id, req.user.branchId);
   }
 
@@ -68,10 +63,7 @@ export class SupplierController {
     description: 'Supplier retrieved/created/updated/deleted',
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async create(
-    @Request() req: RequestWithUser,
-    @Body() dto: CreateSupplierDto,
-  ) {
+  async create(@Request() req: any, @Body() dto: CreateSupplierDto) {
     return this.supplierService.create(req.user.branchId, dto);
   }
 
@@ -87,7 +79,7 @@ export class SupplierController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async update(
     @Param('id') id: string,
-    @Request() req: RequestWithUser,
+    @Request() req: any,
     @Body() dto: UpdateSupplierDto,
   ) {
     return this.supplierService.update(id, req.user.branchId, dto);
@@ -103,7 +95,7 @@ export class SupplierController {
     description: 'Supplier retrieved/created/updated/deleted',
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async remove(@Param('id') id: string, @Request() req: RequestWithUser) {
+  async remove(@Param('id') id: string, @Request() req: any) {
     return this.supplierService.remove(id, req.user.branchId);
   }
 }

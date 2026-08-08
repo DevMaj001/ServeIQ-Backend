@@ -103,4 +103,14 @@ export class CreateMenuItemDto {
   @IsString()
   @IsOptional()
   supplier_id?: string;
+
+  @ApiProperty({ example: 'uuid-of-branch', required: false })
+  @IsString()
+  @IsOptional()
+  branch_id?: string;
+
+  @ApiProperty({ example: 'uuid-of-user', required: false })
+  @IsString()
+  @IsOptional()
+  created_by?: string;
 }

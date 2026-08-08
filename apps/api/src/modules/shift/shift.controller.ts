@@ -10,7 +10,6 @@ import {
 } from '@nestjs/common';
 import { ShiftService } from './shift.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -21,13 +20,6 @@ import {
 } from '@nestjs/swagger';
 import { OpenShiftDto } from './dto/open-shift.dto';
 import { CloseShiftDto } from './dto/close-shift.dto';
-
-interface RequestWithUser {
-  user: {
-    branchId: string;
-    userId: string;
-  };
-}
 
 @ApiTags('Shifts')
 @ApiBearerAuth('access-token')
@@ -40,7 +32,7 @@ export class ShiftController {
   @ApiOperation({ summary: 'List all shifts for the branch' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
-  async findAll(@Request() req: RequestWithUser) {
+  async findAll(@Request() req: any) {
     return this.shiftService.findAll(req.user.branchId);
   }
 
@@ -48,7 +40,7 @@ export class ShiftController {
   @ApiOperation({ summary: 'Get the currently open shift' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
-  async findCurrent(@Request() req: RequestWithUser) {
+  async findCurrent(@Request() req: any) {
     return this.shiftService.findCurrent(req.user.branchId);
   }
 
@@ -56,7 +48,7 @@ export class ShiftController {
   @ApiOperation({ summary: 'Open a new shift with starting cash' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
-  async openShift(@Request() req: RequestWithUser, @Body() dto: OpenShiftDto) {
+  async openShift(@Request() req: any, @Body() dto: OpenShiftDto) {
     return this.shiftService.openShift(req.user.branchId, req.user.userId, dto);
   }
 
@@ -67,7 +59,7 @@ export class ShiftController {
   @ApiResponse({ status: 401 })
   async closeShift(
     @Param('id') id: string,
-    @Request() req: RequestWithUser,
+    @Request() req: any,
     @Body() dto: CloseShiftDto,
   ) {
     return this.shiftService.closeShift(
@@ -79,7 +71,6 @@ export class ShiftController {
   }
 
   @Get('reports/shifts')
-  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({
     summary: 'Shift report with date range and reconciliation summary',
   })
@@ -88,7 +79,7 @@ export class ShiftController {
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
   async getShiftSummary(
-    @Request() req: RequestWithUser,
+    @Request() req: any,
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
   ) {

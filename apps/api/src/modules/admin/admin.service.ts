@@ -1,6 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
+import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
+import { Repository, DataSource, Between } from 'typeorm';
 import { Business } from '../business/entities/business.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { User } from '../user/entities/user.entity';
@@ -12,6 +16,14 @@ import {
 import { Plan } from '../subscription/entities/plan.entity';
 import { UserRole } from '../../common/shared';
 import { UpdateBusinessDto } from './dto/update-business.dto';
+import { PlatformPaymentProvider } from './entities/platform-payment-provider.entity';
+import {
+  CreatePlatformPaymentProviderDto,
+  UpdatePlatformPaymentProviderDto,
+} from './dto/platform-payment-provider.dto';
+import { SyncQueue } from '../sync/sync.entity';
+import { AuditLog } from '../../entities/audit-log.entity';
+import { BillingInterval } from '../subscription/entities/plan.entity';
 
 @Injectable()
 export class AdminService {
@@ -28,7 +40,223 @@ export class AdminService {
     private subscriptionRepo: Repository<Subscription>,
     @InjectRepository(Plan)
     private planRepo: Repository<Plan>,
+    @InjectRepository(PlatformPaymentProvider)
+    private paymentProviderRepo: Repository<PlatformPaymentProvider>,
+    @InjectRepository(SyncQueue)
+    private syncQueueRepo: Repository<SyncQueue>,
+    @InjectRepository(AuditLog)
+    private auditLogRepo: Repository<AuditLog>,
+    @InjectDataSource() private dataSource: DataSource,
   ) {}
+
+  async getRevenue(params?: { months?: number }) {
+    const months = Math.max(1, Math.min(24, params?.months || 12));
+    const since = new Date(
+      new Date().getFullYear(),
+      new Date().getMonth() - months + 1,
+      1,
+    );
+
+    const subs = await this.subscriptionRepo
+      .createQueryBuilder('s')
+      .leftJoinAndSelect('s.plan', 'p')
+      .where('s.status IN (:...statuses)', {
+        statuses: [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING],
+      })
+      .addSelect(['p.price', 'p.currency', 'p.billing_interval'])
+      .getMany();
+
+    const mrr: Record<string, number> = {};
+    let recurring = 0;
+    for (const sub of subs) {
+      const plan = sub.plan;
+      if (!plan) continue;
+      const monthly =
+        plan.billing_interval === BillingInterval.YEARLY
+          ? plan.price / 12
+          : plan.price;
+      mrr[plan.currency] = (mrr[plan.currency] || 0) + monthly;
+      recurring += 1;
+    }
+    const arr: Record<string, number> = {};
+    for (const currency of Object.keys(mrr)) arr[currency] = mrr[currency] * 12;
+
+    const revResult = await this.dataSource.query(
+      `SELECT to_char(date_trunc('month', paid_at), 'YYYY-MM') AS month, SUM(total_kobo) AS total
+       FROM bills WHERE paid_at IS NOT NULL AND paid_at >= $1
+       GROUP BY 1 ORDER BY 1 ASC`,
+      [since],
+    );
+    const bizResult = await this.dataSource.query(
+      `SELECT to_char(date_trunc('month', created_at), 'YYYY-MM') AS month, COUNT(*) AS total
+       FROM businesses WHERE created_at >= $1
+       GROUP BY 1 ORDER BY 1 ASC`,
+      [since],
+    );
+
+    return {
+      mrr,
+      arr,
+      recurring_subscribers: recurring,
+      monthly_revenue: revResult.map((r: any) => ({
+        month: r.month,
+        revenue_kobo: Number(r.total) || 0,
+      })),
+      monthly_new_businesses: bizResult.map((r: any) => ({
+        month: r.month,
+        count: Number(r.total) || 0,
+      })),
+    };
+  }
+
+  async getSystemHealth() {
+    let dbConnected = false;
+    let dbLatencyMs: number | null = null;
+    try {
+      const start = Date.now();
+      await this.dataSource.query('SELECT 1');
+      dbLatencyMs = Date.now() - start;
+      dbConnected = true;
+    } catch {
+      dbConnected = false;
+    }
+
+    const pendingSync = await this.syncQueueRepo.count({
+      where: { status: 'pending' },
+    });
+    const failedSync = await this.syncQueueRepo.count({
+      where: { status: 'failed' },
+    });
+    const totalSync = await this.syncQueueRepo.count();
+
+    const mem = process.memoryUsage();
+    const now = new Date();
+
+    return {
+      status: dbConnected ? 'healthy' : 'degraded',
+      timestamp: now.toISOString(),
+      uptime_seconds: Math.round(process.uptime()),
+      database: {
+        connected: dbConnected,
+        latency_ms: dbLatencyMs,
+      },
+      environment: process.env.NODE_ENV || 'development',
+      node_version: process.version,
+      process: {
+        pid: process.pid,
+        memory_used_mb: Math.round(mem.rss / 1024 / 1024),
+        memory_heap_used_mb: Math.round(mem.heapUsed / 1024 / 1024),
+        cpu_cores: require('os').cpus().length,
+        load_avg: (require('os').loadavg() || [0, 0, 0]).slice(0, 3),
+      },
+      sync_queue: {
+        total: totalSync,
+        pending: pendingSync,
+        failed: failedSync,
+      },
+    };
+  }
+
+  async getAuditLogs(params: {
+    action?: string;
+    user_id?: string;
+    entity_type?: string;
+    entity_id?: string;
+    business_id?: string;
+    date_from?: string;
+    date_to?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const pageNum = Math.max(1, params.page || 1);
+    const limitNum = Math.min(100, Math.max(1, params.limit || 50));
+    const skip = (pageNum - 1) * limitNum;
+
+    const applyFilters = (qb: any) => {
+      if (params.business_id)
+        qb.andWhere('bus.id = :businessId', { businessId: params.business_id });
+      if (params.action)
+        qb.andWhere('a.action = :action', { action: params.action });
+      if (params.user_id)
+        qb.andWhere('a.user_id = :userId', { userId: params.user_id });
+      if (params.entity_type)
+        qb.andWhere('a.entity_type = :entityType', {
+          entityType: params.entity_type,
+        });
+      if (params.entity_id)
+        qb.andWhere('a.entity_id = :entityId', { entityId: params.entity_id });
+      if (params.date_from || params.date_to) {
+        const from = params.date_from
+          ? new Date(params.date_from)
+          : new Date('2000-01-01');
+        const to = params.date_to ? new Date(params.date_to) : new Date();
+        qb.andWhere('a.created_at = :range', { range: Between(from, to) });
+      }
+      return qb;
+    };
+
+    const countQb = applyFilters(
+      this.auditLogRepo
+        .createQueryBuilder('a')
+        .leftJoin('branches', 'b', 'a.branch_id = b.id')
+        .leftJoin('businesses', 'bus', 'b.business_id = bus.id')
+        .leftJoin('users', 'u', 'a.user_id = u.id'),
+    );
+    const total = await countQb.getCount();
+
+    const rowQb = applyFilters(
+      this.auditLogRepo
+        .createQueryBuilder('a')
+        .leftJoin('branches', 'b', 'a.branch_id = b.id')
+        .leftJoin('businesses', 'bus', 'b.business_id = bus.id')
+        .leftJoin('users', 'u', 'a.user_id = u.id')
+        .addSelect([
+          'a.id',
+          'a.branch_id',
+          'a.user_id',
+          'a.action',
+          'a.entity_id',
+          'a.entity_type',
+          'a.payload',
+          'a.created_at',
+          'b.name as branch_name',
+          'bus.name as business_name',
+          'bus.currency as business_currency',
+          'u.full_name as user_name',
+          'u.email as user_email',
+          'u.role as user_role',
+        ])
+        .orderBy('a.created_at', 'DESC')
+        .skip(skip)
+        .take(limitNum),
+    );
+    const rows = await rowQb.getRawMany();
+    const data = rows.map((a: any) => ({
+      id: a.a_id,
+      branch_id: a.a_branch_id,
+      branch_name: a.branch_name ?? null,
+      user_id: a.a_user_id ?? null,
+      user_name: a.user_name ?? null,
+      user_email: a.user_email ?? null,
+      user_role: a.user_role ?? null,
+      business_name: a.business_name ?? null,
+      business_currency: a.business_currency ?? null,
+      action: a.a_action,
+      entity_id: a.a_entity_id ?? null,
+      entity_type: a.a_entity_type ?? null,
+      payload: a.a_payload ?? null,
+      created_at: a.a_created_at,
+    }));
+    return {
+      data,
+      meta: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        total_pages: Math.ceil(total / limitNum),
+      },
+    };
+  }
 
   async getStats() {
     const now = new Date();
@@ -56,7 +284,7 @@ export class AdminService {
       .createQueryBuilder('bill')
       .select('COALESCE(SUM(bill.total_kobo), 0)', 'total')
       .where('bill.paid_at IS NOT NULL')
-      .getRawOne<{ total: string }>();
+      .getRawOne();
     const totalRevenueKobo = Number(revenueResult?.total ?? 0);
 
     const newBusinessesThisMonth = await this.businessRepo
@@ -69,7 +297,7 @@ export class AdminService {
       .select('s.status', 'status')
       .addSelect('COUNT(s.id)', 'count')
       .groupBy('s.status')
-      .getRawMany<{ status: string; count: string }>();
+      .getRawMany();
 
     const planBreakdown = await this.subscriptionRepo
       .createQueryBuilder('s')
@@ -77,7 +305,7 @@ export class AdminService {
       .addSelect('COUNT(s.id)', 'count')
       .leftJoin('s.plan', 'p')
       .groupBy("COALESCE(p.name, 'free_trial')")
-      .getRawMany<{ plan: string; count: string }>();
+      .getRawMany();
 
     const totalSubscriptions = statusBreakdown.reduce(
       (sum, r) => sum + Number(r.count),
@@ -121,11 +349,11 @@ export class AdminService {
         statusBreakdown.find((r) => r.status === 'trialing')?.count || 0,
       subscription_canceled:
         statusBreakdown.find((r) => r.status === 'canceled')?.count || 0,
-      subscription_breakdown: planBreakdown.map((r) => ({
+      subscription_breakdown: planBreakdown.map((r: any) => ({
         plan: r.plan || 'free_trial',
         count: Number(r.count),
       })),
-      subscription_status_breakdown: statusBreakdown.map((r) => ({
+      subscription_status_breakdown: statusBreakdown.map((r: any) => ({
         status: r.status,
         count: Number(r.count),
       })),
@@ -188,7 +416,7 @@ export class AdminService {
         .addSelect('COUNT(br.id)', 'count')
         .where('br.business_id IN (:...ids)', { ids: businessIds })
         .groupBy('br.business_id')
-        .getRawMany<{ business_id: string; count: string }>();
+        .getRawMany();
       for (const c of counts) {
         branchCounts[c.business_id] = Number(c.count);
       }
@@ -337,5 +565,62 @@ export class AdminService {
 
     await this.subscriptionRepo.save(subscription);
     return { business_id: business.id, branch_id: branch.id, subscription };
+  }
+
+  async listPaymentProviders(
+    includeInactive = false,
+  ): Promise<PlatformPaymentProvider[]> {
+    return this.paymentProviderRepo.find({
+      order: { label: 'ASC' },
+      where: includeInactive ? undefined : { is_active: true },
+    });
+  }
+
+  async createPaymentProvider(
+    dto: CreatePlatformPaymentProviderDto,
+  ): Promise<PlatformPaymentProvider> {
+    const existing = await this.paymentProviderRepo.findOne({
+      where: { name: dto.name },
+    });
+    if (existing) {
+      throw new ConflictException(
+        `Payment provider "${dto.name}" already exists`,
+      );
+    }
+    const provider = this.paymentProviderRepo.create({
+      name: dto.name,
+      label: dto.label,
+      type: dto.type,
+      verification_method: dto.verification_method ?? null,
+      config: dto.config ?? {},
+      is_active: dto.is_active ?? true,
+    });
+    return this.paymentProviderRepo.save(provider);
+  }
+
+  async updatePaymentProvider(
+    id: string,
+    dto: UpdatePlatformPaymentProviderDto,
+  ): Promise<PlatformPaymentProvider> {
+    const provider = await this.paymentProviderRepo.findOne({ where: { id } });
+    if (!provider) {
+      throw new NotFoundException('Payment provider not found');
+    }
+    if (dto.label !== undefined) provider.label = dto.label;
+    if (dto.type !== undefined) provider.type = dto.type;
+    if (dto.verification_method !== undefined)
+      provider.verification_method = dto.verification_method;
+    if (dto.config !== undefined) provider.config = dto.config;
+    if (dto.is_active !== undefined) provider.is_active = dto.is_active;
+    return this.paymentProviderRepo.save(provider);
+  }
+
+  async removePaymentProvider(id: string): Promise<{ id: string }> {
+    const provider = await this.paymentProviderRepo.findOne({ where: { id } });
+    if (!provider) {
+      throw new NotFoundException('Payment provider not found');
+    }
+    await this.paymentProviderRepo.remove(provider);
+    return { id };
   }
 }

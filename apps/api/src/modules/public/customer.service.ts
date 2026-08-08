@@ -11,14 +11,9 @@ import { Tab } from '../tab/entities/tab.entity';
 import { Order } from '../order/entities/order.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Table } from '../table/entities/table.entity';
+import { Branch } from '../branch/entities/branch.entity';
 import { TrackingService } from '../tracking/tracking.service';
-import { ModifierSelectionDto } from '../order/dto/create-order-item.dto';
-import {
-  TabType,
-  FulfillmentType,
-  OrderStatus,
-  TableStatus,
-} from '../../common/shared';
+import { TabType, FulfillmentType, OrderStatus } from '../../common/shared';
 
 @Injectable()
 export class CustomerService {
@@ -31,6 +26,8 @@ export class CustomerService {
     private menuItemRepo: Repository<MenuItem>,
     @InjectRepository(Order)
     private orderRepo: Repository<Order>,
+    @InjectRepository(Branch)
+    private branchRepo: Repository<Branch>,
     @Inject(DataSource)
     private dataSource: DataSource,
     private trackingService: TrackingService,
@@ -41,7 +38,7 @@ export class CustomerService {
     table_id?: string;
     customer_name?: string;
     party_size?: number;
-    tab_type?: TabType;
+    tab_type?: string;
   }) {
     const tabType = dto.tab_type || TabType.DINE_IN;
 
@@ -83,9 +80,7 @@ export class CustomerService {
       });
 
       const savedTab = await this.tabRepo.save(newTab);
-      await this.tableRepo.update(dto.table_id, {
-        status: TableStatus.OCCUPIED,
-      });
+      await this.tableRepo.update(dto.table_id, { status: 'occupied' as any });
       return this.getTabResponse(savedTab.id);
     }
 
@@ -123,7 +118,7 @@ export class CustomerService {
       menu_item_id: string;
       quantity: number;
       notes?: string;
-      modifiers?: ModifierSelectionDto[];
+      modifiers?: any[];
     }[],
   ) {
     const tab = await this.tabRepo.findOne({ where: { id: tabId } });
@@ -150,10 +145,11 @@ export class CustomerService {
 
     const orders = await this.dataSource.transaction(async (manager) => {
       const savedOrders: Order[] = [];
+      const held = await this.isTakeawayPrepaid(tab);
       for (const item of items) {
         const menuItem = menuMap.get(item.menu_item_id)!;
         const modifierTotal = (item.modifiers || []).reduce(
-          (sum: number, m: ModifierSelectionDto) => sum + m.price_kobo * m.qty,
+          (sum: number, m: any) => sum + m.price_kobo * m.qty,
           0,
         );
         const order = manager.getRepository(Order).create({
@@ -166,10 +162,13 @@ export class CustomerService {
           created_by: 'self-service',
           notes: item.notes,
           modifiers: item.modifiers,
-          fulfillment_type: (tab.tab_type === TabType.TAKEAWAY
-            ? 'takeaway'
-            : 'serve') as FulfillmentType,
-          order_status: OrderStatus.PENDING_SUPERVISOR_APPROVAL,
+          fulfillment_type:
+            tab.tab_type === TabType.TAKEAWAY
+              ? FulfillmentType.PACK
+              : FulfillmentType.SERVE,
+          order_status: held
+            ? OrderStatus.PENDING_PAYMENT_APPROVAL
+            : OrderStatus.PENDING_SUPERVISOR_APPROVAL,
         });
         savedOrders.push(await manager.getRepository(Order).save(order));
       }
@@ -187,6 +186,19 @@ export class CustomerService {
         order_status: o.order_status,
       })),
     };
+  }
+
+  private async isTakeawayPrepaid(tab: Tab): Promise<boolean> {
+    if (tab.tab_type !== TabType.TAKEAWAY) return false;
+    const branch = await this.branchRepo.findOne({
+      where: { id: tab.branch_id },
+    });
+    const settings = branch?.settings;
+    const policy =
+      settings && typeof settings === 'object'
+        ? settings.takeaway_payment_policy
+        : undefined;
+    return policy !== 'pay_on_pickup';
   }
 
   async getTab(tabId: string, trackingCode: string) {

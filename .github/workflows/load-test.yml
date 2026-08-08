@@ -1,0 +1,296 @@
+name: Load Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      business_code:
+        description: 'Business code for load test'
+        required: true
+      waiter_pin:
+        description: 'Waiter PIN for load test'
+        required: true
+        default: '1234'
+      vus:
+        description: 'Virtual users (concurrent waiters)'
+        required: false
+        default: '100'
+      duration:
+        description: 'Test duration (e.g., 2m, 5m)'
+        required: false
+        default: '2m'
+
+  schedule:
+    # Weekly Sunday 2 AM UTC - run against staging
+    - cron: '0 2 * * 0'
+
+  # Run on backend deploy to staging
+  workflow_run:
+    workflows: ['Deploy Backend to Staging']
+    types:
+      - completed
+
+env:
+  # Set these in GitHub repository secrets
+  STAGING_BASE_URL: 'https://serveiq-backend-staging.onrender.com'
+  PRODUCTION_BASE_URL: 'https://serveiq-backend.onrender.com'
+  K6_CLOUD_TOKEN: ${{ secrets.K6_CLOUD_TOKEN }}
+
+jobs:
+  load-test:
+    name: Load Test (${{ github.event.inputs.environment || 'staging' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      checks: write  # For k6 summary annotations
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup k6
+        uses: grafana/k6-action@v0.2.0
+        with:
+          version: 'latest'
+
+      - name: Determine environment
+        id: env
+        run: |
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            echo "environment=staging" >> $GITHUB_OUTPUT
+            echo "base_url=${{ env.STAGING_BASE_URL }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            echo "environment=staging" >> $GITHUB_OUTPUT
+            echo "base_url=${{ env.STAGING_BASE_URL }}" >> $GITHUB_OUTPUT
+          else
+            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+            if [[ "${{ github.event.inputs.environment }}" == "production" ]]; then
+              echo "base_url=${{ env.PRODUCTION_BASE_URL }}" >> $GITHUB_OUTPUT
+            else
+              echo "base_url=${{ env.STAGING_BASE_URL }}" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Validate secrets
+        run: |
+          if [[ -z "${{ secrets.LOAD_TEST_BUSINESS_CODE }}" ]]; then
+            echo "::error::LOAD_TEST_BUSINESS_CODE secret not set"
+            exit 1
+          fi
+          if [[ -z "${{ secrets.LOAD_TEST_WAITER_PIN }}" ]]; then
+            echo "::error::LOAD_TEST_WAITER_PIN secret not set"
+            exit 1
+          fi
+
+      - name: Run k6 load test
+        id: k6
+        uses: grafana/k6-action@v0.2.0
+        with:
+          filename: load-test.js
+          flags: |
+            --vus ${{ github.event.inputs.vus || 100 }}
+            --duration ${{ github.event.inputs.duration || '2m' }}
+            -e BASE_URL=${{ steps.env.outputs.base_url }}
+            -e BUSINESS_CODE=${{ secrets.LOAD_TEST_BUSINESS_CODE }}
+            -e WAITER_PIN=${{ secrets.LOAD_TEST_WAITER_PIN }}
+            --summary-export=summary.json
+            --out json=results.json
+        env:
+          K6_CLOUD_TOKEN: ${{ secrets.K6_CLOUD_TOKEN }}
+
+      - name: Upload k6 results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-results-${{ steps.env.outputs.environment }}-${{ github.run_id }}
+          path: |
+            summary.json
+            results.json
+          retention-days: 30
+
+      - name: Parse k6 summary
+        if: always()
+        id: summary
+        run: |
+          if [[ -f summary.json ]]; then
+            cat summary.json | jq -r '
+              "http_req_duration_p95=\(.metrics.http_req_duration.values.p95)",
+              "http_req_failed_rate=\(.metrics.http_req_failed.values.rate)",
+              "login_duration_p95=\(.metrics.login_duration.values.p95 // "N/A")",
+              "tab_open_duration_p95=\(.metrics.tab_open_duration.values.p95 // "N/A")",
+              "order_add_duration_p95=\(.metrics.order_add_duration.values.p95 // "N/A")",
+              "bill_generate_duration_p95=\(.metrics.bill_generate_duration.values.p95 // "N/A")",
+              "payment_duration_p95=\(.metrics.payment_duration.values.p95 // "N/A")",
+              "errors_rate=\(.metrics.errors.values.rate // "N/A")",
+              "total_requests=\(.metrics.requests_total.values.count // "N/A")"
+            ' >> $GITHUB_OUTPUT
+          else
+            echo "summary.json not found"
+            exit 1
+          fi
+
+      - name: Check thresholds
+        if: always()
+        run: |
+          echo "=== Load Test Results ==="
+          echo "Environment: ${{ steps.env.outputs.environment }}"
+          echo "Base URL: ${{ steps.env.outputs.base_url }}"
+          echo "VUs: ${{ github.event.inputs.vus || 100 }}"
+          echo "Duration: ${{ github.event.inputs.duration || '2m' }}"
+          echo ""
+          echo "=== Thresholds ==="
+          
+          # Extract values
+          P95=$(echo "${{ steps.summary.outputs.http_req_duration_p95 }}" | cut -d'=' -f2)
+          FAILED_RATE=$(echo "${{ steps.summary.outputs.http_req_failed_rate }}" | cut -d'=' -f2)
+          LOGIN_P95=$(echo "${{ steps.summary.outputs.login_duration_p95 }}" | cut -d'=' -f2)
+          TAB_OPEN_P95=$(echo "${{ steps.summary.outputs.tab_open_duration_p95 }}" | cut -d'=' -f2)
+          ORDER_ADD_P95=$(echo "${{ steps.summary.outputs.order_add_duration_p95 }}" | cut -d'=' -f2)
+          BILL_GEN_P95=$(echo "${{ steps.summary.outputs.bill_generate_duration_p95 }}" | cut -d'=' -f2)
+          PAYMENT_P95=$(echo "${{ steps.summary.outputs.payment_duration_p95 }}" | cut -d'=' -f2)
+          ERRORS_RATE=$(echo "${{ steps.summary.outputs.errors_rate }}" | cut -d'=' -f2)
+          
+          echo "HTTP p95: ${P95}ms (threshold: 500ms)"
+          echo "Failed rate: ${FAILED_RATE} (threshold: 0.01)"
+          echo "Login p95: ${LOGIN_P95}ms (threshold: 1000ms)"
+          echo "Tab open p95: ${TAB_OPEN_P95}ms (threshold: 300ms)"
+          echo "Order add p95: ${ORDER_ADD_P95}ms (threshold: 200ms)"
+          echo "Bill gen p95: ${BILL_GEN_P95}ms (threshold: 500ms)"
+          echo "Payment p95: ${PAYMENT_P95}ms (threshold: 300ms)"
+          echo "Errors rate: ${ERRORS_RATE} (threshold: 0.05)"
+          
+          # Check thresholds
+          FAIL=0
+          
+          if (( $(echo "$P95 > 500" | bc -l) )); then
+            echo "::error::HTTP p95 (${P95}ms) exceeds 500ms threshold"
+            FAIL=1
+          fi
+          
+          if (( $(echo "$FAILED_RATE > 0.01" | bc -l) )); then
+            echo "::error::Failed rate (${FAILED_RATE}) exceeds 1% threshold"
+            FAIL=1
+          fi
+          
+          if [[ "$LOGIN_P95" != "N/A" ]] && (( $(echo "$LOGIN_P95 > 1000" | bc -l) )); then
+            echo "::error::Login p95 (${LOGIN_P95}ms) exceeds 1000ms threshold"
+            FAIL=1
+          fi
+          
+          if [[ "$TAB_OPEN_P95" != "N/A" ]] && (( $(echo "$TAB_OPEN_P95 > 300" | bc -l) )); then
+            echo "::error::Tab open p95 (${TAB_OPEN_P95}ms) exceeds 300ms threshold"
+            FAIL=1
+          fi
+          
+          if [[ "$ORDER_ADD_P95" != "N/A" ]] && (( $(echo "$ORDER_ADD_P95 > 200" | bc -l) )); then
+            echo "::error::Order add p95 (${ORDER_ADD_P95}ms) exceeds 200ms threshold"
+            FAIL=1
+          fi
+          
+          if [[ "$BILL_GEN_P95" != "N/A" ]] && (( $(echo "$BILL_GEN_P95 > 500" | bc -l) )); then
+            echo "::error::Bill generate p95 (${BILL_GEN_P95}ms) exceeds 500ms threshold"
+            FAIL=1
+          fi
+          
+          if [[ "$PAYMENT_P95" != "N/A" ]] && (( $(echo "$PAYMENT_P95 > 300" | bc -l) )); then
+            echo "::error::Payment p95 (${PAYMENT_P95}ms) exceeds 300ms threshold"
+            FAIL=1
+          fi
+          
+          if [[ "$ERRORS_RATE" != "N/A" ]] && (( $(echo "$ERRORS_RATE > 0.05" | bc -l) )); then
+            echo "::error::Errors rate (${ERRORS_RATE}) exceeds 5% threshold"
+            FAIL=1
+          fi
+          
+          if [[ $FAIL -eq 1 ]]; then
+            echo "::error::Load test FAILED - thresholds not met"
+            exit 1
+          else
+            echo "::notice::Load test PASSED - all thresholds met"
+          fi
+
+      - name: Create GitHub check run
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync('summary.json', 'utf8');
+            const data = JSON.parse(summary);
+            
+            const metrics = data.metrics;
+            const md = `
+### Load Test Results (${{ steps.env.outputs.environment }})
+
+| Metric | Value | Threshold | Status |
+|--------|-------|-----------|--------|
+| HTTP p95 | ${metrics.http_req_duration?.values?.p95?.toFixed(2) || 'N/A'}ms | < 500ms | ${(metrics.http_req_duration?.values?.p95 || 0) < 500 ? '✅' : '❌'} |
+| Failed Rate | ${(metrics.http_req_failed?.values?.rate * 100 || 0).toFixed(2)}% | < 1% | ${(metrics.http_req_failed?.values?.rate || 0) < 0.01 ? '✅' : '❌'} |
+| Login p95 | ${metrics.login_duration?.values?.p95?.toFixed(2) || 'N/A'}ms | < 1000ms | ${(metrics.login_duration?.values?.p95 || 0) < 1000 ? '✅' : '❌'} |
+| Tab Open p95 | ${metrics.tab_open_duration?.values?.p95?.toFixed(2) || 'N/A'}ms | < 300ms | ${(metrics.tab_open_duration?.values?.p95 || 0) < 300 ? '✅' : '❌'} |
+| Order Add p95 | ${metrics.order_add_duration?.values?.p95?.toFixed(2) || 'N/A'}ms | < 200ms | ${(metrics.order_add_duration?.values?.p95 || 0) < 200 ? '✅' : '❌'} |
+| Bill Gen p95 | ${metrics.bill_generate_duration?.values?.p95?.toFixed(2) || 'N/A'}ms | < 500ms | ${(metrics.bill_generate_duration?.values?.p95 || 0) < 500 ? '✅' : '❌'} |
+| Payment p95 | ${metrics.payment_duration?.values?.p95?.toFixed(2) || 'N/A'}ms | < 300ms | ${(metrics.payment_duration?.values?.p95 || 0) < 300 ? '✅' : '❌'} |
+| Errors Rate | ${(metrics.errors?.values?.rate * 100 || 0).toFixed(2)}% | < 5% | ${(metrics.errors?.values?.rate || 0) < 0.05 ? '✅' : '❌'} |
+
+**Test Config:** ${ {vus: ${{ github.event.inputs.vus || 100 }}, duration: '${{ github.event.inputs.duration || '2m' }}', baseUrl: '${{ steps.env.outputs.base_url }}'} }
+            `;
+            
+            await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'Load Test Results',
+              head_sha: context.sha,
+              conclusion: '${{ job.status }}' === 'success' ? 'success' : 'failure',
+              output: {
+                title: 'k6 Load Test',
+                summary: md,
+              },
+            });
+
+      - name: Notify on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          channel-id: ${{ secrets.SLACK_ALERTS_CHANNEL }}
+          slack-message: |
+            🚨 *Load Test Failed* (${{ steps.env.outputs.environment }})
+            Repository: ${{ github.repository }}
+            Commit: ${{ github.sha }}
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            
+            Check the workflow run for threshold violations.
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+
+  # Optional: Run against k6 Cloud for better visualization
+  load-test-cloud:
+    name: Load Test (k6 Cloud)
+    if: ${{ secrets.K6_CLOUD_TOKEN != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run k6 Cloud
+        uses: grafana/k6-action@v0.2.0
+        with:
+          filename: load-test.js
+          flags: |
+            --vus ${{ github.event.inputs.vus || 100 }}
+            --duration ${{ github.event.inputs.duration || '2m' }}
+            -e BASE_URL=${{ github.event.inputs.environment == 'production' && env.PRODUCTION_BASE_URL || env.STAGING_BASE_URL }}
+            -e BUSINESS_CODE=${{ secrets.LOAD_TEST_BUSINESS_CODE }}
+            -e WAITER_PIN=${{ secrets.LOAD_TEST_WAITER_PIN }}
+            --out cloud
+        env:
+          K6_CLOUD_TOKEN: ${{ secrets.K6_CLOUD_TOKEN }}

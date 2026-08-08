@@ -71,13 +71,4 @@ export class CreateOrderItemDto {
   @IsOptional()
   @IsEnum(FulfillmentType)
   fulfillment_type?: FulfillmentType;
-
-  @ApiProperty({
-    example: 1,
-    required: false,
-    description: 'Round number for this item; defaults to 1.',
-  })
-  @IsOptional()
-  @IsNumber()
-  round_number?: number;
 }

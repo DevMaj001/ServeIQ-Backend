@@ -1,8 +1,10 @@
 import {
   Controller,
   Get,
+  Post,
   Body,
   Patch,
+  Param,
   UseGuards,
   Request,
 } from '@nestjs/common';
@@ -20,11 +22,6 @@ import {
 } from '@nestjs/swagger';
 import { UpdateBusinessDto } from './dto/update-business.dto';
 
-interface RequestWithUser {
-  user: {
-    businessId: string;
-  };
-}
 @ApiTags('Businesses')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
@@ -36,7 +33,7 @@ export class BusinessController {
   @ApiOperation({ summary: 'Get the authenticated business profile' })
   @ApiResponse({ status: 200, description: 'Business profile returned.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async getMe(@Request() req: RequestWithUser) {
+  async getMe(@Request() req: any) {
     return this.businessService.findOne(req.user.businessId);
   }
 
@@ -47,10 +44,7 @@ export class BusinessController {
   @ApiBody({ type: UpdateBusinessDto })
   @ApiResponse({ status: 200, description: 'Business profile updated.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async updateMe(
-    @Request() req: RequestWithUser,
-    @Body() updateDto: UpdateBusinessDto,
-  ) {
+  async updateMe(@Request() req: any, @Body() updateDto: UpdateBusinessDto) {
     return this.businessService.update(req.user.businessId, updateDto);
   }
 }

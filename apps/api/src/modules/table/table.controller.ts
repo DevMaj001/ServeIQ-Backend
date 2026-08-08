@@ -29,14 +29,6 @@ import { UpdateTableStatusDto } from './dto/update-table-status.dto';
 import { Table } from './entities/table.entity';
 import { getPaginationParams, paginate } from '../../common/pagination';
 
-interface RequestWithUser {
-  user: {
-    branchId: string;
-    userId: string;
-    role: string;
-  };
-}
-
 @ApiTags('Tables')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
@@ -55,7 +47,7 @@ export class TableController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async findAll(
-    @Request() req: RequestWithUser,
+    @Request() req: any,
     @Query('page') page?: string,
     @Query('per_page') per_page?: string,
   ) {
@@ -73,7 +65,7 @@ export class TableController {
   @ApiResponse({ status: 200, description: 'Table details.', type: Table })
   @ApiResponse({ status: 404, description: 'Table not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async findOne(@Param('id') id: string, @Request() req: RequestWithUser) {
+  async findOne(@Param('id') id: string, @Request() req: any) {
     return this.tableService.findOne(id, req.user.branchId);
   }
 
@@ -84,10 +76,7 @@ export class TableController {
   @ApiResponse({ status: 201, description: 'Table created.', type: Table })
   @ApiResponse({ status: 400, description: 'Validation error.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async create(
-    @Request() req: RequestWithUser,
-    @Body() createDto: CreateTableDto,
-  ) {
+  async create(@Request() req: any, @Body() createDto: CreateTableDto) {
     const data = { ...createDto };
 
     // Defensive mapping for Waiter app or other clients that might send different field names
@@ -112,7 +101,7 @@ export class TableController {
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async update(
     @Param('id') id: string,
-    @Request() req: RequestWithUser,
+    @Request() req: any,
     @Body() updateDto: UpdateTableDto,
   ) {
     return this.tableService.update(id, req.user.branchId, updateDto);
@@ -128,7 +117,7 @@ export class TableController {
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async updateStatus(
     @Param('id') id: string,
-    @Request() req: RequestWithUser,
+    @Request() req: any,
     @Body() statusDto: UpdateTableStatusDto,
   ) {
     return this.tableService.updateStatus(
@@ -151,7 +140,7 @@ export class TableController {
     description: 'Only owners and managers can release a table.',
   })
   @ApiResponse({ status: 404, description: 'Table not found.' })
-  async releaseTable(@Param('id') id: string, @Request() req: RequestWithUser) {
+  async releaseTable(@Param('id') id: string, @Request() req: any) {
     return this.tableService.release(
       id,
       req.user.branchId,
@@ -168,7 +157,7 @@ export class TableController {
   @ApiResponse({ status: 200, description: 'Table deleted.' })
   @ApiResponse({ status: 404, description: 'Table not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async remove(@Param('id') id: string, @Request() req: RequestWithUser) {
+  async remove(@Param('id') id: string, @Request() req: any) {
     return this.tableService.remove(id, req.user.branchId);
   }
 }

@@ -33,20 +33,6 @@ const EXCLUDED_PREFIXES = [
   '/api/v1/notifications',
 ];
 
-interface RequestUser {
-  role?: string;
-  impersonating?: boolean;
-  branchId?: string;
-  branch_id?: string;
-}
-
-interface AuthRequest {
-  route?: { path?: string };
-  path?: string;
-  headers?: { authorization?: string };
-  user?: RequestUser;
-}
-
 @Injectable()
 export class SubscriptionGuard implements CanActivate {
   constructor(
@@ -56,8 +42,8 @@ export class SubscriptionGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<AuthRequest>();
-    const path: string = request.route?.path || request.path || '';
+    const request = context.switchToHttp().getRequest();
+    const path: string = request.route?.path || request.path;
 
     if (this.isExcluded(path)) {
       return true;
@@ -70,13 +56,13 @@ export class SubscriptionGuard implements CanActivate {
     }
 
     // Decode user from JWT (global guard runs before JwtAuthGuard, so request.user may not be set)
-    let user: RequestUser | undefined = request.user;
+    let user: any = request.user;
     if (!user || !user.role) {
       const authHeader = request.headers?.authorization;
       if (authHeader && authHeader.startsWith('Bearer ')) {
         try {
           const token = authHeader.slice(7);
-          user = this.jwtService.verify<RequestUser>(token);
+          user = this.jwtService.verify(token);
         } catch {
           return true;
         }

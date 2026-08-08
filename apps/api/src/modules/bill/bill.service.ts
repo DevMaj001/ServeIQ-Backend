@@ -15,12 +15,14 @@ import { MenuItem } from '../menu/entities/menu-item.entity';
 import { User } from '../user/entities/user.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { Business } from '../business/entities/business.entity';
+import { OrderStatus } from '../../common/shared';
 import { GenerateBillDto } from './dto/generate-bill.dto';
 import { ProcessPaymentDto } from './dto/process-payment.dto';
 import { ApplyDiscountDto } from './dto/apply-discount.dto';
 import { IngredientService } from '../ingredient/ingredient.service';
 import { ReceiptService } from './receipt.service';
 import { CloudinaryService } from '../../cloudinary/cloudinary.service';
+import { RealtimeService } from '../gateway/realtime.service';
 
 @Injectable()
 export class BillService {
@@ -46,6 +48,7 @@ export class BillService {
     private ingredientService: IngredientService,
     private receiptService: ReceiptService,
     private cloudinaryService: CloudinaryService,
+    private realtimeService: RealtimeService,
   ) {}
 
   async generateBill(
@@ -117,6 +120,17 @@ export class BillService {
     await this.tabRepository.update(tabId, {
       status: 'billed',
       billed_at: new Date(),
+    });
+
+    // Emit real-time events
+    this.realtimeService.emitBillUpdate(tab.branch_id, tabId, {
+      status: 'billed',
+      bill: savedBill,
+    });
+    this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+      type: 'bill_generated',
+      tabId,
+      bill: savedBill,
     });
 
     return savedBill;
@@ -230,6 +244,19 @@ export class BillService {
         cashier_id: userId,
       });
 
+      // Release prepaid takeaway orders (held on payment approval) to the kitchen now
+      // that payment is confirmed.
+      await manager
+        .getRepository(Order)
+        .createQueryBuilder()
+        .update(Order)
+        .set({ order_status: OrderStatus.PENDING_SUPERVISOR_APPROVAL })
+        .where('tab_id = :tabId', { tabId })
+        .andWhere('order_status = :held', {
+          held: OrderStatus.PENDING_PAYMENT_APPROVAL,
+        })
+        .execute();
+
       // Virtual tables never participate in occupancy logic — they are system records, not seatable tables.
       const payTable = await manager
         .getRepository(Table)
@@ -239,6 +266,17 @@ export class BillService {
           .getRepository(Table)
           .update(tab.table_id, { status: TableStatus.AVAILABLE });
       }
+    });
+
+    // Emit real-time events
+    this.realtimeService.emitBillUpdate(tab.branch_id, tabId, {
+      status: 'paid',
+      bill,
+    });
+    this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+      type: 'payment_received',
+      tabId,
+      bill,
     });
 
     // Generate PDF receipt and upload to Cloudinary
@@ -360,6 +398,18 @@ export class BillService {
     }
 
     await this.tabRepository.update(tabId, { status: 'billed' });
+
+    // Emit real-time events
+    this.realtimeService.emitBillUpdate(tab.branch_id, tabId, {
+      status: 'billed',
+      splitBills: bills,
+    });
+    this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+      type: 'bill_split',
+      tabId,
+      splitBills: bills,
+    });
+
     return bills;
   }
 
@@ -405,6 +455,18 @@ export class BillService {
     }
 
     await this.tabRepository.update(tabId, { status: 'billed' });
+
+    // Emit real-time events
+    this.realtimeService.emitBillUpdate(tab.branch_id, tabId, {
+      status: 'billed',
+      splitBills: bills,
+    });
+    this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+      type: 'bill_split',
+      tabId,
+      splitBills: bills,
+    });
+
     return bills;
   }
 

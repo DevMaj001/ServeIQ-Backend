@@ -26,9 +26,6 @@ import { AuditService } from '../../common/services/audit.service';
 
 @Injectable()
 export class AuthService {
-  private static readonly MAX_LOGIN_ATTEMPTS = 5;
-  private static readonly LOCKOUT_MS = 15 * 60 * 1000;
-
   constructor(
     private jwtService: JwtService,
     @Inject(DataSource)
@@ -121,63 +118,21 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    const repo = this.dataSource.getRepository(User);
-    const user = await repo.findOne({
+    const user = await this.dataSource.getRepository(User).findOne({
       where: { email: dto.email },
     });
 
-    const now = new Date();
-    if (user?.locked_until && user.locked_until > now) {
-      throw new UnauthorizedException(
-        'Too many failed attempts. Account temporarily locked — try again in a few minutes.',
-      );
-    }
-
-    const valid = user
-      ? await bcrypt.compare(dto.password, user.password_hash)
-      : false;
-
-    if (user && !valid) {
-      user.failed_login_attempts = (user.failed_login_attempts ?? 0) + 1;
-      if (user.failed_login_attempts >= AuthService.MAX_LOGIN_ATTEMPTS) {
-        user.locked_until = new Date(now.getTime() + AuthService.LOCKOUT_MS);
-        user.failed_login_attempts = 0;
-        await this.auditService.log({
-          branchId: user.branch_id,
-          userId: user.id,
-          action: 'ACCOUNT_LOCKED',
-          entityType: 'User',
-          entityId: user.id,
-          payload: {
-            email: user.email,
-            lockoutMinutes: 15,
-            reason: 'max_login_attempts',
-          },
-        });
-        await repo.save(user);
-        throw new UnauthorizedException(
-          'Too many failed attempts. Account locked for 15 minutes.',
-        );
-      }
-      await repo.save(user);
-    }
-
-    if (valid) {
-      user!.failed_login_attempts = 0;
-      user!.locked_until = null;
-      user!.last_login_at = new Date();
-      await repo.save(user!);
+    if (user && (await bcrypt.compare(dto.password, user.password_hash))) {
       await this.auditService.log({
-        branchId: user!.branch_id,
-        userId: user!.id,
+        branchId: user.branch_id,
+        userId: user.id,
         action: 'LOGIN',
         entityType: 'User',
-        entityId: user!.id,
-        payload: { email: user!.email, role: user!.role },
+        entityId: user.id,
+        payload: { email: user.email, role: user.role },
       });
-      return this.generateTokens(user!);
+      return this.generateTokens(user);
     }
-
     throw new UnauthorizedException('Invalid credentials');
   }
 
@@ -472,8 +427,6 @@ export class AuthService {
 
     const salt = await bcrypt.genSalt();
     user.password_hash = await bcrypt.hash(newPassword, salt);
-    user.failed_login_attempts = 0;
-    user.locked_until = null;
     await this.dataSource.getRepository(User).save(user);
 
     stored.is_used = true;

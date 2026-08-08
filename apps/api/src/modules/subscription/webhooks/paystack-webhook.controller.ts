@@ -3,16 +3,6 @@ import { Request, Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { SubscriptionService } from '../subscription.service';
 
-interface PaystackWebhookPayload {
-  event:
-    | 'charge.success'
-    | 'subscription.create'
-    | 'invoice.payment_failed'
-    | 'subscription.disable'
-    | (string & {});
-  data: Record<string, unknown>;
-}
-
 @ApiTags('Webhooks')
 @Controller({ path: 'webhooks/paystack', version: '1' })
 export class PaystackWebhookController {
@@ -23,7 +13,8 @@ export class PaystackWebhookController {
   @ApiResponse({ status: 200, description: 'Webhook processed' })
   async handleWebhook(@Req() req: Request, @Res() res: Response) {
     const signature = req.headers['x-paystack-signature'] as string;
-    const rawBody = JSON.stringify(req.body);
+    const rawBody =
+      (req as any).rawBody?.toString('utf8') ?? JSON.stringify(req.body);
 
     const isValid = await this.subscriptionService.verifyPaystackSignature(
       signature,
@@ -35,7 +26,7 @@ export class PaystackWebhookController {
         .json({ status: false, message: 'Invalid signature' });
     }
 
-    const event = req.body as unknown as PaystackWebhookPayload;
+    const event = req.body;
 
     switch (event.event) {
       case 'charge.success':

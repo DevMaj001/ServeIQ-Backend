@@ -9,7 +9,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Table, TableStatus } from './entities/table.entity';
 import { Tab } from '../tab/entities/tab.entity';
-import { CreateTableDto } from './dto/create-table.dto';
 
 @Injectable()
 export class TableService {
@@ -22,7 +21,7 @@ export class TableService {
     private dataSource: DataSource,
   ) {}
 
-  async create(createDto: CreateTableDto & { is_virtual?: boolean }) {
+  async create(createDto: any) {
     // Strip is_virtual if somehow passed — only TableSystemService.ensureSystemTables may set it
     delete createDto.is_virtual;
 

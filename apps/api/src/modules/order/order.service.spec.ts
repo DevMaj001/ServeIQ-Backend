@@ -1,13 +1,12 @@
-import { Repository, DataSource } from 'typeorm';
-import { Order } from './entities/order.entity';
-import { MenuItem } from '../menu/entities/menu-item.entity';
-import { Tab } from '../tab/entities/tab.entity';
-import { Department } from '../department/entities/department.entity';
-import { IngredientService } from '../ingredient/ingredient.service';
-import { AuditService } from '../../common/services/audit.service';
-import { NotificationService } from '../notification/notification.service';
 import { OrderService } from './order.service';
 import { OrderStatus } from '../../common/shared';
+
+const mockRealtimeService = () => ({
+  emitOrderCreated: jest.fn(),
+  emitOrderUpdated: jest.fn(),
+  emitOrderStatusChange: jest.fn(),
+  emitDashboardUpdate: jest.fn(),
+});
 
 describe('OrderService', () => {
   const mockOrderRepository = () => ({
@@ -33,7 +32,7 @@ describe('OrderService', () => {
   });
 
   const mockDataSource = () => ({
-    transaction: jest.fn((cb: (m: unknown) => unknown) => cb(manager)),
+    transaction: jest.fn(async (cb) => cb(manager)),
     query: jest.fn(),
   });
 
@@ -54,30 +53,25 @@ describe('OrderService', () => {
   beforeEach(() => {
     manager = {
       getRepository: jest.fn().mockReturnValue({
-        create: jest.fn((dto: unknown) => dto),
-        save: jest.fn((order: Order) => ({ ...order, id: 'order-1' })),
+        create: jest.fn((dto) => dto),
+        save: jest.fn(async (order) => ({ ...order, id: 'order-1' })),
         findOne: jest.fn(),
       }),
     };
   });
 
-  const buildService = (overrides: Record<string, unknown> = {}) => {
-    const orderRepo = (overrides.orderRepository ??
-      mockOrderRepository()) as unknown as Repository<Order>;
-    const menuRepo = (overrides.menuRepository ??
-      mockMenuRepository()) as unknown as Repository<MenuItem>;
-    const tabRepo = (overrides.tabRepository ??
-      mockTabRepository()) as unknown as Repository<Tab>;
-    const deptRepo = (overrides.departmentRepo ??
-      mockDepartmentRepo()) as unknown as Repository<Department>;
-    const dataSource = (overrides.dataSource ??
-      mockDataSource()) as unknown as DataSource;
-    const ingredientService = (overrides.ingredientService ??
-      mockIngredientService()) as unknown as IngredientService;
-    const auditService = (overrides.auditService ??
-      mockAuditService()) as unknown as AuditService;
-    const notificationService = (overrides.notificationService ??
-      mockNotificationService()) as unknown as NotificationService;
+  const buildService = (overrides: any = {}) => {
+    const orderRepo = overrides.orderRepository ?? mockOrderRepository();
+    const menuRepo = overrides.menuRepository ?? mockMenuRepository();
+    const tabRepo = overrides.tabRepository ?? mockTabRepository();
+    const deptRepo = overrides.departmentRepo ?? mockDepartmentRepo();
+    const dataSource = overrides.dataSource ?? mockDataSource();
+    const ingredientService =
+      overrides.ingredientService ?? mockIngredientService();
+    const auditService = overrides.auditService ?? mockAuditService();
+    const notificationService =
+      overrides.notificationService ?? mockNotificationService();
+    const realtimeService = overrides.realtimeService ?? mockRealtimeService();
 
     return new OrderService(
       orderRepo,
@@ -88,13 +82,18 @@ describe('OrderService', () => {
       ingredientService,
       auditService,
       notificationService,
+      realtimeService,
     );
   };
 
   describe('addOrderItems', () => {
     it('deducts stock when new order items are created', async () => {
       const tabRepo = mockTabRepository();
-      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        status: 'open',
+      });
 
       const menuRepo = mockMenuRepository();
       menuRepo.find.mockResolvedValue([
@@ -172,7 +171,11 @@ describe('OrderService', () => {
 
     it('calculates subtotal with modifiers', async () => {
       const tabRepo = mockTabRepository();
-      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        status: 'open',
+      });
 
       const menuRepo = mockMenuRepository();
       menuRepo.find.mockResolvedValue([
@@ -257,7 +260,7 @@ describe('OrderService', () => {
         subtotal_kobo: 10000,
         modifiers: [],
       });
-      orderRepo.save.mockImplementation((o: Order) => o);
+      orderRepo.save.mockImplementation(async (o) => o);
 
       const service = buildService({ orderRepository: orderRepo });
       const result = await service.updateOrder('o1', { quantity: 3 });
@@ -269,7 +272,11 @@ describe('OrderService', () => {
   describe('removeOrder', () => {
     it('removes order and returns message', async () => {
       const orderRepo = mockOrderRepository();
-      const order = { id: 'o1', tab_id: 'tab-1' };
+      const order = {
+        id: 'o1',
+        tab_id: 'tab-1',
+        order_status: OrderStatus.PENDING_SUPERVISOR_APPROVAL,
+      };
       orderRepo.findOne.mockResolvedValue(order);
       orderRepo.remove.mockResolvedValue(undefined);
 
@@ -305,10 +312,11 @@ describe('OrderService', () => {
         id: 'tab-1',
         branch_id: 'branch-1',
         tracking_code: 'SVQ-ABCD-123',
+        status: 'open',
       });
 
-      const dataSource = {
-        transaction: jest.fn((cb: (m: unknown) => unknown) => {
+      const dataSource: any = {
+        transaction: jest.fn(async (cb) => {
           const m = {
             getRepository: jest.fn().mockReturnValue({
               findOne: jest.fn().mockResolvedValue({
@@ -316,7 +324,7 @@ describe('OrderService', () => {
                 tab_id: 'tab-1',
                 order_status: OrderStatus.PENDING_SUPERVISOR_APPROVAL,
               }),
-              save: jest.fn((order: Order) => ({ ...order, id: 'o1' })),
+              save: jest.fn(async (order) => ({ ...order, id: 'o1' })),
             }),
           };
           return cb(m);
@@ -342,7 +350,7 @@ describe('OrderService', () => {
       expect(auditService.log).toHaveBeenCalled();
       expect(notificationService.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: expect.stringContaining('Tracking: SVQ-ABCD-123') as string,
+          message: expect.stringContaining('Tracking: SVQ-ABCD-123'),
         }),
       );
     });
@@ -354,10 +362,14 @@ describe('OrderService', () => {
       orderRepo.findOne.mockResolvedValue({ id: 'o1', tab_id: 'tab-1' });
 
       const tabRepo = mockTabRepository();
-      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        status: 'open',
+      });
 
-      const dataSource = {
-        transaction: jest.fn((cb: (m: unknown) => unknown) => {
+      const dataSource: any = {
+        transaction: jest.fn(async (cb) => {
           const m = {
             getRepository: jest.fn().mockReturnValue({
               findOne: jest.fn().mockResolvedValue({
@@ -365,7 +377,7 @@ describe('OrderService', () => {
                 tab_id: 'tab-1',
                 order_status: OrderStatus.PENDING_SUPERVISOR_APPROVAL,
               }),
-              save: jest.fn((order: Order) => order),
+              save: jest.fn(async (order) => order),
             }),
           };
           return cb(m);
@@ -416,229 +428,6 @@ describe('OrderService', () => {
       expect(result).toHaveLength(2);
       expect(result[0].order_status).toBe(OrderStatus.READY_FOR_PICKUP);
       expect(orderRepo.save).toHaveBeenCalled();
-    });
-  });
-
-  describe('Order Round Logic', () => {
-    it('ROUND-01: First order on tab gets round_number = 1 (default)', async () => {
-      const tabRepo = mockTabRepository();
-      tabRepo.findOne.mockResolvedValue({
-        id: 'tab-1',
-        branch_id: 'branch-1',
-        tab_type: 'dine_in',
-      });
-
-      const menuRepo = mockMenuRepository();
-      menuRepo.find.mockResolvedValue([
-        {
-          id: 'menu-1',
-          name: 'Beer',
-          price_kobo: 5000,
-          track_stock: false,
-          quantity_in_stock: 0,
-        },
-      ]);
-
-      const service = buildService({
-        tabRepository: tabRepo,
-        menuRepository: menuRepo,
-      });
-
-      const result = await service.addOrderItems(
-        'tab-1',
-        [{ menu_item_id: 'menu-1', quantity: 2, round_number: 1 }],
-        'waiter-1',
-      );
-
-      expect(result[0].round_number).toBe(1);
-      expect(result[0].subtotal_kobo).toBe(10000);
-    });
-
-    it('ROUND-02: Orders without explicit round_number default to 1', async () => {
-      const tabRepo = mockTabRepository();
-      tabRepo.findOne.mockResolvedValue({
-        id: 'tab-1',
-        branch_id: 'branch-1',
-        tab_type: 'dine_in',
-      });
-
-      const menuRepo = mockMenuRepository();
-      menuRepo.find.mockResolvedValue([
-        {
-          id: 'menu-1',
-          name: 'Beer',
-          price_kobo: 5000,
-          track_stock: false,
-          quantity_in_stock: 0,
-        },
-      ]);
-
-      const service = buildService({
-        tabRepository: tabRepo,
-        menuRepository: menuRepo,
-      });
-
-      const result = await service.addOrderItems(
-        'tab-1',
-        [{ menu_item_id: 'menu-1', quantity: 1 }],
-        'waiter-1',
-      );
-
-      expect(result[0].round_number).toBe(1);
-    });
-
-    it('ROUND-03: Orders with explicit round_number are preserved', async () => {
-      const tabRepo = mockTabRepository();
-      tabRepo.findOne.mockResolvedValue({
-        id: 'tab-1',
-        branch_id: 'branch-1',
-        tab_type: 'dine_in',
-      });
-
-      const menuRepo = mockMenuRepository();
-      menuRepo.find.mockResolvedValue([
-        {
-          id: 'menu-1',
-          name: 'Beer',
-          price_kobo: 5000,
-          track_stock: false,
-          quantity_in_stock: 0,
-        },
-      ]);
-
-      const service = buildService({
-        tabRepository: tabRepo,
-        menuRepository: menuRepo,
-      });
-
-      const result = await service.addOrderItems(
-        'tab-1',
-        [{ menu_item_id: 'menu-1', quantity: 1, round_number: 3 }],
-        'waiter-1',
-      );
-
-      expect(result[0].round_number).toBe(3);
-    });
-
-    it('ROUND-04: Subtotal equals quantity × unit_price_kobo + modifier total', async () => {
-      const tabRepo = mockTabRepository();
-      tabRepo.findOne.mockResolvedValue({
-        id: 'tab-1',
-        branch_id: 'branch-1',
-        tab_type: 'dine_in',
-      });
-
-      const menuRepo = mockMenuRepository();
-      menuRepo.find.mockResolvedValue([
-        {
-          id: 'menu-1',
-          name: 'Pizza',
-          price_kobo: 10000,
-          track_stock: false,
-          quantity_in_stock: 0,
-        },
-      ]);
-
-      const service = buildService({
-        tabRepository: tabRepo,
-        menuRepository: menuRepo,
-      });
-
-      const result = await service.addOrderItems(
-        'tab-1',
-        [
-          {
-            menu_item_id: 'menu-1',
-            quantity: 2,
-            round_number: 1,
-            modifiers: [{ name: 'Extra Cheese', price_kobo: 1500, qty: 1 }],
-          },
-        ],
-        'waiter-1',
-      );
-
-      expect(result[0].subtotal_kobo).toBe(21500);
-      expect(result[0].modifiers).toEqual([
-        { name: 'Extra Cheese', price_kobo: 1500, qty: 1 },
-      ]);
-    });
-
-    it('ROUND-05: Price snapshot is taken from menu at order creation, not re-fetched', async () => {
-      const tabRepo = mockTabRepository();
-      tabRepo.findOne.mockResolvedValue({
-        id: 'tab-1',
-        branch_id: 'branch-1',
-        tab_type: 'dine_in',
-      });
-
-      const menuRepo = mockMenuRepository();
-      menuRepo.find.mockResolvedValue([
-        {
-          id: 'menu-1',
-          name: 'Beer',
-          price_kobo: 5000,
-          track_stock: false,
-          quantity_in_stock: 0,
-        },
-      ]);
-
-      const service = buildService({
-        tabRepository: tabRepo,
-        menuRepository: menuRepo,
-      });
-
-      const result = await service.addOrderItems(
-        'tab-1',
-        [{ menu_item_id: 'menu-1', quantity: 3 }],
-        'waiter-1',
-      );
-
-      expect(result[0].unit_price_kobo).toBe(5000);
-      expect(result[0].subtotal_kobo).toBe(15000);
-    });
-
-    it('ROUND-06: Multiple items in same round get same round_number', async () => {
-      const tabRepo = mockTabRepository();
-      tabRepo.findOne.mockResolvedValue({
-        id: 'tab-1',
-        branch_id: 'branch-1',
-        tab_type: 'dine_in',
-      });
-
-      const menuRepo = mockMenuRepository();
-      menuRepo.find.mockResolvedValue([
-        {
-          id: 'menu-1',
-          name: 'Beer',
-          price_kobo: 5000,
-          track_stock: false,
-          quantity_in_stock: 0,
-        },
-        {
-          id: 'menu-2',
-          name: 'Wine',
-          price_kobo: 8000,
-          track_stock: false,
-          quantity_in_stock: 0,
-        },
-      ]);
-
-      const service = buildService({
-        tabRepository: tabRepo,
-        menuRepository: menuRepo,
-      });
-
-      const result = await service.addOrderItems(
-        'tab-1',
-        [
-          { menu_item_id: 'menu-1', quantity: 2, round_number: 1 },
-          { menu_item_id: 'menu-2', quantity: 1, round_number: 1 },
-        ],
-        'waiter-1',
-      );
-
-      expect(result[0].round_number).toBe(1);
-      expect(result[1].round_number).toBe(1);
     });
   });
 });

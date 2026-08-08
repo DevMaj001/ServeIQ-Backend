@@ -57,7 +57,7 @@ export class User {
   role: UserRole;
 
   @Index()
-  @Column({ type: 'uuid', nullable: true })
+  @Column({ type: 'uuid' })
   role_id: string;
 
   @ManyToOne(() => Role)
@@ -78,12 +78,6 @@ export class User {
 
   @Column({ type: 'int', default: 0 })
   pin_token_version: number;
-
-  @Column({ type: 'int', nullable: true, default: 0 })
-  failed_login_attempts: number | null;
-
-  @Column({ type: 'timestamp', nullable: true })
-  locked_until: Date | null;
 
   @CreateDateColumn()
   created_at: Date;

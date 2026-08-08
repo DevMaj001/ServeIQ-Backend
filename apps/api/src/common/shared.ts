@@ -9,6 +9,7 @@ export enum UserRole {
 }
 
 export enum OrderStatus {
+  PENDING_PAYMENT_APPROVAL = 'pending_payment_approval',
   PENDING_SUPERVISOR_APPROVAL = 'pending_supervisor_approval',
   APPROVED = 'approved',
   ASSIGNED_TO_DEPARTMENT = 'assigned_to_department',

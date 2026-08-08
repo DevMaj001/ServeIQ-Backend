@@ -7,19 +7,6 @@ import { DataSource } from 'typeorm';
 import { User } from '../../user/entities/user.entity';
 import { Branch } from '../../branch/entities/branch.entity';
 
-interface JwtPayload {
-  sub: string;
-  email?: string;
-  role?: string;
-  role_id?: string | null;
-  businessId?: string;
-  business_id?: string;
-  branchId?: string;
-  branch_id?: string;
-  pin_token_version?: number;
-  staff_token_version?: number;
-}
-
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
@@ -30,15 +17,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
         ExtractJwt.fromAuthHeaderAsBearerToken(),
-        (req: { cookies?: { access_token?: string } }) =>
-          req?.cookies?.access_token || null,
+        (req: any) => req?.cookies?.access_token || null,
       ]),
       ignoreExpiration: false,
       secretOrKey: configService.get<string>('JWT_SECRET')!,
     });
   }
 
-  async validate(payload: JwtPayload) {
+  async validate(payload: any) {
     if (
       payload.pin_token_version !== undefined ||
       payload.staff_token_version !== undefined
@@ -72,11 +58,21 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       }
     }
 
+    // Load roleEntity for PBAC
+    const userRepo = this.dataSource.getRepository(User);
+    const userWithRole = await userRepo.findOne({
+      where: { id: payload.sub },
+      relations: { roleEntity: true },
+    });
+
     return {
       userId: payload.sub,
       email: payload.email,
       role: payload.role,
       role_id: payload.role_id,
+      roleEntity: userWithRole?.roleEntity
+        ? { id: userWithRole.roleEntity.id, name: userWithRole.roleEntity.name }
+        : undefined,
       businessId: payload.businessId || payload.business_id,
       branchId: payload.branchId || payload.branch_id,
     };

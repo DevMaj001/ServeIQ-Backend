@@ -27,14 +27,6 @@ import { ProcessPaymentDto } from './dto/process-payment.dto';
 import { GenerateBillDto } from './dto/generate-bill.dto';
 import { ApplyDiscountDto } from './dto/apply-discount.dto';
 
-interface RequestWithUser {
-  user: {
-    branchId: string;
-    userId: string;
-    role: string;
-  };
-}
-
 @ApiTags('Bills')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
@@ -55,7 +47,7 @@ export class BillController {
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async generateBill(
     @Param('tabId') tabId: string,
-    @Request() req: RequestWithUser,
+    @Request() req: any,
     @Body() generateBillDto?: GenerateBillDto,
   ) {
     return this.billService.generateBill(
@@ -77,7 +69,7 @@ export class BillController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async applyDiscount(
     @Param('tabId') tabId: string,
-    @Request() req: RequestWithUser,
+    @Request() req: any,
     @Body() dto: ApplyDiscountDto,
   ) {
     return this.billService.applyDiscount(tabId, req.user.branchId, dto);
@@ -96,7 +88,7 @@ export class BillController {
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async payBill(
     @Param('tabId') tabId: string,
-    @Request() req: RequestWithUser,
+    @Request() req: any,
     @Body() paymentDto: ProcessPaymentDto,
   ) {
     return this.billService.processPayment(
@@ -114,7 +106,7 @@ export class BillController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async splitEvenly(
     @Param('tabId') tabId: string,
-    @Request() req: RequestWithUser,
+    @Request() req: any,
     @Body() body: { splits: number },
   ) {
     return this.billService.splitEvenly(
@@ -132,7 +124,7 @@ export class BillController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async splitByItem(
     @Param('tabId') tabId: string,
-    @Request() req: RequestWithUser,
+    @Request() req: any,
     @Body() body: { allocations: { order_ids: string[]; label?: string }[] },
   ) {
     return this.billService.splitByItem(
@@ -148,10 +140,7 @@ export class BillController {
   @ApiParam({ name: 'tabId' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getSplitBills(
-    @Param('tabId') tabId: string,
-    @Request() req: RequestWithUser,
-  ) {
+  async getSplitBills(@Param('tabId') tabId: string, @Request() req: any) {
     return this.billService.getSplitBills(tabId, req.user.branchId);
   }
 
@@ -164,7 +153,7 @@ export class BillController {
   async paySplit(
     @Param('tabId') tabId: string,
     @Param('billId') billId: string,
-    @Request() req: RequestWithUser,
+    @Request() req: any,
     @Body() paymentDto: ProcessPaymentDto,
   ) {
     return this.billService.processSplitPayment(
@@ -186,10 +175,7 @@ export class BillController {
   @ApiResponse({ status: 200, description: 'Receipt details.' })
   @ApiResponse({ status: 404, description: 'Tab or bill not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async getReceipt(
-    @Param('tabId') tabId: string,
-    @Request() req: RequestWithUser,
-  ) {
+  async getReceipt(@Param('tabId') tabId: string, @Request() req: any) {
     return this.billService.getReceipt(tabId, req.user.branchId);
   }
 
@@ -206,7 +192,7 @@ export class BillController {
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async getReceiptPdf(
     @Param('tabId') tabId: string,
-    @Request() req: RequestWithUser,
+    @Request() req: any,
     @Res() res: Response,
   ) {
     const pdf = await this.billService.getReceiptPdf(tabId, req.user.branchId);

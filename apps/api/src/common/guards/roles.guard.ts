@@ -15,9 +15,12 @@ export class RolesGuard implements CanActivate {
       return true;
     }
     const request = context.switchToHttp().getRequest<{
-      user?: { role?: string };
+      user?: { role?: string; roleEntity?: { name?: string } };
     }>();
     const user = request.user;
-    return requiredRoles.some((role: string) => user?.role === role);
+
+    // Prefer roleEntity.name (PBAC) over legacy role string
+    const userRole = user?.roleEntity?.name || user?.role;
+    return requiredRoles.some((role: string) => userRole === role);
   }
 }

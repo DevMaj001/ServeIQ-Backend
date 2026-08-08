@@ -24,11 +24,6 @@ import { UnitService } from './unit.service';
 import { CreateUnitDto } from './dto/create-unit.dto';
 import { UpdateUnitDto } from './dto/update-unit.dto';
 
-interface RequestWithUser {
-  user: {
-    branchId: string;
-  };
-}
 @ApiTags('Units')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -49,7 +44,7 @@ export class UnitController {
   @ApiOperation({ summary: 'Get all units for the branch' })
   @ApiResponse({ status: 200, description: 'List of units.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async findAll(@Request() req: RequestWithUser) {
+  async findAll(@Request() req: any) {
     return this.unitService.findAllByBranch(req.user.branchId);
   }
 
@@ -66,7 +61,7 @@ export class UnitController {
   @ApiParam({ name: 'id', description: 'Unit UUID' })
   @ApiResponse({ status: 200, description: 'Unit details.' })
   @ApiResponse({ status: 404, description: 'Unit not found.' })
-  async findOne(@Param('id') id: string, @Request() req: RequestWithUser) {
+  async findOne(@Param('id') id: string, @Request() req: any) {
     return this.unitService.findOne(id, req.user.branchId);
   }
 
@@ -80,7 +75,7 @@ export class UnitController {
     description: 'Unit created or existing returned.',
   })
   @ApiResponse({ status: 400, description: 'Validation error.' })
-  async create(@Request() req: RequestWithUser, @Body() dto: CreateUnitDto) {
+  async create(@Request() req: any, @Body() dto: CreateUnitDto) {
     return this.unitService.create({
       ...dto,
       branch_id: req.user.branchId,
@@ -94,7 +89,7 @@ export class UnitController {
   @ApiResponse({ status: 404, description: 'Unit not found.' })
   async update(
     @Param('id') id: string,
-    @Request() req: RequestWithUser,
+    @Request() req: any,
     @Body() dto: UpdateUnitDto,
   ) {
     return this.unitService.update(id, req.user.branchId, dto);
@@ -105,7 +100,7 @@ export class UnitController {
   @ApiParam({ name: 'id', description: 'Unit UUID' })
   @ApiResponse({ status: 200, description: 'Unit deleted.' })
   @ApiResponse({ status: 404, description: 'Unit not found.' })
-  async remove(@Param('id') id: string, @Request() req: RequestWithUser) {
+  async remove(@Param('id') id: string, @Request() req: any) {
     return this.unitService.remove(id, req.user.branchId);
   }
 }

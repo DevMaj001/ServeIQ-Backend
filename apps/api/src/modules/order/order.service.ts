@@ -20,13 +20,9 @@ import { AuditService } from '../../common/services/audit.service';
 import { Department } from '../department/entities/department.entity';
 import { ApproveOrderDto } from './dto/approve-order.dto';
 import { DeclineOrderDto } from './dto/decline-order.dto';
-import { UpdateOrderDto } from './dto/update-order.dto';
-import {
-  CreateOrderItemDto,
-  ModifierSelectionDto,
-} from './dto/create-order-item.dto';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationType } from '../notification/entities/notification.entity';
+import { RealtimeService } from '../gateway/realtime.service';
 
 @Injectable()
 export class OrderService {
@@ -44,13 +40,10 @@ export class OrderService {
     private ingredientService: IngredientService,
     private auditService: AuditService,
     private notificationService: NotificationService,
+    private realtimeService: RealtimeService,
   ) {}
 
-  async addOrderItems(
-    tabId: string,
-    items: CreateOrderItemDto[],
-    userId: string,
-  ) {
+  async addOrderItems(tabId: string, items: any[], userId: string) {
     const ids = items.map((i) => i.menu_item_id);
     const menuItems = await this.menuRepository.find({
       where: { id: In(ids) },
@@ -71,57 +64,80 @@ export class OrderService {
       }
     }
 
-    return this.dataSource.transaction(async (manager) => {
-      const orders = [];
-      const tab = await this.tabRepository.findOne({ where: { id: tabId } });
-      if (!tab) {
-        throw new NotFoundException('Tab not found');
-      }
-
-      const tabDefault =
-        tab.tab_type === TabType.TAKEAWAY
-          ? FulfillmentType.PACK
-          : FulfillmentType.SERVE;
-
-      for (const item of items) {
-        const menuItem = menuMap.get(item.menu_item_id);
-        if (!menuItem) {
-          throw new NotFoundException(
-            `Menu item ${item.menu_item_id} not found`,
+    return this.dataSource
+      .transaction(async (manager) => {
+        const orders = [];
+        const tab = await this.tabRepository.findOne({ where: { id: tabId } });
+        if (!tab) {
+          throw new NotFoundException('Tab not found');
+        }
+        if (tab.status !== 'open') {
+          throw new BadRequestException(
+            `Cannot add items to tab with status: ${tab.status}`,
           );
         }
 
-        const modifierTotal = (item.modifiers || []).reduce(
-          (sum: number, m: ModifierSelectionDto) => sum + m.price_kobo * m.qty,
-          0,
+        const branchId = tab.branch_id;
+        const tabDefault =
+          tab.tab_type === TabType.TAKEAWAY
+            ? FulfillmentType.PACK
+            : FulfillmentType.SERVE;
+
+        for (const item of items) {
+          const menuItem = menuMap.get(item.menu_item_id);
+          if (!menuItem) {
+            throw new NotFoundException(
+              `Menu item ${item.menu_item_id} not found`,
+            );
+          }
+
+          const modifierTotal = (item.modifiers || []).reduce(
+            (sum: number, m: any) => sum + m.price_kobo * m.qty,
+            0,
+          );
+          const order = manager.getRepository(Order).create({
+            tab_id: tabId,
+            menu_item_id: item.menu_item_id,
+            quantity: item.quantity,
+            unit_price_kobo: menuItem.price_kobo,
+            subtotal_kobo: item.quantity * menuItem.price_kobo + modifierTotal,
+            round_number: item.round_number || 1,
+            created_by: userId,
+            notes: item.notes,
+            modifiers: item.modifiers || null,
+            fulfillment_type: item.fulfillment_type || tabDefault,
+            order_status: OrderStatus.PENDING_SUPERVISOR_APPROVAL,
+          });
+          orders.push(await manager.getRepository(Order).save(order));
+        }
+
+        await this.ingredientService.deductByTab(
+          { id: tabId, branch_id: branchId },
+          items.map((item) => ({
+            menu_item_id: item.menu_item_id,
+            quantity: item.quantity,
+          })),
+          manager,
         );
-        const order = manager.getRepository(Order).create({
-          tab_id: tabId,
-          menu_item_id: item.menu_item_id,
-          quantity: item.quantity,
-          unit_price_kobo: menuItem.price_kobo,
-          subtotal_kobo: item.quantity * menuItem.price_kobo + modifierTotal,
-          round_number: item.round_number || 1,
-          created_by: userId,
-          notes: item.notes,
-          modifiers: item.modifiers,
-          fulfillment_type: item.fulfillment_type || tabDefault,
-          order_status: OrderStatus.PENDING_SUPERVISOR_APPROVAL,
-        });
-        orders.push(await manager.getRepository(Order).save(order));
-      }
 
-      await this.ingredientService.deductByTab(
-        { id: tabId, branch_id: tab.branch_id },
-        items.map((item) => ({
-          menu_item_id: item.menu_item_id,
-          quantity: item.quantity,
-        })),
-        manager,
+        return { orders, branchId };
+      })
+      .then((result) => {
+        this.emitOrderCreatedEvents(result.branchId, result.orders);
+        return result.orders;
+      });
+  }
+
+  private async emitOrderCreatedEvents(branchId: string, orders: any[]) {
+    for (const order of orders) {
+      this.realtimeService.emitOrderCreated(branchId, order);
+      this.realtimeService.emitOrderStatusChange(
+        branchId,
+        order.id,
+        order.order_status,
+        order.tab_id,
       );
-
-      return orders;
-    });
+    }
   }
 
   async findByTab(tabId: string, branchId?: string) {
@@ -150,7 +166,7 @@ export class OrderService {
     return order;
   }
 
-  async updateOrder(id: string, updateDto: UpdateOrderDto, branchId?: string) {
+  async updateOrder(id: string, updateDto: any, branchId?: string) {
     const order = await this.findOne(id, branchId);
 
     if (updateDto.quantity !== undefined) {
@@ -177,6 +193,13 @@ export class OrderService {
 
   async removeOrder(id: string, branchId?: string) {
     const order = await this.findOne(id, branchId);
+
+    if (order.order_status !== OrderStatus.PENDING_SUPERVISOR_APPROVAL) {
+      throw new BadRequestException(
+        `Cannot remove order with status: ${order.order_status}`,
+      );
+    }
+
     await this.orderRepository.remove(order);
     return { message: 'Order item removed successfully' };
   }
@@ -285,6 +308,22 @@ export class OrderService {
             tracking_code: orderTab?.tracking_code,
           },
         });
+
+        // Emit real-time events
+        this.realtimeService.emitOrderUpdated(tab.branch_id, savedOrder.id, {
+          order_status: savedOrder.order_status,
+        });
+        this.realtimeService.emitOrderStatusChange(
+          tab.branch_id,
+          savedOrder.id,
+          savedOrder.order_status,
+          savedOrder.tab_id,
+        );
+        this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+          type: 'order_approved',
+          order: savedOrder,
+        });
+
         return savedOrder;
       });
   }
@@ -297,97 +336,151 @@ export class OrderService {
   ) {
     const { tab } = await this.getTabForOrder(id, branchId);
     const alphaIds = [id].sort();
-    return this.dataSource.transaction(async (manager) => {
-      const order = await manager.getRepository(Order).findOne({
-        where: { id: alphaIds[0] },
-        lock: { mode: 'pessimistic_write' },
+    return this.dataSource
+      .transaction(async (manager) => {
+        const order = await manager.getRepository(Order).findOne({
+          where: { id: alphaIds[0] },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!order) throw new NotFoundException('Order not found');
+        if (order.order_status !== OrderStatus.PENDING_SUPERVISOR_APPROVAL) {
+          throw new BadRequestException('Order is not pending approval');
+        }
+
+        order.order_status = OrderStatus.DECLINED;
+        order.declined_by = userId;
+        order.declined_at = new Date();
+        order.decline_reason = dto.decline_reason;
+
+        await manager.getRepository(Order).save(order);
+
+        await this.auditService.log({
+          branchId: tab.branch_id,
+          userId,
+          action: 'order.decline',
+          entityId: id,
+          entityType: 'order',
+          payload: { reason: dto.decline_reason },
+        });
+
+        return order;
+      })
+      .then((savedOrder) => {
+        // Emit real-time events
+        this.realtimeService.emitOrderUpdated(tab.branch_id, savedOrder.id, {
+          order_status: savedOrder.order_status,
+        });
+        this.realtimeService.emitOrderStatusChange(
+          tab.branch_id,
+          savedOrder.id,
+          savedOrder.order_status,
+          savedOrder.tab_id,
+        );
+        this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+          type: 'order_declined',
+          order: savedOrder,
+        });
+        return savedOrder;
       });
-      if (!order) throw new NotFoundException('Order not found');
-      if (order.order_status !== OrderStatus.PENDING_SUPERVISOR_APPROVAL) {
-        throw new BadRequestException('Order is not pending approval');
-      }
-
-      order.order_status = OrderStatus.DECLINED;
-      order.declined_by = userId;
-      order.declined_at = new Date();
-      order.decline_reason = dto.decline_reason;
-
-      await manager.getRepository(Order).save(order);
-
-      await this.auditService.log({
-        branchId: tab.branch_id,
-        userId,
-        action: 'order.decline',
-        entityId: id,
-        entityType: 'order',
-        payload: { reason: dto.decline_reason },
-      });
-
-      return order;
-    });
   }
 
   async confirmPickup(id: string, userId: string, branchId?: string) {
     const { tab } = await this.getTabForOrder(id, branchId);
     const alphaIds = [id].sort();
-    return this.dataSource.transaction(async (manager) => {
-      const order = await manager.getRepository(Order).findOne({
-        where: { id: alphaIds[0] },
-        lock: { mode: 'pessimistic_write' },
+    return this.dataSource
+      .transaction(async (manager) => {
+        const order = await manager.getRepository(Order).findOne({
+          where: { id: alphaIds[0] },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!order) throw new NotFoundException('Order not found');
+        if (order.order_status !== OrderStatus.READY_FOR_PICKUP) {
+          throw new BadRequestException('Order is not ready for pickup');
+        }
+
+        order.order_status = OrderStatus.OUT_FOR_DELIVERY;
+
+        await manager.getRepository(Order).save(order);
+
+        await this.auditService.log({
+          branchId: tab.branch_id,
+          userId,
+          action: 'order.confirm_pickup',
+          entityId: id,
+          entityType: 'order',
+        });
+
+        return order;
+      })
+      .then((savedOrder) => {
+        // Emit real-time events
+        this.realtimeService.emitOrderUpdated(tab.branch_id, savedOrder.id, {
+          order_status: savedOrder.order_status,
+        });
+        this.realtimeService.emitOrderStatusChange(
+          tab.branch_id,
+          savedOrder.id,
+          savedOrder.order_status,
+          savedOrder.tab_id,
+        );
+        this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+          type: 'order_pickup',
+          order: savedOrder,
+        });
+        return savedOrder;
       });
-      if (!order) throw new NotFoundException('Order not found');
-      if (order.order_status !== OrderStatus.READY_FOR_PICKUP) {
-        throw new BadRequestException('Order is not ready for pickup');
-      }
-
-      order.order_status = OrderStatus.OUT_FOR_DELIVERY;
-
-      await manager.getRepository(Order).save(order);
-
-      await this.auditService.log({
-        branchId: tab.branch_id,
-        userId,
-        action: 'order.confirm_pickup',
-        entityId: id,
-        entityType: 'order',
-      });
-
-      return order;
-    });
   }
 
   async deliver(id: string, userId: string, branchId?: string) {
     const { tab } = await this.getTabForOrder(id, branchId);
     const alphaIds = [id].sort();
-    return this.dataSource.transaction(async (manager) => {
-      const order = await manager.getRepository(Order).findOne({
-        where: { id: alphaIds[0] },
-        lock: { mode: 'pessimistic_write' },
+    return this.dataSource
+      .transaction(async (manager) => {
+        const order = await manager.getRepository(Order).findOne({
+          where: { id: alphaIds[0] },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!order) throw new NotFoundException('Order not found');
+        if (
+          order.order_status !== OrderStatus.READY_FOR_PICKUP &&
+          order.order_status !== OrderStatus.OUT_FOR_DELIVERY
+        ) {
+          throw new BadRequestException('Order is not ready for pickup');
+        }
+
+        order.order_status = OrderStatus.DELIVERED;
+        order.delivered_by_supervisor = userId;
+        order.delivered_at = new Date();
+
+        await manager.getRepository(Order).save(order);
+
+        await this.auditService.log({
+          branchId: tab.branch_id,
+          userId,
+          action: 'order.deliver',
+          entityId: id,
+          entityType: 'order',
+        });
+
+        return order;
+      })
+      .then((savedOrder) => {
+        // Emit real-time events
+        this.realtimeService.emitOrderUpdated(tab.branch_id, savedOrder.id, {
+          order_status: savedOrder.order_status,
+        });
+        this.realtimeService.emitOrderStatusChange(
+          tab.branch_id,
+          savedOrder.id,
+          savedOrder.order_status,
+          savedOrder.tab_id,
+        );
+        this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+          type: 'order_delivered',
+          order: savedOrder,
+        });
+        return savedOrder;
       });
-      if (!order) throw new NotFoundException('Order not found');
-      if (
-        order.order_status !== OrderStatus.READY_FOR_PICKUP &&
-        order.order_status !== OrderStatus.OUT_FOR_DELIVERY
-      ) {
-        throw new BadRequestException('Order is not ready for pickup');
-      }
-
-      order.order_status = OrderStatus.DELIVERED;
-      order.delivered_by_supervisor = userId;
-      order.delivered_at = new Date();
-
-      await manager.getRepository(Order).save(order);
-
-      await this.auditService.log({
-        branchId: tab.branch_id,
-        userId,
-        action: 'order.deliver',
-        entityId: id,
-        entityType: 'order',
-      });
-
-      return order;
-    });
   }
 
   private async findGroupedOrdersByBranch(
@@ -396,11 +489,11 @@ export class OrderService {
     orderField: string,
     pagination?: { page: number; per_page: number },
     waiterId?: string,
-  ): Promise<{ data: Array<Record<string, unknown>>; total: number }> {
+  ) {
     const orderClause =
       orderField === 'created_at'
         ? 'o.created_at DESC'
-        : 'o.timer_ends_at ASC NULLS LAST';
+        : 'MIN(o.timer_ends_at) ASC NULLS LAST';
 
     const params: any[] = [branchId, statuses];
     let waiterClause = '';
@@ -422,10 +515,7 @@ export class OrderService {
     `;
 
     const countSql = `SELECT COUNT(DISTINCT o.tab_id) AS total ${baseQuery}`;
-    const countResult = await this.dataSource.query<Array<{ total: string }>>(
-      countSql,
-      params,
-    );
+    const countResult = await this.dataSource.query(countSql, params);
     const total = parseInt(countResult[0]?.total || '0', 10);
 
     let paginationClause = '';
@@ -482,15 +572,12 @@ export class OrderService {
           ) ORDER BY o.created_at
         ) AS items
       ${baseQuery}
-      GROUP BY o.tab_id, o.created_at, t.table_id, tbl.table_number, t.waiter_id, w.full_name, t.tab_type
+      GROUP BY o.tab_id, o.created_at, t.table_id, tbl.table_number, t.waiter_id, w.full_name, t.tracking_code, t.tracking_generated_at, t.tab_type
       ORDER BY ${orderClause}
       ${paginationClause}
     `;
 
-    const rows = await this.dataSource.query<Array<Record<string, unknown>>>(
-      dataSql,
-      params,
-    );
+    const rows = await this.dataSource.query(dataSql, params);
     return { data: rows, total };
   }
 

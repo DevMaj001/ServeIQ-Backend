@@ -50,14 +50,14 @@ export class Order {
     length: 20,
     default: FulfillmentType.SERVE,
   })
-  fulfillment_type: FulfillmentType;
+  fulfillment_type: string;
 
   @Column({
     type: 'varchar',
     length: 40,
     default: OrderStatus.PENDING_SUPERVISOR_APPROVAL,
   })
-  order_status: OrderStatus;
+  order_status: string;
 
   @Column({ type: 'uuid', nullable: true })
   approved_by: string | null;

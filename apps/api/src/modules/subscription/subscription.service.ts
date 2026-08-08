@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, EntityManager } from 'typeorm';
@@ -14,19 +15,12 @@ import {
 import { Plan } from './entities/plan.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { Business } from '../business/entities/business.entity';
-import Paystack from 'paystack';
 
-interface PaystackWebhookData {
-  customer?: { email?: string; customer_code?: string };
-  subscription?: { next_payment_date?: string; subscription_code?: string };
-  subscription_code?: string;
-  created_at?: string | number | Date;
-  [key: string]: unknown;
-}
+const Paystack = require('paystack');
 
 @Injectable()
 export class SubscriptionService {
-  private paystack: Paystack | null = null;
+  private paystack: any;
 
   constructor(
     @InjectRepository(Subscription)
@@ -67,9 +61,36 @@ export class SubscriptionService {
       );
     }
 
-    const plan = await this.planRepo.findOne({
-      where: { id: planId, is_active: true },
-    });
+    const isUUIDRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    let plan = null;
+    if (isUUIDRegex.test(planId)) {
+      plan = await this.planRepo.findOne({
+        where: { id: planId, is_active: true },
+      });
+    } else {
+      if (planId.startsWith('fallback-')) {
+        const inner = planId.slice('fallback-'.length);
+        const parts = inner.split('-');
+        if (parts.length >= 1) {
+          const name = parts[0];
+          const currency =
+            parts.length >= 2
+              ? parts[parts.length - 1].toUpperCase()
+              : undefined;
+          const qb = this.planRepo
+            .createQueryBuilder('p')
+            .where('LOWER(p.name) = LOWER(:name)', { name })
+            .andWhere('p.is_active = :active', { active: true })
+            .orderBy('p.created_at', 'ASC')
+            .take(1);
+          if (currency) {
+            qb.andWhere('p.currency = :currency', { currency });
+          }
+          plan = await qb.getOne();
+        }
+      }
+    }
     if (!plan) {
       throw new NotFoundException('Plan not found or inactive');
     }
@@ -92,16 +113,14 @@ export class SubscriptionService {
     let customerCode = subscription?.paystack_customer_code ?? null;
 
     if (!customerCode) {
-      let customerResp: Awaited<ReturnType<Paystack['customer']['create']>>;
+      let customerResp;
       try {
         customerResp = await this.paystack.customer.create({
           email: customerEmail,
         });
       } catch (e) {
         throw new BadRequestException(
-          `Paystack customer creation failed: ${
-            e instanceof Error ? e.message : String(e)
-          }`,
+          `Paystack customer creation failed: ${e.message}`,
         );
       }
       if (!customerResp?.status) {
@@ -109,7 +128,7 @@ export class SubscriptionService {
           customerResp?.message || 'Failed to create Paystack customer',
         );
       }
-      customerCode = customerResp.data?.customer_code ?? null;
+      customerCode = customerResp.data?.customer_code;
       if (!customerCode) {
         throw new BadRequestException('Failed to create Paystack customer');
       }
@@ -122,9 +141,7 @@ export class SubscriptionService {
       );
     }
 
-    let initializeResp: Awaited<
-      ReturnType<Paystack['transaction']['initialize']>
-    >;
+    let initializeResp;
     try {
       initializeResp = await this.paystack.transaction.initialize({
         amount: plan.price,
@@ -141,9 +158,7 @@ export class SubscriptionService {
       });
     } catch (e) {
       throw new BadRequestException(
-        `Paystack transaction initialization failed: ${
-          e instanceof Error ? e.message : String(e)
-        }`,
+        `Paystack transaction initialization failed: ${e.message}`,
       );
     }
 
@@ -154,25 +169,19 @@ export class SubscriptionService {
     }
 
     if (subscription) {
-      subscription.plan_id = planId;
+      subscription.plan_id = plan.id;
       subscription.paystack_customer_code = customerCode;
       subscription.status = SubscriptionStatus.TRIALING;
       await this.subscriptionRepo.save(subscription);
     } else {
       subscription = this.subscriptionRepo.create({
         branch_id: branchId,
-        plan_id: planId,
+        plan_id: plan.id,
         paystack_customer_code: customerCode,
         status: SubscriptionStatus.TRIALING,
         trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
       });
       await this.subscriptionRepo.save(subscription);
-    }
-
-    if (!initializeResp.data) {
-      throw new BadRequestException(
-        'Failed to initialize Paystack transaction: missing data',
-      );
     }
 
     return {
@@ -182,7 +191,7 @@ export class SubscriptionService {
     };
   }
 
-  async handleChargeSuccess(data: PaystackWebhookData) {
+  async handleChargeSuccess(data: any) {
     const customerEmail = data.customer?.email;
     if (!customerEmail) return;
 
@@ -203,10 +212,10 @@ export class SubscriptionService {
 
     subscription.status = SubscriptionStatus.ACTIVE;
     subscription.current_period_start = new Date(
-      data.created_at as string | number,
+      this.toDateFromPaystack(data.created_at) ?? Date.now(),
     );
     subscription.current_period_end = new Date(
-      data.subscription?.next_payment_date ||
+      this.toDateFromPaystack(data.subscription?.next_payment_date) ??
         Date.now() + 30 * 24 * 60 * 60 * 1000,
     );
     subscription.paystack_customer_code =
@@ -219,7 +228,7 @@ export class SubscriptionService {
     await this.subscriptionRepo.save(subscription);
   }
 
-  async handleSubscriptionCreate(data: PaystackWebhookData) {
+  async handleSubscriptionCreate(data: any) {
     const customerCode = data.customer?.customer_code;
     if (!customerCode) return;
 
@@ -228,13 +237,12 @@ export class SubscriptionService {
     });
     if (!subscription) return;
 
-    subscription.paystack_subscription_code =
-      data.subscription_code ?? subscription.paystack_subscription_code;
+    subscription.paystack_subscription_code = data.subscription_code;
 
     await this.subscriptionRepo.save(subscription);
   }
 
-  async handleInvoicePaymentFailed(data: PaystackWebhookData) {
+  async handleInvoicePaymentFailed(data: any) {
     const customerEmail = data.customer?.email;
     if (!customerEmail) return;
 
@@ -261,7 +269,7 @@ export class SubscriptionService {
     await this.subscriptionRepo.save(subscription);
   }
 
-  async handleSubscriptionDisable(data: PaystackWebhookData) {
+  async handleSubscriptionDisable(data: any) {
     const subscriptionCode = data.subscription_code;
     if (!subscriptionCode) return;
 
@@ -275,11 +283,34 @@ export class SubscriptionService {
     await this.subscriptionRepo.save(subscription);
   }
 
-  async getPlans() {
+  async getPlans(includeInactive = false) {
     const plans = await this.planRepo.find({
-      where: { is_active: true },
+      where: includeInactive ? {} : { is_active: true },
       order: { price: 'ASC' },
     });
+
+    if (plans.length === 0) {
+      const allPlans = await this.planRepo.find();
+      if (allPlans.length > 0) {
+        const inactiveOnly = allPlans.every((p) => !p.is_active);
+        console.error(
+          'CRITICAL: No active plans found. ' +
+            (inactiveOnly
+              ? 'All plans are inactive!'
+              : 'Database is missing plans entirely.'),
+          allPlans.map((p) => ({
+            name: p.name,
+            currency: p.currency,
+            is_active: p.is_active,
+          })),
+        );
+      } else {
+        console.error(
+          'CRITICAL: No plans found in database at all. Seed migration may not have run.',
+        );
+      }
+    }
+
     const seen = new Set<string>();
     return plans.filter((p) => {
       const key = p.name.toLowerCase();
@@ -287,6 +318,59 @@ export class SubscriptionService {
       seen.add(key);
       return true;
     });
+  }
+
+  // Admin plan management
+  async createPlan(dto: any) {
+    const existing = await this.planRepo.findOne({
+      where: { name: dto.name, currency: dto.currency },
+    });
+    if (existing) {
+      throw new ConflictException(
+        `Plan "${dto.name}" already exists for currency ${dto.currency}`,
+      );
+    }
+    const plan = this.planRepo.create({
+      name: dto.name,
+      price: dto.price,
+      currency: dto.currency,
+      billing_interval: dto.billing_interval || 'monthly',
+      features: dto.features ?? {
+        max_tables: 20,
+        max_waiters: 15,
+        reporting_enabled: true,
+      },
+      is_active: dto.is_active ?? true,
+      paystack_plan_code: dto.paystack_plan_code ?? null,
+    });
+    return this.planRepo.save(plan);
+  }
+
+  async updatePlan(id: string, dto: any) {
+    const plan = await this.planRepo.findOne({ where: { id } });
+    if (!plan) {
+      throw new NotFoundException('Plan not found');
+    }
+    Object.assign(plan, dto);
+    return this.planRepo.save(plan);
+  }
+
+  async deletePlan(id: string) {
+    const plan = await this.planRepo.findOne({ where: { id } });
+    if (!plan) {
+      throw new NotFoundException('Plan not found');
+    }
+    await this.planRepo.remove(plan);
+    return { id };
+  }
+
+  async togglePlanActive(id: string) {
+    const plan = await this.planRepo.findOne({ where: { id } });
+    if (!plan) {
+      throw new NotFoundException('Plan not found');
+    }
+    plan.is_active = !plan.is_active;
+    return this.planRepo.save(plan);
   }
 
   async getCurrent(branchId: string) {
@@ -320,15 +404,14 @@ export class SubscriptionService {
     subscription.canceled_at = new Date();
     await this.subscriptionRepo.save(subscription);
 
-    const paystack = this.paystack;
-    if (paystack && subscription.paystack_subscription_code) {
+    if (subscription.paystack_subscription_code) {
       try {
-        const sub = await paystack.subscription.get(
+        const sub = await this.paystack.subscription.get(
           subscription.paystack_subscription_code,
         );
         const token = sub?.data?.email_token;
         if (token) {
-          await paystack.subscription.disable({
+          await this.paystack.subscription.disable({
             code: subscription.paystack_subscription_code,
             token,
           });
@@ -414,9 +497,21 @@ export class SubscriptionService {
     body: string,
   ): Promise<boolean> {
     const secret = this.configService.get<string>('PAYSTACK_SECRET_KEY');
-    if (!secret) return Promise.resolve(false);
+    if (!secret) return false;
 
     const hash = crypto.createHmac('sha512', secret).update(body).digest('hex');
-    return Promise.resolve(hash === signature);
+    return hash === signature;
+  }
+
+  private toDateFromPaystack(value: any): number | undefined {
+    if (!value) return undefined;
+    if (typeof value === 'number') {
+      return value > 1e12 ? value : value * 1000;
+    }
+    if (typeof value === 'string') {
+      const parsed = Date.parse(value);
+      return Number.isNaN(parsed) ? undefined : parsed;
+    }
+    return undefined;
   }
 }

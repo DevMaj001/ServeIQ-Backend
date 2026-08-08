@@ -24,11 +24,6 @@ import { MenuCategoryService } from './menu-category.service';
 import { CreateMenuCategoryDto } from './dto/create-menu-category.dto';
 import { UpdateMenuCategoryDto } from './dto/update-menu-category.dto';
 
-interface RequestWithUser {
-  user: {
-    branchId: string;
-  };
-}
 @ApiTags('Menu Categories')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -49,7 +44,7 @@ export class MenuCategoryController {
   @ApiOperation({ summary: 'Get all menu categories for the branch' })
   @ApiResponse({ status: 200, description: 'List of menu categories.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async findAll(@Request() req: RequestWithUser) {
+  async findAll(@Request() req: any) {
     return this.categoryService.findAllByBranch(req.user.branchId);
   }
 
@@ -66,7 +61,7 @@ export class MenuCategoryController {
   @ApiParam({ name: 'id', description: 'Menu category UUID' })
   @ApiResponse({ status: 200, description: 'Menu category details.' })
   @ApiResponse({ status: 404, description: 'Menu category not found.' })
-  async findOne(@Param('id') id: string, @Request() req: RequestWithUser) {
+  async findOne(@Param('id') id: string, @Request() req: any) {
     return this.categoryService.findOne(id, req.user.branchId);
   }
 
@@ -74,10 +69,7 @@ export class MenuCategoryController {
   @ApiOperation({ summary: 'Create a new menu category (Owner/Manager only)' })
   @ApiResponse({ status: 201, description: 'Menu category created.' })
   @ApiResponse({ status: 400, description: 'Validation error.' })
-  async create(
-    @Request() req: RequestWithUser,
-    @Body() dto: CreateMenuCategoryDto,
-  ) {
+  async create(@Request() req: any, @Body() dto: CreateMenuCategoryDto) {
     return this.categoryService.create({
       ...dto,
       branch_id: req.user.branchId,
@@ -91,7 +83,7 @@ export class MenuCategoryController {
   @ApiResponse({ status: 404, description: 'Menu category not found.' })
   async update(
     @Param('id') id: string,
-    @Request() req: RequestWithUser,
+    @Request() req: any,
     @Body() dto: UpdateMenuCategoryDto,
   ) {
     return this.categoryService.update(id, req.user.branchId, dto);
@@ -102,7 +94,7 @@ export class MenuCategoryController {
   @ApiParam({ name: 'id', description: 'Menu category UUID' })
   @ApiResponse({ status: 200, description: 'Menu category deleted.' })
   @ApiResponse({ status: 404, description: 'Menu category not found.' })
-  async remove(@Param('id') id: string, @Request() req: RequestWithUser) {
+  async remove(@Param('id') id: string, @Request() req: any) {
     return this.categoryService.remove(id, req.user.branchId);
   }
 }

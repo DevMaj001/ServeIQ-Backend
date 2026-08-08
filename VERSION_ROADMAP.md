@@ -83,8 +83,6 @@ Every version of ServeIQ must:
 | Menu bulk import | CSV upload for menu items |
 | Discount support | Percentage or fixed discount on tab |
 | Customer name tagging | Optional name capture on tab for records |
-| Department routing | Menu items assigned to a department; orders inherit it automatically at creation, so the supervisor's pending feed groups by department instead of by waiter tab |
-| Kitchen tickets | Supervisor approves once per tab/department bundle; items split into one virtual ticket per department (tab + department + round) so each station sees only its own ticket |
 
 ---
 

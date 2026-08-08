@@ -28,34 +28,13 @@ import {
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 
-interface AuthResponse {
-  cookie: (
-    name: string,
-    value: string,
-    options?: Record<string, unknown>,
-  ) => void;
-  clearCookie: (name: string, options?: Record<string, unknown>) => void;
-}
-
-interface AuthRequestUser {
-  userId: string;
-  role?: string;
-  branchId?: string;
-  businessId?: string;
-  email?: string;
-}
-
-interface RequestWithUser {
-  user: AuthRequestUser;
-}
-
 @ApiTags('Authentication')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   private setAuthCookies(
-    res: AuthResponse,
+    res: any,
     tokens: { access_token: string; refresh_token: string | null },
   ) {
     res.cookie('access_token', tokens.access_token, {
@@ -115,7 +94,7 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Invalid credentials.' })
   async login(
     @Body() loginDto: LoginDto,
-    @Response({ passthrough: true }) res: AuthResponse,
+    @Response({ passthrough: true }) res: any,
   ) {
     const tokens = await this.authService.login(loginDto);
     this.setAuthCookies(res, tokens);
@@ -136,7 +115,7 @@ export class AuthController {
   })
   async refresh(
     @Body() refreshDto: RefreshDto,
-    @Response({ passthrough: true }) res: AuthResponse,
+    @Response({ passthrough: true }) res: any,
   ) {
     const tokens = await this.authService.refreshToken(
       refreshDto.refresh_token,
@@ -151,7 +130,7 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Logged out successfully.' })
   async logout(
     @Body() logoutDto: LogoutDto,
-    @Response({ passthrough: true }) res: AuthResponse,
+    @Response({ passthrough: true }) res: any,
   ) {
     res.clearCookie('access_token', { path: '/' });
     res.clearCookie('refresh_token', { path: '/api/v1/auth' });
@@ -182,7 +161,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send email verification code' })
   @ApiResponse({ status: 200, description: 'OK' })
-  async sendVerification(@Request() req: RequestWithUser) {
+  async sendVerification(@Request() req: any) {
     return this.authService.sendEmailVerification(req.user.userId);
   }
 
@@ -192,10 +171,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify email with OTP code' })
   @ApiResponse({ status: 200, description: 'OK' })
-  async verifyEmail(
-    @Request() req: RequestWithUser,
-    @Body() body: { otp: string },
-  ) {
+  async verifyEmail(@Request() req: any, @Body() body: { otp: string }) {
     return this.authService.verifyEmail(req.user.userId, body.otp);
   }
 
@@ -261,7 +237,7 @@ export class AuthController {
   })
   @ApiResponse({ status: 200, description: 'OK' })
   async impersonate(
-    @Request() req: RequestWithUser,
+    @Request() req: any,
     @Body() dto: { businessId: string; branchId?: string },
   ) {
     return this.authService.impersonate(req.user, dto);

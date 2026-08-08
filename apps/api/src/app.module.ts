@@ -58,10 +58,12 @@ import { AddTabType1800000000001 } from './database/migrations/1800000000001-Add
 import { AddFulfillmentType1800000000002 } from './database/migrations/1800000000002-AddFulfillmentType';
 import { RelocateTrackingToTabs1800000000003 } from './database/migrations/1800000000003-RelocateTrackingToTabs';
 import { MakeWaiterIdNullable1800000000004 } from './database/migrations/1800000000004-MakeWaiterIdNullable';
-import { ConsolidateEnsureTables1800000000005 } from './database/migrations/1800000000005-ConsolidateEnsureTables';
-import { AddLoginLockout1800000000006 } from './database/migrations/1800000000006-AddLoginLockout';
 import { BackfillUserRoleId1752892800000 } from './database/migrations/1752892800000-BackfillUserRoleId';
 import { MakeUserRoleIdNotNull1752892800001 } from './database/migrations/1752892800001-MakeUserRoleIdNotNull';
+import { CreatePlatformPaymentProvidersTable1801000000000 } from './database/migrations/1801000000000-CreatePlatformPaymentProvidersTable';
+import { CreateFeedbackTable1802000000000 } from './database/migrations/1802000000000-CreateFeedbackTable';
+import { PlatformPaymentProvider } from './modules/admin/entities/platform-payment-provider.entity';
+import { Feedback } from './modules/feedback/entities/feedback.entity';
 
 import { AuthModule } from './modules/auth/auth.module';
 import { BusinessModule } from './modules/business/business.module';
@@ -92,6 +94,8 @@ import { AdvertisementModule } from './modules/advertisement/advertisement.modul
 import { RoleModule } from './modules/role/role.module';
 import { MenuCategoryModule } from './modules/menu-category/menu-category.module';
 import { UnitModule } from './modules/unit/unit.module';
+import { FeedbackModule } from './modules/feedback/feedback.module';
+import { GatewayModule } from './modules/gateway/gateway.module';
 
 @Module({
   imports: [
@@ -131,6 +135,8 @@ import { UnitModule } from './modules/unit/unit.module';
         Role,
         MenuCategory,
         Unit,
+        PlatformPaymentProvider,
+        Feedback,
       ],
       migrations: [
         BackfillUserRoleId1752892800000,
@@ -155,8 +161,8 @@ import { UnitModule } from './modules/unit/unit.module';
         AddFulfillmentType1800000000002,
         RelocateTrackingToTabs1800000000003,
         MakeWaiterIdNullable1800000000004,
-        ConsolidateEnsureTables1800000000005,
-        AddLoginLockout1800000000006,
+        CreatePlatformPaymentProvidersTable1801000000000,
+        CreateFeedbackTable1802000000000,
       ],
       migrationsRun: true,
       synchronize: false,
@@ -206,6 +212,8 @@ import { UnitModule } from './modules/unit/unit.module';
     HealthModule,
     MenuCategoryModule,
     UnitModule,
+    FeedbackModule,
+    GatewayModule,
   ],
   controllers: [AppController],
   providers: [

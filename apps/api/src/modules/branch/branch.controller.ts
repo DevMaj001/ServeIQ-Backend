@@ -10,6 +10,7 @@ import {
   Request,
   Res,
   Header,
+  NotFoundException,
 } from '@nestjs/common';
 import { BranchService } from './branch.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -25,24 +26,50 @@ import {
 } from '@nestjs/swagger';
 import { CreateBranchDto } from './dto/create-branch.dto';
 import { UpdateBranchDto } from './dto/update-branch.dto';
+import { UpdateBranchSettingsDto } from './dto/update-branch-settings.dto';
 import { DashboardStatsDto } from './dto/dashboard-stats.dto';
 import { Branch } from './entities/branch.entity';
+import { PlatformPaymentProvider } from '../admin/entities/platform-payment-provider.entity';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import * as QRCode from 'qrcode';
 import { Response } from 'express';
-
-interface RequestWithUser {
-  user: {
-    businessId: string;
-    branchId: string;
-  };
-}
 
 @ApiTags('Branches')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
 @Controller('branches')
 export class BranchController {
-  constructor(private readonly branchService: BranchService) {}
+  constructor(
+    private readonly branchService: BranchService,
+    @InjectRepository(Branch)
+    private readonly branchRepository: Repository<Branch>,
+    @InjectRepository(PlatformPaymentProvider)
+    private readonly platformPaymentProviderRepo: Repository<PlatformPaymentProvider>,
+  ) {}
+
+  @Get('payment-providers')
+  @ApiOperation({
+    summary:
+      'List globally-available payment providers defined by the super admin',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Array of enabled platform payment providers.',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized.' })
+  async listPlatformPaymentProviders() {
+    const providers = await this.platformPaymentProviderRepo.find({
+      where: { is_active: true },
+      order: { label: 'ASC' },
+    });
+    return providers.map((p) => ({
+      name: p.name,
+      label: p.label,
+      type: p.type,
+      verification_method: p.verification_method,
+    }));
+  }
 
   @Get()
   @ApiOperation({ summary: 'List all branches for the authenticated business' })
@@ -52,7 +79,7 @@ export class BranchController {
     type: [Branch],
   })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async findAll(@Request() req: RequestWithUser) {
+  async findAll(@Request() req: any) {
     return this.branchService.findAllByBusiness(req.user.businessId);
   }
 
@@ -62,7 +89,7 @@ export class BranchController {
   @ApiResponse({ status: 200, description: 'Branch record.', type: Branch })
   @ApiResponse({ status: 404, description: 'Branch not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async findOne(@Param('id') id: string, @Request() req: RequestWithUser) {
+  async findOne(@Param('id') id: string, @Request() req: any) {
     return this.branchService.findOne(id, req.user.businessId);
   }
 
@@ -74,7 +101,7 @@ export class BranchController {
     type: DashboardStatsDto,
   })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async getDashboardStats(@Request() req: RequestWithUser) {
+  async getDashboardStats(@Request() req: any) {
     return this.branchService.getDashboardStats(req.user.branchId);
   }
 
@@ -85,10 +112,7 @@ export class BranchController {
   @ApiResponse({ status: 201, description: 'Branch created.' })
   @ApiResponse({ status: 400, description: 'Validation error.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async create(
-    @Request() req: RequestWithUser,
-    @Body() createDto: CreateBranchDto,
-  ) {
+  async create(@Request() req: any, @Body() createDto: CreateBranchDto) {
     return this.branchService.create({
       ...createDto,
       business_id: req.user.businessId,
@@ -105,7 +129,7 @@ export class BranchController {
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async update(
     @Param('id') id: string,
-    @Request() req: RequestWithUser,
+    @Request() req: any,
     @Body() updateDto: UpdateBranchDto,
   ) {
     return this.branchService.update(id, req.user.businessId, updateDto);
@@ -121,7 +145,7 @@ export class BranchController {
   @Header('Content-Type', 'image/png')
   async generateQr(
     @Param('id') id: string,
-    @Request() req: RequestWithUser,
+    @Request() req: any,
     @Res() res: Response,
   ) {
     const branch = await this.branchService.findOne(id, req.user.businessId);
@@ -147,7 +171,31 @@ export class BranchController {
   @ApiResponse({ status: 200, description: 'Branch deleted.' })
   @ApiResponse({ status: 404, description: 'Branch not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async remove(@Param('id') id: string, @Request() req: RequestWithUser) {
+  async remove(@Param('id') id: string, @Request() req: any) {
     return this.branchService.remove(id, req.user.businessId);
+  }
+
+  @Patch(':id/settings')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERADMIN)
+  @ApiOperation({
+    summary:
+      'Update branch settings (payment provider, webhook keys, takeaway policy)',
+  })
+  @ApiParam({ name: 'id', description: 'Branch UUID' })
+  @ApiResponse({ status: 200, description: 'Settings updated.' })
+  @ApiResponse({ status: 404, description: 'Branch not found.' })
+  @ApiResponse({ status: 401, description: 'Unauthorized.' })
+  async updateSettings(
+    @Param('id') id: string,
+    @Request() req: any,
+    @Body() dto: UpdateBranchSettingsDto,
+  ) {
+    const branch = await this.branchService.findOne(id, req.user.businessId);
+    if (!branch) throw new NotFoundException('Branch not found');
+    const currentSettings = branch.settings || {};
+    const newSettings = { ...currentSettings, ...dto.settings };
+    branch.settings = newSettings;
+    return this.branchRepository.save(branch);
   }
 }

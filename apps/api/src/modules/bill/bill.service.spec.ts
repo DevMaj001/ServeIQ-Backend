@@ -13,42 +13,36 @@ import { DataSource } from 'typeorm';
 import { IngredientService } from '../ingredient/ingredient.service';
 import { ReceiptService } from './receipt.service';
 import { CloudinaryService } from '../../cloudinary/cloudinary.service';
-import { PaymentMethod } from '../../common/shared';
+import { RealtimeService } from '../gateway/realtime.service';
 
-type MockRepoShape = {
-  findOne: jest.Mock;
-  find: jest.Mock;
-  create: jest.Mock;
-  save: jest.Mock;
-  update: jest.Mock;
-};
+const mockRealtimeService = () => ({
+  emitBillUpdate: jest.fn(),
+  emitDashboardUpdate: jest.fn(),
+});
 
 describe('BillService', () => {
   let service: BillService;
-  let billRepo: MockRepoShape;
-  let tabRepo: MockRepoShape;
-  let orderRepo: MockRepoShape;
-  let tableRepo: MockRepoShape;
-  let branchRepo: MockRepoShape;
-  let businessRepo: MockRepoShape;
-  let dataSource: { transaction: jest.Mock };
-  let ingredientService: { deductByTab: jest.Mock };
-  let receiptService: { generatePdf: jest.Mock };
-  let cloudinaryService: { uploadFile: jest.Mock };
+  let billRepo: any;
+  let tabRepo: any;
+  let orderRepo: any;
+  let tableRepo: any;
+  let branchRepo: any;
+  let businessRepo: any;
+  let dataSource: any;
+  let ingredientService: any;
+  let receiptService: any;
+  let cloudinaryService: any;
 
-  const mockRepo = (): MockRepoShape => ({
+  const mockRepo = () => ({
     findOne: jest.fn(),
     find: jest.fn(),
-    create: jest.fn((dto: unknown) => dto),
-    save: jest.fn(async (entity: object): Promise<Record<string, unknown>> => {
-      await Promise.resolve();
-      return {
-        ...entity,
-        id: 'bill-1',
-        created_at: new Date(),
-        updated_at: new Date(),
-      };
-    }),
+    create: jest.fn((dto) => dto),
+    save: jest.fn(async (entity) => ({
+      ...entity,
+      id: 'bill-1',
+      created_at: new Date(),
+      updated_at: new Date(),
+    })),
     update: jest.fn(),
   });
 
@@ -61,13 +55,22 @@ describe('BillService', () => {
     businessRepo = mockRepo();
 
     dataSource = {
-      transaction: jest.fn(<T>(cb: (em: unknown) => Promise<T>) =>
+      transaction: jest.fn(async (cb) =>
         cb({
           getRepository: jest.fn(() => ({
             findOne: jest.fn(),
             find: jest.fn().mockResolvedValue([]),
             update: jest.fn(),
-            save: jest.fn((e: unknown) => Promise.resolve(e)),
+            save: jest.fn(async (e) => e),
+            createQueryBuilder: () => ({
+              update: () => ({
+                set: () => ({
+                  where: () => ({
+                    andWhere: () => ({ execute: jest.fn() }),
+                  }),
+                }),
+              }),
+            }),
           })),
         }),
       ),
@@ -98,6 +101,7 @@ describe('BillService', () => {
         { provide: IngredientService, useValue: ingredientService },
         { provide: ReceiptService, useValue: receiptService },
         { provide: CloudinaryService, useValue: cloudinaryService },
+        { provide: RealtimeService, useValue: mockRealtimeService() },
       ],
     }).compile();
 
@@ -250,7 +254,7 @@ describe('BillService', () => {
 
       const result = await service.processPayment('tab-1', 'user-1', 'owner', {
         amount: 5000,
-        method: 'cash' as PaymentMethod,
+        method: 'cash' as any,
       });
 
       expect(result.payment_method).toBe('cash');
@@ -267,7 +271,7 @@ describe('BillService', () => {
 
       const result = await service.processPayment('tab-1', 'user-1', 'owner', {
         amount: 5000,
-        method: 'card' as PaymentMethod,
+        method: 'card' as any,
         idempotency_key: 'dup-key',
       });
 
@@ -287,7 +291,7 @@ describe('BillService', () => {
       const result = await service.splitEvenly('tab-1', 'user-1', 'owner', 3);
 
       expect(result).toHaveLength(3);
-      const total = result.reduce((s: number, b) => s + b.total_kobo, 0);
+      const total = result.reduce((s: number, b: any) => s + b.total_kobo, 0);
       expect(total).toBe(18000);
     });
   });

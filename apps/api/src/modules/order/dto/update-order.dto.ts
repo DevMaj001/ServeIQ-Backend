@@ -1,6 +1,5 @@
 import { IsNumber, IsOptional, Min, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { ModifierSelectionDto } from './create-order-item.dto';
 
 export class UpdateOrderDto {
   @ApiProperty({ example: 5, minimum: 1 })
@@ -13,8 +12,4 @@ export class UpdateOrderDto {
   @IsString()
   @IsOptional()
   notes?: string;
-
-  @ApiProperty({ type: [ModifierSelectionDto], required: false })
-  @IsOptional()
-  modifiers?: ModifierSelectionDto[];
 }

@@ -294,4 +294,3 @@ The schema is designed to accommodate these without breaking changes:
 - `bill_splits` — multiple payments per bill
 - `customer_profiles` — linked to tabs via customer_id
 - `audit_logs` — every critical mutation recorded
-- `menu_items.department_id` — nullable FK to `departments`; orders inherit it at creation so the supervisor feed auto-routes/group by department (Kitchen tickets are a virtual grouping over `orders.assigned_department + round_number` — no new table)

@@ -169,11 +169,7 @@ export class DashboardService {
       .addSelect('SUM(o.subtotal_kobo)', 'revenue_kobo')
       .groupBy('EXTRACT(HOUR FROM o.created_at)')
       .orderBy('"hour"', 'ASC')
-      .getRawMany<{
-        hour: string;
-        order_count: string;
-        revenue_kobo: string;
-      }>();
+      .getRawMany();
 
     const hourly: Record<
       number,
@@ -252,14 +248,7 @@ export class DashboardService {
   }
 
   async getTableVelocity(branchId: string) {
-    const rows = await this.tabRepository.query<
-      Array<{
-        table_id: string;
-        table_number: string;
-        avg_duration_minutes: string;
-        total_covers: string;
-      }>
-    >(
+    const rows = await this.tabRepository.query(
       `
       SELECT
         t.table_id,
@@ -294,13 +283,7 @@ export class DashboardService {
       : new Date(new Date().setHours(23, 59, 59, 999));
     if (!dateFrom) from.setHours(0, 0, 0, 0);
 
-    const rows = await this.tabRepository.query<
-      Array<{
-        hour: string;
-        total_covers: string;
-        avg_duration_minutes: string;
-      }>
-    >(
+    const rows = await this.tabRepository.query(
       `
       SELECT
         EXTRACT(HOUR FROM t.closed_at)::int AS hour,

@@ -5,6 +5,7 @@ import {
   Body,
   Param,
   Headers,
+  NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
 import {
@@ -17,7 +18,6 @@ import {
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { CustomerService } from './customer.service';
-import { TabType } from '../../common/shared';
 
 @ApiTags('Customer Self-Service')
 @Controller('public')
@@ -60,7 +60,7 @@ export class CustomerController {
       table_id?: string;
       customer_name?: string;
       party_size?: number;
-      tab_type?: TabType;
+      tab_type?: string;
     },
   ) {
     if (!body.branch_id) {

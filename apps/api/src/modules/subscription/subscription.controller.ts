@@ -3,6 +3,9 @@ import {
   Get,
   Post,
   Body,
+  Patch,
+  Delete,
+  Param,
   UseGuards,
   Request,
 } from '@nestjs/common';
@@ -16,16 +19,12 @@ import { SubscriptionService } from './subscription.service';
 import { InitializeSubscriptionDto } from './dto/initialize-subscription.dto';
 import { AdminGrantDto } from './dto/admin-grant.dto';
 import { AdminExtendGraceDto } from './dto/admin-extend-grace.dto';
+import { CreatePlanDto } from './dto/create-plan.dto';
+import { UpdatePlanDto } from './dto/create-plan.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { PERMISSIONS } from '../role/permission-codes';
-
-interface RequestWithUser {
-  user: {
-    branchId: string;
-  };
-}
 
 @ApiTags('Subscriptions')
 @Controller({ path: 'subscriptions', version: '1' })
@@ -44,7 +43,7 @@ export class SubscriptionController {
   })
   @ApiResponse({ status: 404, description: 'Plan not found' })
   async initialize(
-    @Request() req: RequestWithUser,
+    @Request() req: any,
     @Body() dto: InitializeSubscriptionDto,
   ) {
     return this.subscriptionService.initialize(req.user.branchId, dto.plan_id);
@@ -59,6 +58,63 @@ export class SubscriptionController {
     return this.subscriptionService.getPlans();
   }
 
+  @Get('admin/plans')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.MANAGE_SUBSCRIPTION)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'List all plans including inactive (superadmin)' })
+  @ApiResponse({ status: 200, description: 'List of all plans' })
+  async getAllPlans() {
+    return this.subscriptionService.getPlans(true);
+  }
+
+  @Post('admin/plans')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.MANAGE_SUBSCRIPTION)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Create a new subscription plan (superadmin)' })
+  @ApiResponse({ status: 201, description: 'Plan created' })
+  @ApiResponse({
+    status: 409,
+    description: 'Plan name already exists for currency',
+  })
+  async createPlan(@Body() dto: CreatePlanDto) {
+    return this.subscriptionService.createPlan(dto);
+  }
+
+  @Patch('admin/plans/:id')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.MANAGE_SUBSCRIPTION)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Update a subscription plan (superadmin)' })
+  @ApiResponse({ status: 200, description: 'Plan updated' })
+  @ApiResponse({ status: 404, description: 'Plan not found' })
+  async updatePlan(@Param('id') id: string, @Body() dto: UpdatePlanDto) {
+    return this.subscriptionService.updatePlan(id, dto);
+  }
+
+  @Patch('admin/plans/:id/toggle')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.MANAGE_SUBSCRIPTION)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Toggle plan active/inactive (superadmin)' })
+  @ApiResponse({ status: 200, description: 'Plan toggled' })
+  @ApiResponse({ status: 404, description: 'Plan not found' })
+  async togglePlan(@Param('id') id: string) {
+    return this.subscriptionService.togglePlanActive(id);
+  }
+
+  @Delete('admin/plans/:id')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.MANAGE_SUBSCRIPTION)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Delete a subscription plan (superadmin)' })
+  @ApiResponse({ status: 200, description: 'Plan deleted' })
+  @ApiResponse({ status: 404, description: 'Plan not found' })
+  async deletePlan(@Param('id') id: string) {
+    return this.subscriptionService.deletePlan(id);
+  }
+
   @Get('current')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
@@ -70,7 +126,7 @@ export class SubscriptionController {
     description: 'Subscription details with plan and timestamps',
   })
   @ApiResponse({ status: 404, description: 'No subscription found' })
-  async getCurrent(@Request() req: RequestWithUser) {
+  async getCurrent(@Request() req: any) {
     return this.subscriptionService.getCurrent(req.user.branchId);
   }
 
@@ -84,7 +140,7 @@ export class SubscriptionController {
     status: 400,
     description: 'Subscription is not eligible for cancellation',
   })
-  async cancel(@Request() req: RequestWithUser) {
+  async cancel(@Request() req: any) {
     return this.subscriptionService.cancel(req.user.branchId);
   }
 
@@ -96,10 +152,7 @@ export class SubscriptionController {
     summary: 'Manually grant or extend a subscription (superadmin only)',
   })
   @ApiResponse({ status: 200, description: 'Subscription granted or extended' })
-  async adminGrant(
-    @Request() req: RequestWithUser,
-    @Body() dto: AdminGrantDto,
-  ) {
+  async adminGrant(@Request() req: any, @Body() dto: AdminGrantDto) {
     return this.subscriptionService.adminGrant(dto);
   }
 
@@ -112,10 +165,7 @@ export class SubscriptionController {
   })
   @ApiResponse({ status: 200, description: 'Grace period extended' })
   @ApiResponse({ status: 404, description: 'Subscription not found' })
-  async extendGrace(
-    @Request() req: RequestWithUser,
-    @Body() dto: AdminExtendGraceDto,
-  ) {
+  async extendGrace(@Request() req: any, @Body() dto: AdminExtendGraceDto) {
     return this.subscriptionService.extendGracePeriod(dto);
   }
 }

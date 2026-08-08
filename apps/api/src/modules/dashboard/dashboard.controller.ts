@@ -1,7 +1,6 @@
 import { Controller, Get, Query, UseGuards, Request } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -22,7 +21,7 @@ export class DashboardController {
     summary: 'Branch overview — totals for tables, open tabs, today revenue',
   })
   @ApiResponse({ status: 200, description: 'Branch overview stats.' })
-  async getBranchOverview(@Request() req: { user: { branchId: string } }) {
+  async getBranchOverview(@Request() req: any) {
     return this.dashboardService.getBranchOverview(req.user.branchId);
   }
 
@@ -31,12 +30,11 @@ export class DashboardController {
     summary: 'Waiter performance — tabs closed and revenue today by waiter',
   })
   @ApiResponse({ status: 200, description: 'Waiter performance list.' })
-  async getWaiterPerformance(@Request() req: { user: { branchId: string } }) {
+  async getWaiterPerformance(@Request() req: any) {
     return this.dashboardService.getWaiterPerformance(req.user.branchId);
   }
 
   @Get('reports/sales')
-  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({
     summary:
       'Sales report with optional date range and payment method breakdown',
@@ -66,7 +64,7 @@ export class DashboardController {
     },
   })
   async getSalesReport(
-    @Request() req: { user: { branchId: string } },
+    @Request() req: any,
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
   ) {
@@ -78,13 +76,12 @@ export class DashboardController {
   }
 
   @Get('reports/peak-hours')
-  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({ summary: 'Orders and revenue grouped by hour of day' })
   @ApiQuery({ name: 'dateFrom', required: false, example: '2026-06-01' })
   @ApiQuery({ name: 'dateTo', required: false, example: '2026-06-28' })
   @ApiResponse({ status: 200, description: 'Hourly breakdown array (0-23).' })
   async getPeakHours(
-    @Request() req: { user: { branchId: string } },
+    @Request() req: any,
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
   ) {
@@ -96,13 +93,12 @@ export class DashboardController {
   }
 
   @Get('reports/items')
-  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({ summary: 'Top selling items report with date range filter' })
   @ApiQuery({ name: 'dateFrom', required: false, example: '2026-06-01' })
   @ApiQuery({ name: 'dateTo', required: false, example: '2026-06-28' })
   @ApiResponse({ status: 200, description: 'Top items list.' })
   async getTopItems(
-    @Request() req: { user: { branchId: string } },
+    @Request() req: any,
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
   ) {
@@ -114,7 +110,6 @@ export class DashboardController {
   }
 
   @Get('reports/table-velocity')
-  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({
     summary: 'Average time between open and close per table (table velocity)',
   })
@@ -122,12 +117,11 @@ export class DashboardController {
     status: 200,
     description: 'Table velocity list sorted by shortest avg duration.',
   })
-  async getTableVelocity(@Request() req: { user: { branchId: string } }) {
+  async getTableVelocity(@Request() req: any) {
     return this.dashboardService.getTableVelocity(req.user.branchId);
   }
 
   @Get('reports/peak-efficiency')
-  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({ summary: 'Covers and avg duration grouped by hour of day' })
   @ApiQuery({ name: 'dateFrom', required: false, example: '2026-06-01' })
   @ApiQuery({ name: 'dateTo', required: false, example: '2026-06-28' })
@@ -136,7 +130,7 @@ export class DashboardController {
     description: 'Hourly efficiency breakdown (0-23).',
   })
   async getPeakEfficiency(
-    @Request() req: { user: { branchId: string } },
+    @Request() req: any,
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
   ) {

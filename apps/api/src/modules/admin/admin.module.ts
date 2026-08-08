@@ -8,6 +8,9 @@ import { User } from '../user/entities/user.entity';
 import { Bill } from '../bill/entities/bill.entity';
 import { Subscription } from '../subscription/entities/subscription.entity';
 import { Plan } from '../subscription/entities/plan.entity';
+import { PlatformPaymentProvider } from './entities/platform-payment-provider.entity';
+import { SyncQueue } from '../sync/sync.entity';
+import { AuditLog } from '../../entities/audit-log.entity';
 
 @Module({
   imports: [
@@ -18,6 +21,9 @@ import { Plan } from '../subscription/entities/plan.entity';
       Bill,
       Subscription,
       Plan,
+      PlatformPaymentProvider,
+      SyncQueue,
+      AuditLog,
     ]),
   ],
   controllers: [AdminController],
