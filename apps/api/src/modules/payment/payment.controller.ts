@@ -31,6 +31,7 @@ import { BillService } from '../bill/bill.service';
 import { ProcessPaymentDto } from '../bill/dto/process-payment.dto';
 import { PaymentMethod } from '../../common/shared';
 import { PaymentVerificationDto } from './dto/payment-verification.dto';
+import { buildPaymentMethods } from './payment-provider.util';
 import * as crypto from 'crypto';
 
 interface PaymentProviderConfig {
@@ -107,19 +108,15 @@ export class PaymentController {
       bill = await this.billRepo.save(bill);
     }
 
-    const activeTerminals = await this.posTerminalRepo.find({
-      where: { branch_id: tab.branch_id, is_active: true },
-    });
+    const [activeTerminals, branch] = await Promise.all([
+      this.posTerminalRepo.find({
+        where: { branch_id: tab.branch_id, is_active: true },
+      }),
+      this.branchRepo.findOne({ where: { id: tab.branch_id } }),
+    ]);
 
-    const paymentMethods: any[] = activeTerminals.map((t) => ({
-      type: 'terminal',
-      id: t.id,
-      label: t.label,
-      account_number: t.account_number || null,
-      has_transfer: t.account_number ? true : false,
-    }));
-
-    paymentMethods.push({ type: 'cash' });
+    const settings = branch?.settings || {};
+    const paymentMethods = buildPaymentMethods(activeTerminals, settings);
 
     return {
       bill_id: bill.id,

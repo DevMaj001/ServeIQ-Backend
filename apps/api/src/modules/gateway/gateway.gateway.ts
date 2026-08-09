@@ -4,6 +4,7 @@ import {
   SubscribeMessage,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
   ConnectedSocket,
   MessageBody,
 } from '@nestjs/websockets';
@@ -32,7 +33,11 @@ const connectedClients = new Map<string, Set<AuthenticatedSocket>>();
 })
 @Injectable()
 export class GatewayGateway
-  implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit
+  implements
+    OnGatewayConnection,
+    OnGatewayDisconnect,
+    OnModuleInit,
+    OnGatewayInit
 {
   @WebSocketServer()
   server: Server;
@@ -41,10 +46,25 @@ export class GatewayGateway
 
   constructor(private readonly jwtService: JwtService) {}
 
+  afterInit(server: Server) {
+    if (server) {
+      (
+        globalThis as unknown as Record<
+          typeof GATEWAY_SERVER,
+          Server | undefined
+        >
+      )[GATEWAY_SERVER] = server;
+    }
+  }
+
   onModuleInit() {
-    // Server will be available after NestJS initializes the gateway
     if (this.server) {
-      (global as any)[GATEWAY_SERVER] = this.server;
+      (
+        globalThis as unknown as Record<
+          typeof GATEWAY_SERVER,
+          Server | undefined
+        >
+      )[GATEWAY_SERVER] = this.server;
     }
   }
 

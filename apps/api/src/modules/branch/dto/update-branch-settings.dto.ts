@@ -16,6 +16,10 @@ export class BranchPaymentSettingsDto {
   @IsString()
   payment_provider?: string;
 
+  @ApiProperty({ type: [String], example: ['manual'], required: false })
+  @IsOptional()
+  enabled_providers?: string[];
+
   @ApiProperty({ type: [Object], required: false })
   @IsOptional()
   payment_providers?: PaymentProviderConfig[];

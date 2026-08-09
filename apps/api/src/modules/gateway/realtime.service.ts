@@ -4,62 +4,81 @@ import { GATEWAY_SERVER } from './gateway.constants';
 
 @Injectable()
 export class RealtimeService {
-  constructor(@Inject(GATEWAY_SERVER) private readonly server: Server) {}
+  constructor(@Inject(GATEWAY_SERVER) private readonly server?: Server) {}
+
+  private get io(): Server | undefined {
+    const live: Server | undefined = (
+      globalThis as unknown as Record<typeof GATEWAY_SERVER, Server | undefined>
+    )[GATEWAY_SERVER];
+    return this.server || live;
+  }
+
+  private emitTo(rooms: string[], event: string, payload: any) {
+    const server = this.io;
+    if (!server) return;
+    for (const room of rooms) {
+      server.to(room).emit(event, payload);
+    }
+  }
 
   emitTabUpdate(branchId: string, tabId: string, data: any) {
-    this.server
-      .to(`branch:${branchId}`)
-      .emit('tab:updated', { tabId, ...data });
-    this.server
-      .to(`managers:${branchId}`)
-      .emit('tab:updated', { tabId, ...data });
+    this.emitTo([`branch:${branchId}`, `managers:${branchId}`], 'tab:updated', {
+      tabId,
+      ...data,
+    });
   }
 
   emitTabCreated(branchId: string, tab: any) {
-    this.server.to(`branch:${branchId}`).emit('tab:created', tab);
-    this.server.to(`tables:${branchId}`).emit('table:status', {
+    this.emitTo(
+      [`branch:${branchId}`, `managers:${branchId}`],
+      'tab:created',
+      tab,
+    );
+    this.emitTo([`tables:${branchId}`], 'table:status', {
       tableId: tab.table_id,
       status: 'occupied',
     });
-    this.server.to(`managers:${branchId}`).emit('tab:created', tab);
   }
 
   emitTabClosed(branchId: string, tabId: string, tableId: string) {
-    this.server.to(`branch:${branchId}`).emit('tab:closed', { tabId });
-    this.server.to(`tables:${branchId}`).emit('table:status', {
+    this.emitTo([`branch:${branchId}`, `managers:${branchId}`], 'tab:closed', {
+      tabId,
+    });
+    this.emitTo([`tables:${branchId}`], 'table:status', {
       tableId,
       status: 'available',
     });
-    this.server.to(`managers:${branchId}`).emit('tab:closed', { tabId });
   }
 
   emitTableStatusChange(branchId: string, tableId: string, status: string) {
-    this.server
-      .to(`tables:${branchId}`)
-      .emit('table:status', { tableId, status });
-    this.server
-      .to(`managers:${branchId}`)
-      .emit('table:status', { tableId, status });
+    this.emitTo(
+      [`tables:${branchId}`, `managers:${branchId}`],
+      'table:status',
+      {
+        tableId,
+        status,
+      },
+    );
   }
 
   emitOrderCreated(branchId: string, order: any) {
-    this.server.to(`orders:${branchId}`).emit('order:created', order);
-    this.server.to(`orders:${branchId}:pending`).emit('order:created', order);
-    this.server.to(`managers:${branchId}`).emit('order:created', order);
+    this.emitTo(
+      [
+        `orders:${branchId}`,
+        `orders:${branchId}:pending`,
+        `managers:${branchId}`,
+      ],
+      'order:created',
+      order,
+    );
   }
 
   emitOrderUpdated(branchId: string, orderId: string, data: any) {
-    this.server
-      .to(`orders:${branchId}`)
-      .emit('order:updated', { orderId, ...data });
+    const rooms = [`orders:${branchId}`, `managers:${branchId}`];
     if (data.order_status) {
-      this.server
-        .to(`orders:${branchId}:${data.order_status}`)
-        .emit('order:updated', { orderId, ...data });
+      rooms.push(`orders:${branchId}:${data.order_status}`);
     }
-    this.server
-      .to(`managers:${branchId}`)
-      .emit('order:updated', { orderId, ...data });
+    this.emitTo(rooms, 'order:updated', { orderId, ...data });
   }
 
   emitOrderStatusChange(
@@ -68,36 +87,38 @@ export class RealtimeService {
     status: string,
     tabId?: string,
   ) {
-    this.server
-      .to(`orders:${branchId}`)
-      .emit('order:status', { orderId, status, tabId });
-    this.server
-      .to(`orders:${branchId}:${status}`)
-      .emit('order:status', { orderId, status, tabId });
-    this.server
-      .to(`managers:${branchId}`)
-      .emit('order:status', { orderId, status, tabId });
+    this.emitTo(
+      [
+        `orders:${branchId}`,
+        `orders:${branchId}:${status}`,
+        `managers:${branchId}`,
+      ],
+      'order:status',
+      { orderId, status, tabId },
+    );
   }
 
   emitDashboardUpdate(branchId: string, data: any) {
-    this.server.to(`dashboard:${branchId}`).emit('dashboard:updated', data);
-    this.server.to(`managers:${branchId}`).emit('dashboard:updated', data);
+    this.emitTo(
+      [`dashboard:${branchId}`, `managers:${branchId}`],
+      'dashboard:updated',
+      data,
+    );
   }
 
   emitNotification(branchId: string, notification: any) {
-    this.server.to(`branch:${branchId}`).emit('notification', notification);
+    this.emitTo([`branch:${branchId}`], 'notification', notification);
   }
 
   emitShiftUpdate(branchId: string, data: any) {
-    this.server.to(`managers:${branchId}`).emit('shift:updated', data);
+    this.emitTo([`managers:${branchId}`], 'shift:updated', data);
   }
 
   emitBillUpdate(branchId: string, tabId: string, data: any) {
-    this.server
-      .to(`branch:${branchId}`)
-      .emit('bill:updated', { tabId, ...data });
-    this.server
-      .to(`managers:${branchId}`)
-      .emit('bill:updated', { tabId, ...data });
+    this.emitTo(
+      [`branch:${branchId}`, `managers:${branchId}`],
+      'bill:updated',
+      { tabId, ...data },
+    );
   }
 }
