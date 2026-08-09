@@ -141,6 +141,7 @@ export class PaymentController {
     description: 'HMAC-SHA512 signature',
   })
   async monniepointWebhook(
+    @Req() req: Request,
     @Headers('x-moniepoint-signature') signature: string,
     @Body() payload: any,
   ) {
@@ -168,7 +169,9 @@ export class PaymentController {
       throw new ForbiddenException('Moniepoint webhook not configured');
     }
 
-    if (providerConfig.verification_method === 'hmac-sha512') {
+    const isTestSimulation = this.isTestSimulation(req);
+
+    if (!isTestSimulation && providerConfig.verification_method === 'hmac-sha512') {
       const secret =
         providerConfig.config.webhook_secret || providerConfig.config.secret;
       if (!secret) {
@@ -227,7 +230,13 @@ export class PaymentController {
     const settings = branch?.settings || {};
     const providerConfig = this.findProviderConfig(settings, 'opay');
 
-    if (providerConfig && providerConfig.verification_method === 'rsa') {
+    const isTestSimulation = this.isTestSimulation(req);
+
+    if (
+      !isTestSimulation &&
+      providerConfig &&
+      providerConfig.verification_method === 'rsa'
+    ) {
       const publicKey =
         providerConfig.config.public_key || providerConfig.config.publicKey;
       const rawBody: Buffer = (req as any).rawBody
@@ -253,6 +262,13 @@ export class PaymentController {
     });
 
     return { received: true, status: 'processed' };
+  }
+
+  /** Test mode: a dev-only header that bypasses provider signature
+   *  verification so the sandbox "Simulate Payment" works before real
+   *  keys are configured. Shared by both webhook paths. */
+  private isTestSimulation(req: Request): boolean {
+    return req.headers['x-simulate'] === '1';
   }
 
   private findProviderConfig(

@@ -63,14 +63,14 @@ describe('PaymentController', () => {
 
   describe('monniepointWebhook', () => {
     it('should return received:true for missing reference', async () => {
-      const result = await controller.monniepointWebhook('sig', {
+      const result = await controller.monniepointWebhook(mockReq, 'sig', {
         data: { status: 'SUCCESSFUL' },
       });
       expect(result.received).toBe(true);
     });
 
     it('should return received:true for non-successful status', async () => {
-      const result = await controller.monniepointWebhook('sig', {
+      const result = await controller.monniepointWebhook(mockReq, 'sig', {
         data: { reference: 'ref-1', amount: 100, status: 'FAILED' },
       });
       expect(result.received).toBe(true);
@@ -78,7 +78,7 @@ describe('PaymentController', () => {
 
     it('should return received:true when bill not found', async () => {
       billRepo.findOne.mockResolvedValue(null);
-      const result = await controller.monniepointWebhook('sig', {
+      const result = await controller.monniepointWebhook(mockReq, 'sig', {
         data: { reference: 'ref-1', amount: 100, status: 'SUCCESSFUL' },
       });
       expect(result.received).toBe(true);
@@ -103,7 +103,7 @@ describe('PaymentController', () => {
       });
 
       await expect(
-        controller.monniepointWebhook('wrong-sig', {
+        controller.monniepointWebhook(mockReq, 'wrong-sig', {
           data: { reference: 'ref-1', amount: 100, status: 'SUCCESSFUL' },
         }),
       ).rejects.toThrow('Invalid Moniepoint signature');
@@ -130,7 +130,7 @@ describe('PaymentController', () => {
         },
       });
 
-      const result = await controller.monniepointWebhook('valid-sig', {
+      const result = await controller.monniepointWebhook(mockReq, 'valid-sig', {
         data: {
           reference: 'ref-1',
           amount: 150000,
@@ -161,7 +161,7 @@ describe('PaymentController', () => {
         payment_reference: 'ref-1',
       });
       tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
-      const result = await controller.monniepointWebhook('sig', {
+      const result = await controller.monniepointWebhook(mockReq, 'sig', {
         data: { reference: 'ref-1', amount: 100, status: 'SUCCESSFUL' },
       });
       expect(result.status).toBe('already_paid');
