@@ -141,4 +141,33 @@ export class CustomerController {
       throw new BadRequestException('x-tracking-code header is required');
     return this.customerService.getTab(tabId, trackingCode);
   }
+
+  @Post('tabs/:tabId/confirm-received')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({
+    summary:
+      'Self-service: customer confirms the order was received -> delivered (no supervisor needed)',
+  })
+  @ApiParam({ name: 'tabId', description: 'Tab UUID' })
+  @ApiHeader({
+    name: 'x-tracking-code',
+    required: true,
+    description: 'Tracking code for the tab',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Ready orders marked as delivered.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'No orders ready / tab not open.',
+  })
+  async confirmReceived(
+    @Param('tabId') tabId: string,
+    @Headers('x-tracking-code') trackingCode: string,
+  ) {
+    if (!trackingCode)
+      throw new BadRequestException('x-tracking-code header is required');
+    return this.customerService.confirmReceived(tabId, trackingCode);
+  }
 }

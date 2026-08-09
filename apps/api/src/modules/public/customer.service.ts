@@ -13,6 +13,7 @@ import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Table } from '../table/entities/table.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { TrackingService } from '../tracking/tracking.service';
+import { RealtimeService } from '../gateway/realtime.service';
 import { TabType, FulfillmentType, OrderStatus } from '../../common/shared';
 
 @Injectable()
@@ -31,6 +32,7 @@ export class CustomerService {
     @Inject(DataSource)
     private dataSource: DataSource,
     private trackingService: TrackingService,
+    private realtimeService: RealtimeService,
   ) {}
 
   async openTab(dto: {
@@ -206,6 +208,61 @@ export class CustomerService {
     if (!tab) throw new NotFoundException('Tab not found');
     if (tab.tracking_code !== trackingCode)
       throw new ForbiddenException('Invalid tracking code');
+
+    return this.getTabResponse(tabId);
+  }
+
+  /** Self-service: the customer confirms they collected the order. This is the
+   *  direct replacement for the supervisor's confirm-pickup → deliver dance —
+   *  no waiter involvement needed for self-service orders. */
+  async confirmReceived(tabId: string, trackingCode: string) {
+    const tab = await this.tabRepo.findOne({ where: { id: tabId } });
+    if (!tab) throw new NotFoundException('Tab not found');
+    if (tab.tracking_code !== trackingCode)
+      throw new ForbiddenException('Invalid tracking code');
+    if (tab.status !== 'open')
+      throw new BadRequestException('Tab is not open');
+    if (tab.waiter_id !== null)
+      throw new BadRequestException('This tab is managed by a waiter');
+
+    const orders = await this.orderRepo.find({
+      where: {
+        tab_id: tabId,
+        order_status: In([
+          OrderStatus.READY_FOR_PICKUP,
+          OrderStatus.OUT_FOR_DELIVERY,
+        ]),
+      },
+    });
+    if (orders.length === 0) {
+      throw new BadRequestException(
+        'No orders are ready to be marked as received',
+      );
+    }
+
+    const now = new Date();
+    for (const order of orders) {
+      order.order_status = OrderStatus.DELIVERED;
+      order.delivered_at = now;
+      order.actual_ready_time = order.actual_ready_time || now;
+    }
+    await this.orderRepo.save(orders);
+
+    for (const order of orders) {
+      this.realtimeService.emitOrderUpdated(tab.branch_id, order.id, {
+        order_status: order.order_status,
+      });
+      this.realtimeService.emitOrderStatusChange(
+        tab.branch_id,
+        order.id,
+        order.order_status,
+        tabId,
+      );
+      this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+        type: 'order_delivered',
+        order,
+      });
+    }
 
     return this.getTabResponse(tabId);
   }
