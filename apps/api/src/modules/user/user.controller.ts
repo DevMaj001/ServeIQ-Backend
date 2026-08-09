@@ -20,7 +20,10 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { PERMISSIONS } from '../role/permission-codes';
 import { UserRole } from '../../common/shared';
 import { UserService } from './user.service';
 import { CreateWaiterDto } from './dto/create-waiter.dto';
@@ -43,8 +46,9 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post('waiters')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.CREATE_STAFF)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Create a waiter or supervisor' })
   @ApiResponse({ status: 201, description: 'User created.' })
@@ -108,8 +112,9 @@ export class UserController {
   }
 
   @Patch('waiters/:id/reset-pin')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.RESET_PASSWORD)
   @ApiBearerAuth('access-token')
   @ApiOperation({
     summary:
@@ -124,8 +129,9 @@ export class UserController {
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.EDIT_STAFF)
   @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: 'Update a user/waiter profile (Owner/Manager only)',
@@ -142,8 +148,9 @@ export class UserController {
   }
 
   @Patch(':id/deactivate')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.EDIT_STAFF)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Deactivate a user (Owner/Manager only)' })
   @ApiParam({ name: 'id', description: 'User UUID' })
@@ -156,8 +163,9 @@ export class UserController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.DELETE_STAFF)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Delete a user (Owner/Manager only)' })
   @ApiResponse({ status: 200, description: 'User deleted.' })

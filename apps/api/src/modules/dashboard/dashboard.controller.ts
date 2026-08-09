@@ -1,6 +1,9 @@
 import { Controller, Get, Query, UseGuards, Request } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { PERMISSIONS } from '../role/permission-codes';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -17,6 +20,8 @@ export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   @Get('dashboard/branch')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.VIEW_DASHBOARD)
   @ApiOperation({
     summary: 'Branch overview — totals for tables, open tabs, today revenue',
   })
@@ -26,6 +31,8 @@ export class DashboardController {
   }
 
   @Get('dashboard/waiters')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.VIEW_DASHBOARD)
   @ApiOperation({
     summary: 'Waiter performance — tabs closed and revenue today by waiter',
   })
@@ -35,6 +42,8 @@ export class DashboardController {
   }
 
   @Get('reports/sales')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.VIEW_DAILY_SALES)
   @ApiOperation({
     summary:
       'Sales report with optional date range and payment method breakdown',
@@ -76,6 +85,8 @@ export class DashboardController {
   }
 
   @Get('reports/peak-hours')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.VIEW_DAILY_SALES)
   @ApiOperation({ summary: 'Orders and revenue grouped by hour of day' })
   @ApiQuery({ name: 'dateFrom', required: false, example: '2026-06-01' })
   @ApiQuery({ name: 'dateTo', required: false, example: '2026-06-28' })
@@ -93,6 +104,8 @@ export class DashboardController {
   }
 
   @Get('reports/items')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.VIEW_DAILY_SALES)
   @ApiOperation({ summary: 'Top selling items report with date range filter' })
   @ApiQuery({ name: 'dateFrom', required: false, example: '2026-06-01' })
   @ApiQuery({ name: 'dateTo', required: false, example: '2026-06-28' })
@@ -110,6 +123,8 @@ export class DashboardController {
   }
 
   @Get('reports/table-velocity')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.VIEW_DAILY_SALES)
   @ApiOperation({
     summary: 'Average time between open and close per table (table velocity)',
   })
@@ -122,6 +137,8 @@ export class DashboardController {
   }
 
   @Get('reports/peak-efficiency')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.VIEW_DAILY_SALES)
   @ApiOperation({ summary: 'Covers and avg duration grouped by hour of day' })
   @ApiQuery({ name: 'dateFrom', required: false, example: '2026-06-01' })
   @ApiQuery({ name: 'dateTo', required: false, example: '2026-06-28' })

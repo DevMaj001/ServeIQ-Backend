@@ -16,7 +16,10 @@ import {
 import { IngredientService } from './ingredient.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { PERMISSIONS } from '../role/permission-codes';
 import { UserRole } from '../../common/shared';
 import {
   ApiTags,
@@ -37,6 +40,8 @@ export class IngredientController {
   constructor(private readonly ingredientService: IngredientService) {}
 
   @Get('inventory')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.VIEW_INVENTORY)
   @ApiOperation({
     summary: 'List all inventory items with current stock levels',
   })
@@ -46,6 +51,8 @@ export class IngredientController {
   }
 
   @Get('inventory/bestsellers')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.VIEW_INVENTORY)
   @ApiOperation({ summary: 'Best-selling items with sales data' })
   @ApiQuery({ name: 'dateFrom', required: false })
   @ApiQuery({ name: 'dateTo', required: false })
@@ -64,6 +71,8 @@ export class IngredientController {
   }
 
   @Get('inventory/alerts')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.VIEW_INVENTORY)
   @ApiOperation({ summary: 'Get items below reorder level' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -72,6 +81,8 @@ export class IngredientController {
   }
 
   @Get('inventory/untracked-items')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.VIEW_INVENTORY)
   @ApiOperation({ summary: 'Get menu items that are not tracked for stock' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -80,6 +91,8 @@ export class IngredientController {
   }
 
   @Get('inventory/audit')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.VIEW_INVENTORY)
   @ApiOperation({ summary: 'Get inventory audit — expected vs actual stock' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -89,6 +102,8 @@ export class IngredientController {
   }
 
   @Get('inventory/:id')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.VIEW_INVENTORY)
   @ApiOperation({ summary: 'Get inventory item by ID' })
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
@@ -98,6 +113,8 @@ export class IngredientController {
   }
 
   @Get('inventory/:id/movements')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.VIEW_INVENTORY)
   @ApiOperation({ summary: 'Get stock movement history for an item' })
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
@@ -107,8 +124,9 @@ export class IngredientController {
   }
 
   @Post('inventory')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.UPDATE_INVENTORY)
   @ApiOperation({ summary: 'Create inventory item (Owner/Manager only)' })
   @ApiResponse({ status: 201, description: 'Item created.' })
   async create(@Request() req: any, @Body() dto: CreateInventoryItemDto) {
@@ -119,8 +137,9 @@ export class IngredientController {
   }
 
   @Patch('inventory/:id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.UPDATE_INVENTORY)
   @ApiOperation({ summary: 'Update inventory item (Owner/Manager only)' })
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
@@ -134,8 +153,9 @@ export class IngredientController {
   }
 
   @Delete('inventory/:id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.UPDATE_INVENTORY)
   @ApiOperation({ summary: 'Delete inventory item (Owner/Manager only)' })
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
@@ -145,6 +165,8 @@ export class IngredientController {
   }
 
   @Get('menu-items/:id/movements')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.VIEW_INVENTORY)
   @ApiOperation({ summary: 'Get stock movement history for a menu item' })
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
@@ -154,6 +176,8 @@ export class IngredientController {
   }
 
   @Post('menu-items/:id/restock')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.ADJUST_STOCK)
   @ApiOperation({ summary: 'Restock a menu item' })
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'Restock successful.' })
@@ -185,8 +209,9 @@ export class IngredientController {
   }
 
   @Post('inventory/reconcile')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.ADJUST_STOCK)
   @ApiOperation({ summary: 'Reconcile inventory (Owner/Manager only)' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -206,6 +231,8 @@ export class IngredientController {
   }
 
   @Get('reports/stock-variance')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.VIEW_INVENTORY)
   @ApiOperation({ summary: 'Stock variance report — expected vs actual' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -214,6 +241,8 @@ export class IngredientController {
   }
 
   @Get('reports/daily-tally')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.VIEW_INVENTORY)
   @ApiOperation({ summary: 'Daily stock tally report' })
   @ApiQuery({ name: 'date', required: false })
   @ApiResponse({ status: 200, description: 'OK' })

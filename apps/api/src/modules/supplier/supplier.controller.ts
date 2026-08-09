@@ -12,7 +12,10 @@ import {
 import { SupplierService } from './supplier.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { PERMISSIONS } from '../role/permission-codes';
 import { UserRole } from '../../common/shared';
 import {
   ApiTags,
@@ -32,6 +35,8 @@ export class SupplierController {
   constructor(private readonly supplierService: SupplierService) {}
 
   @Get()
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.MANAGE_SUPPLIERS)
   @ApiOperation({ summary: 'List all suppliers for the branch' })
   @ApiResponse({
     status: 200,
@@ -43,6 +48,8 @@ export class SupplierController {
   }
 
   @Get(':id')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.MANAGE_SUPPLIERS)
   @ApiOperation({ summary: 'Get a supplier by ID' })
   @ApiParam({ name: 'id' })
   @ApiResponse({
@@ -55,8 +62,8 @@ export class SupplierController {
   }
 
   @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.MANAGE_SUPPLIERS)
   @ApiOperation({ summary: 'Create a supplier (Owner/Manager only)' })
   @ApiResponse({
     status: 200,
@@ -68,8 +75,8 @@ export class SupplierController {
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.MANAGE_SUPPLIERS)
   @ApiOperation({ summary: 'Update a supplier (Owner/Manager only)' })
   @ApiParam({ name: 'id' })
   @ApiResponse({
@@ -86,8 +93,8 @@ export class SupplierController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.MANAGE_SUPPLIERS)
   @ApiOperation({ summary: 'Delete a supplier (Owner/Manager only)' })
   @ApiParam({ name: 'id' })
   @ApiResponse({

@@ -13,7 +13,10 @@ import {
 import { TabService } from './tab.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { PERMISSIONS } from '../role/permission-codes';
 import { UserRole } from '../../common/shared';
 import {
   ApiTags,
@@ -219,8 +222,9 @@ export class TabController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.CLOSE_TABLE)
   @ApiOperation({ summary: 'Delete a tab (Owner/Manager only)' })
   @ApiParam({ name: 'id', description: 'Tab UUID' })
   @ApiResponse({ status: 200, description: 'Tab deleted.' })

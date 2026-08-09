@@ -13,7 +13,10 @@ import {
 import { DepartmentService } from './department.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { PERMISSIONS } from '../role/permission-codes';
 import { UserRole } from '../../common/shared';
 import {
   ApiTags,
@@ -64,6 +67,8 @@ export class DepartmentController {
   }
 
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.EDIT_STAFF)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiOperation({ summary: 'Create a new department' })
   @ApiResponse({ status: 200 })
@@ -73,6 +78,8 @@ export class DepartmentController {
   }
 
   @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.EDIT_STAFF)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiOperation({ summary: 'Update a department' })
   @ApiParam({ name: 'id', description: 'Department UUID' })
@@ -86,6 +93,8 @@ export class DepartmentController {
   }
 
   @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.EDIT_STAFF)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiOperation({ summary: 'Delete a department' })
   @ApiParam({ name: 'id', description: 'Department UUID' })

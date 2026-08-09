@@ -12,7 +12,10 @@ import {
 import { PosService } from './pos.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { PERMISSIONS } from '../role/permission-codes';
 import { UserRole } from '../../common/shared';
 import {
   ApiTags,
@@ -73,8 +76,9 @@ export class PosController {
   }
 
   @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.PAYMENT_GATEWAY)
   @ApiOperation({ summary: 'Create a POS terminal (Owner/Manager only)' })
   @ApiResponse({ status: 201, description: 'POS terminal created.' })
   @ApiResponse({ status: 400, description: 'Validation error.' })
@@ -84,8 +88,9 @@ export class PosController {
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.PAYMENT_GATEWAY)
   @ApiOperation({ summary: 'Update a POS terminal (Owner/Manager only)' })
   @ApiParam({ name: 'id', description: 'POS Terminal UUID' })
   @ApiResponse({ status: 200, description: 'POS terminal updated.' })
@@ -100,8 +105,9 @@ export class PosController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.PAYMENT_GATEWAY)
   @ApiOperation({ summary: 'Delete a POS terminal (Owner/Manager only)' })
   @ApiParam({ name: 'id', description: 'POS Terminal UUID' })
   @ApiResponse({ status: 200, description: 'POS terminal deleted.' })

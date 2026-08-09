@@ -96,8 +96,9 @@ export class MenuController {
   }
 
   @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.CREATE_MENU)
   @ApiOperation({ summary: 'Create a new menu item (Owner/Manager only)' })
   @ApiResponse({
     status: 201,
@@ -119,8 +120,9 @@ export class MenuController {
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.EDIT_MENU)
   @ApiOperation({ summary: 'Update a menu item (Owner/Manager only)' })
   @ApiParam({ name: 'id', description: 'Menu item UUID' })
   @ApiResponse({ status: 200, description: 'Menu item updated.' })
@@ -139,8 +141,9 @@ export class MenuController {
   }
 
   @Post('import')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.CREATE_MENU)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
@@ -191,8 +194,9 @@ export class MenuController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.DELETE_MENU)
   @ApiOperation({ summary: 'Delete a menu item (Owner/Manager only)' })
   @ApiParam({ name: 'id', description: 'Menu item UUID' })
   @ApiResponse({ status: 200, description: 'Menu item deleted.' })

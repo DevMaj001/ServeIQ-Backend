@@ -24,7 +24,10 @@ import { Observable, map } from 'rxjs';
 import { PrinterService } from './printer.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { PERMISSIONS } from '../role/permission-codes';
 import { UserRole } from '../../common/shared';
 import { CreatePrinterDto } from './dto/create-printer.dto';
 import { UpdatePrinterDto } from './dto/update-printer.dto';
@@ -54,8 +57,9 @@ export class PrinterController {
   }
 
   @Post('printers')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.RESTAURANT_SETTINGS)
   @ApiOperation({ summary: 'Register a printer (Owner/Manager only)' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -64,8 +68,9 @@ export class PrinterController {
   }
 
   @Patch('printers/:id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.RESTAURANT_SETTINGS)
   @ApiOperation({
     summary: 'Update printer configuration (Owner/Manager only)',
   })
@@ -81,8 +86,9 @@ export class PrinterController {
   }
 
   @Delete('printers/:id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.RESTAURANT_SETTINGS)
   @ApiOperation({ summary: 'Remove a printer (Owner/Manager only)' })
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })

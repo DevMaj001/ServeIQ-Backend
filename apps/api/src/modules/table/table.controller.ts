@@ -13,7 +13,10 @@ import {
 import { TableService } from './table.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { PERMISSIONS } from '../role/permission-codes';
 import { UserRole } from '../../common/shared';
 import {
   ApiTags,
@@ -70,8 +73,9 @@ export class TableController {
   }
 
   @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.OPEN_TABLE)
   @ApiOperation({ summary: 'Create a new table (Owner/Manager only)' })
   @ApiResponse({ status: 201, description: 'Table created.', type: Table })
   @ApiResponse({ status: 400, description: 'Validation error.' })
@@ -92,8 +96,9 @@ export class TableController {
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.OPEN_TABLE)
   @ApiOperation({ summary: 'Update a table (Owner/Manager only)' })
   @ApiParam({ name: 'id', description: 'Table UUID' })
   @ApiResponse({ status: 200, description: 'Table updated.' })
@@ -128,8 +133,9 @@ export class TableController {
   }
 
   @Post(':id/release')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.CLOSE_TABLE)
   @ApiOperation({
     summary: 'Force-release a table and void its open tab (owner/manager only)',
   })
@@ -150,8 +156,9 @@ export class TableController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.OPEN_TABLE)
   @ApiOperation({ summary: 'Delete a table (Owner/Manager only)' })
   @ApiParam({ name: 'id', description: 'Table UUID' })
   @ApiResponse({ status: 200, description: 'Table deleted.' })

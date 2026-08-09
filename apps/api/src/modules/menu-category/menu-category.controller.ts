@@ -18,7 +18,10 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { PERMISSIONS } from '../role/permission-codes';
 import { UserRole } from '../../common/shared';
 import { MenuCategoryService } from './menu-category.service';
 import { CreateMenuCategoryDto } from './dto/create-menu-category.dto';
@@ -66,6 +69,9 @@ export class MenuCategoryController {
   }
 
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.CREATE_MENU)
   @ApiOperation({ summary: 'Create a new menu category (Owner/Manager only)' })
   @ApiResponse({ status: 201, description: 'Menu category created.' })
   @ApiResponse({ status: 400, description: 'Validation error.' })
@@ -77,6 +83,9 @@ export class MenuCategoryController {
   }
 
   @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.EDIT_MENU)
   @ApiOperation({ summary: 'Update a menu category (Owner/Manager only)' })
   @ApiParam({ name: 'id', description: 'Menu category UUID' })
   @ApiResponse({ status: 200, description: 'Menu category updated.' })
@@ -90,6 +99,9 @@ export class MenuCategoryController {
   }
 
   @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.DELETE_MENU)
   @ApiOperation({ summary: 'Delete a menu category (Owner/Manager only)' })
   @ApiParam({ name: 'id', description: 'Menu category UUID' })
   @ApiResponse({ status: 200, description: 'Menu category deleted.' })

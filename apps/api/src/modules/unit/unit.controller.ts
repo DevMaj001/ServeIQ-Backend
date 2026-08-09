@@ -18,7 +18,10 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { PERMISSIONS } from '../role/permission-codes';
 import { UserRole } from '../../common/shared';
 import { UnitService } from './unit.service';
 import { CreateUnitDto } from './dto/create-unit.dto';
@@ -66,6 +69,9 @@ export class UnitController {
   }
 
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.CREATE_MENU)
   @ApiOperation({
     summary:
       'Create a new unit (Owner/Manager only). If name already exists, returns existing.',
@@ -83,6 +89,9 @@ export class UnitController {
   }
 
   @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.EDIT_MENU)
   @ApiOperation({ summary: 'Update a unit (Owner/Manager only)' })
   @ApiParam({ name: 'id', description: 'Unit UUID' })
   @ApiResponse({ status: 200, description: 'Unit updated.' })
@@ -96,6 +105,9 @@ export class UnitController {
   }
 
   @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.DELETE_MENU)
   @ApiOperation({ summary: 'Delete a unit (Owner/Manager only)' })
   @ApiParam({ name: 'id', description: 'Unit UUID' })
   @ApiResponse({ status: 200, description: 'Unit deleted.' })
