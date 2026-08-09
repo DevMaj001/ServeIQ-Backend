@@ -220,7 +220,7 @@ export class CustomerService {
     if (!tab) throw new NotFoundException('Tab not found');
     if (tab.tracking_code !== trackingCode)
       throw new ForbiddenException('Invalid tracking code');
-    if (tab.status !== 'open')
+    if (tab.status !== 'open' && tab.status !== 'paid')
       throw new BadRequestException('Tab is not open');
     if (tab.waiter_id !== null)
       throw new BadRequestException('This tab is managed by a waiter');
