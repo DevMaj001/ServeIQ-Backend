@@ -27,6 +27,8 @@ const mockRepo = () => ({
   createQueryBuilder: jest.fn().mockReturnThis(),
 });
 
+const mockReq = { rawBody: undefined } as any;
+
 describe('PaymentController', () => {
   let controller: PaymentController;
   let billRepo: any;
@@ -115,7 +117,17 @@ describe('PaymentController', () => {
       });
       tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
       branchRepo.findOne.mockResolvedValue({
-        settings: { payment_providers: [] },
+        settings: {
+          payment_providers: [
+            {
+              name: 'monniepoint',
+              type: 'webhook',
+              label: 'Moniepoint',
+              verification_method: 'none',
+              config: {},
+            },
+          ],
+        },
       });
 
       const result = await controller.monniepointWebhook('valid-sig', {
@@ -158,14 +170,14 @@ describe('PaymentController', () => {
 
   describe('opayWebhook', () => {
     it('should return received:true for missing reference', async () => {
-      const result = await controller.opayWebhook('sig', {
+      const result = await controller.opayWebhook(mockReq, 'sig', {
         data: { status: 'SUCCESS' },
       });
       expect(result.received).toBe(true);
     });
 
     it('should return received:true for non-successful status', async () => {
-      const result = await controller.opayWebhook('sig', {
+      const result = await controller.opayWebhook(mockReq, 'sig', {
         data: { reference: 'ref-1', amount: 100, status: 'FAILED' },
       });
       expect(result.received).toBe(true);
@@ -185,14 +197,14 @@ describe('PaymentController', () => {
               name: 'opay',
               type: 'webhook',
               label: 'OPay',
-              verification_method: 'rsa',
-              config: { public_key: 'key123' },
+              verification_method: 'none',
+              config: {},
             },
           ],
         },
       });
 
-      const result = await controller.opayWebhook('valid-sig', {
+      const result = await controller.opayWebhook(mockReq, 'valid-sig', {
         data: {
           reference: 'ref-1',
           amount: 50000,
@@ -227,14 +239,14 @@ describe('PaymentController', () => {
               name: 'opay',
               type: 'webhook',
               label: 'OPay',
-              verification_method: 'rsa',
-              config: { public_key: 'key123' },
+              verification_method: 'none',
+              config: {},
             },
           ],
         },
       });
 
-      const result = await controller.opayWebhook('valid-sig', {
+      const result = await controller.opayWebhook(mockReq, 'valid-sig', {
         data: {
           reference: 'ref-1',
           amount: 50000,
@@ -253,6 +265,39 @@ describe('PaymentController', () => {
           idempotency_key: 'opay-ref-1',
         }),
       );
+    });
+
+    it('should reject an invalid RSA signature when rsa verification is configured', async () => {
+      billRepo.findOne.mockResolvedValue({
+        tab_id: 'tab-1',
+        paid_at: null,
+        payment_reference: 'ref-1',
+      });
+      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
+      branchRepo.findOne.mockResolvedValue({
+        settings: {
+          payment_providers: [
+            {
+              name: 'opay',
+              type: 'webhook',
+              label: 'OPay',
+              verification_method: 'rsa',
+              config: { public_key: '-----BEGIN PUBLIC KEY-----not-a-key' },
+            },
+          ],
+        },
+      });
+
+      await expect(
+        controller.opayWebhook(mockReq, 'not-a-valid-signature', {
+          data: {
+            reference: 'ref-1',
+            amount: 50000,
+            status: 'SUCCESS',
+            transactionType: 'TRANSFER',
+          },
+        }),
+      ).rejects.toThrow('Invalid OPay signature');
     });
   });
 });

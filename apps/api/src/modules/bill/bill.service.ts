@@ -192,6 +192,14 @@ export class BillService {
     });
     if (!bill) throw new NotFoundException('Bill not found');
 
+    // Reject underpayments: a bill must not be settled for less than its total.
+    // Guards against truncated webhook amounts silently closing a larger bill.
+    if (bill.total_kobo && paymentDto.amount < bill.total_kobo) {
+      throw new BadRequestException(
+        `Payment amount ${paymentDto.amount} is less than bill total ${bill.total_kobo}`,
+      );
+    }
+
     if (paymentDto.idempotency_key) {
       const existing = await this.billRepository.findOne({
         where: { idempotency_key: paymentDto.idempotency_key },

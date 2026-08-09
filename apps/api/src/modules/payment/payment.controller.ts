@@ -4,6 +4,7 @@ import {
   Get,
   Body,
   Query,
+  Req,
   NotFoundException,
   BadRequestException,
   ForbiddenException,
@@ -11,6 +12,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { Request } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -162,14 +164,17 @@ export class PaymentController {
     });
     const settings = branch?.settings || {};
     const providerConfig = this.findProviderConfig(settings, 'monniepoint');
+    if (!providerConfig) {
+      throw new ForbiddenException('Moniepoint webhook not configured');
+    }
 
-    if (
-      providerConfig &&
-      providerConfig.verification_method === 'hmac-sha512'
-    ) {
+    if (providerConfig.verification_method === 'hmac-sha512') {
       const secret =
         providerConfig.config.webhook_secret || providerConfig.config.secret;
-      if (secret && !this.verifyHmacSignature(payload, signature, secret)) {
+      if (!secret) {
+        throw new ForbiddenException('Moniepoint webhook secret not configured');
+      }
+      if (!this.verifyHmacSignature(payload, signature, secret)) {
         throw new ForbiddenException('Invalid Moniepoint signature');
       }
     }
@@ -196,6 +201,7 @@ export class PaymentController {
     description: 'OPay signature',
   })
   async opayWebhook(
+    @Req() req: Request,
     @Headers('x-opay-signature') signature: string,
     @Body() payload: any,
   ) {
@@ -224,9 +230,12 @@ export class PaymentController {
     if (providerConfig && providerConfig.verification_method === 'rsa') {
       const publicKey =
         providerConfig.config.public_key || providerConfig.config.publicKey;
+      const rawBody: Buffer = (req as any).rawBody
+        ? Buffer.from((req as any).rawBody)
+        : Buffer.from(JSON.stringify(payload));
       if (
-        publicKey &&
-        !this.verifyRsaSignature(payload, signature, publicKey)
+        !publicKey ||
+        !this.verifyRsaSignature(rawBody, signature, publicKey)
       ) {
         throw new ForbiddenException('Invalid OPay signature');
       }
@@ -271,11 +280,21 @@ export class PaymentController {
   }
 
   private verifyRsaSignature(
-    payload: any,
+    rawBody: Buffer,
     signature: string,
     publicKey: string,
   ): boolean {
-    return true;
+    if (!signature || !publicKey) return false;
+    try {
+      return crypto.verify(
+        'RSA-SHA256',
+        rawBody,
+        publicKey,
+        Buffer.from(signature, 'base64'),
+      );
+    } catch {
+      return false;
+    }
   }
 
   @Get('status')
