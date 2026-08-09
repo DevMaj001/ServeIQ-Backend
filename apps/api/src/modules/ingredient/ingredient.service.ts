@@ -2,7 +2,6 @@ import {
   Injectable,
   Inject,
   NotFoundException,
-  BadRequestException,
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
@@ -327,19 +326,15 @@ export class IngredientService {
         if (!item || !item.track_stock) continue;
 
         const oldQty = Number(item.quantity_in_stock);
-        if (oldQty - deduction.qty < 0) {
-          throw new BadRequestException(
-            `Insufficient stock for "${item.name}": ${oldQty} available, ${deduction.qty} requested`,
-          );
-        }
-        item.quantity_in_stock = oldQty - deduction.qty;
+        const toDeduct = Math.min(deduction.qty, oldQty);
+        item.quantity_in_stock = oldQty - toDeduct;
         await menuItemRepo.save(item);
 
         const movement = movementRepo.create({
           branch_id: tab.branch_id,
           menu_item_id: item.id,
           type: StockMovementType.ORDER_CONSUMPTION,
-          quantity_change: -deduction.qty,
+          quantity_change: -toDeduct,
           quantity_after: Number(item.quantity_in_stock),
           reference_id: tab.id,
         });
