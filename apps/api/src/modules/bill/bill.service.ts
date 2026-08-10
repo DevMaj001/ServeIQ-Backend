@@ -4,6 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
@@ -15,7 +16,7 @@ import { MenuItem } from '../menu/entities/menu-item.entity';
 import { User } from '../user/entities/user.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { Business } from '../business/entities/business.entity';
-import { OrderStatus } from '../../common/shared';
+import { OrderStatus, isBillable, statusBlocksPayment } from '../../common/shared';
 import { GenerateBillDto } from './dto/generate-bill.dto';
 import { ProcessPaymentDto } from './dto/process-payment.dto';
 import { ApplyDiscountDto } from './dto/apply-discount.dto';
@@ -60,13 +61,6 @@ export class BillService {
     const tab = await this.tabRepository.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
 
-    const existing = await this.billRepository.findOne({
-      where: { tab_id: tabId },
-    });
-    if (existing) {
-      return existing;
-    }
-
     if (
       tab.waiter_id &&
       userId &&
@@ -78,10 +72,20 @@ export class BillService {
       throw new ForbiddenException('This tab belongs to another waiter');
     }
 
+    const existing = await this.billRepository.findOne({
+      where: { tab_id: tabId },
+      order: { created_at: 'DESC' },
+    });
+    if (existing?.paid_at) {
+      return existing;
+    }
+
     const orders = await this.orderRepository.find({
       where: { tab_id: tabId },
     });
-    const subtotal = orders.reduce(
+    // Declined/cancelled items never contribute to the bill.
+    const billableOrders = orders.filter((o) => isBillable(o.order_status));
+    const subtotal = billableOrders.reduce(
       (sum, order) => sum + (order.subtotal_kobo ?? 0),
       0,
     );
@@ -104,6 +108,25 @@ export class BillService {
 
     let total = subtotal + serviceCharge + tax - discount;
     if (total < 0) total = 0;
+
+    if (existing) {
+      // Running bill: recompute amounts from current billable items so items added
+      // after the bill was first viewed stay reflected. Discount is preserved.
+      existing.subtotal_kobo = subtotal;
+      existing.service_charge_kobo = serviceCharge;
+      existing.tax_kobo = tax;
+      existing.total_kobo = Math.max(
+        0,
+        subtotal + serviceCharge + tax - (existing.discount_kobo ?? 0),
+      );
+      const updated = await this.billRepository.save(existing);
+
+      this.realtimeService.emitBillUpdate(tab.branch_id, tabId, {
+        status: 'billed',
+        bill: updated,
+      });
+      return updated;
+    }
 
     const bill = this.billRepository.create({
       tab_id: tabId,
@@ -189,8 +212,26 @@ export class BillService {
 
     const bill = await this.billRepository.findOne({
       where: { tab_id: tabId },
+      order: { created_at: 'DESC' },
     });
     if (!bill) throw new NotFoundException('Bill not found');
+
+    // Payment gateway: a tab must not be settled while it still has undelivered
+    // billable orders. Declined/cancelled items are excluded, and prepaid-takeaway
+    // orders HELD in PENDING_PAYMENT_APPROVAL are exempt (they are paid up front and
+    // released to the kitchen at processPayment).
+    const orders = await this.orderRepository.find({ where: { tab_id: tabId } });
+    const blockingOrders = orders.filter((o) =>
+      statusBlocksPayment(o.order_status),
+    );
+    if (blockingOrders.length > 0) {
+      throw new ConflictException(
+        'Complete delivery of all orders before proceeding to payment. ' +
+          `Undelivered item(s): ${blockingOrders
+            .map((o) => o.menu_item_id.slice(0, 8))
+            .join(', ')}`,
+      );
+    }
 
     // Reject underpayments: a bill must not be settled for less than its total.
     // Guards against truncated webhook amounts silently closing a larger bill.
@@ -380,7 +421,11 @@ export class BillService {
     if (orders.length === 0)
       throw new BadRequestException('No items on this tab');
 
-    const total = orders.reduce((sum, o) => sum + o.subtotal_kobo, 0);
+    const billableOrders = orders.filter((o) => isBillable(o.order_status));
+    if (billableOrders.length === 0)
+      throw new BadRequestException('No billable items on this tab');
+
+    const total = billableOrders.reduce((sum, o) => sum + o.subtotal_kobo, 0);
     const baseAmount = Math.floor(total / numSplits);
     const remainder = total - baseAmount * numSplits;
 
@@ -442,7 +487,10 @@ export class BillService {
       let subtotal = 0;
       for (const oid of allocation.order_ids) {
         const order = orderMap.get(oid);
-        if (order) subtotal += order.subtotal_kobo;
+        // Never charge a declined/cancelled item on a split.
+        if (order && isBillable(order.order_status)) {
+          subtotal += order.subtotal_kobo;
+        }
       }
       if (subtotal === 0) continue;
 
@@ -504,6 +552,24 @@ export class BillService {
     if (!bill) throw new NotFoundException('Split bill not found');
     if (bill.paid_at)
       throw new BadRequestException('This split bill is already paid');
+
+    // Same payment gate as full settlement: no undelivered billable orders may be
+    // outstanding when a split is being settled (declined/cancelled excluded,
+    // prepaid-takeaway held orders exempt).
+    const openOrders = await this.orderRepository.find({
+      where: { tab_id: tabId },
+    });
+    const blockingOrders = openOrders.filter((o) =>
+      statusBlocksPayment(o.order_status),
+    );
+    if (blockingOrders.length > 0) {
+      throw new ConflictException(
+        'Complete delivery of all orders before proceeding to payment. ' +
+          `Undelivered item(s): ${blockingOrders
+            .map((o) => o.menu_item_id.slice(0, 8))
+            .join(', ')}`,
+      );
+    }
 
     if (paymentDto.idempotency_key) {
       const dup = await this.billRepository.findOne({

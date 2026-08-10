@@ -277,24 +277,26 @@ export class IngredientService {
     return { items: result, generated_at: new Date() };
   }
 
+  /**
+   * Deduct stock for ordered menu items.
+   *
+   * Movements are keyed to the TAB (reference_id = tab.id), matching voidTab's
+   * reversal lookup. The applied deduction is a DELTA: for each menu item we
+   * subtract whatever was already consumed for this tab (from prior rounds), so
+   * the FIRST round deducts fully and subsequent rounds (multi-order) deduct the
+   * newly-added quantity only. Legacy data is handled uniformly because we always
+   * compare against existing/aggregated ORDER_CONSUMPTION movements for the tab.
+   */
   async deductByTab(
     tab: { id: string; branch_id: string },
     orders: { menu_item_id: string; quantity: number }[],
     manager?: EntityManager,
   ) {
-    const alreadyDeducted = await this.movementRepo.findOne({
-      where: {
-        reference_id: tab.id,
-        type: StockMovementType.ORDER_CONSUMPTION,
-      },
-    });
-    if (alreadyDeducted) return;
-
     const deductionFn = async (mgr: EntityManager) => {
       const menuItemRepo = mgr.getRepository(MenuItem);
       const movementRepo = mgr.getRepository(StockMovement);
 
-      // Phase 1: aggregate deductions per menu_item_id,
+      // Phase 1: aggregate requested deductions per menu_item_id,
       // filtering only items with track_stock = true
       const deductionsByItem = new Map<string, { id: string; qty: number }>();
       for (const order of orders) {
@@ -316,7 +318,8 @@ export class IngredientService {
       // Phase 2: sort IDs to prevent deadlocks
       const sortedIds = [...deductionsByItem.keys()].sort();
 
-      // Phase 3: lock and deduct each item in sorted order
+      // Phase 3: lock and deduct each item in sorted order, applying only the
+      // delta not already consumed for this tab.
       for (const menuItemId of sortedIds) {
         const deduction = deductionsByItem.get(menuItemId)!;
         const item = await menuItemRepo.findOne({
@@ -325,16 +328,31 @@ export class IngredientService {
         });
         if (!item || !item.track_stock) continue;
 
+        const alreadyConsumedRows = await movementRepo.find({
+          where: {
+            reference_id: tab.id,
+            menu_item_id: item.id,
+            type: StockMovementType.ORDER_CONSUMPTION,
+          },
+        });
+        const alreadyConsumed = alreadyConsumedRows.reduce(
+          (sum, m) => sum + Math.abs(Number(m.quantity_change)),
+          0,
+        );
+
+        const toDeduct = Math.max(0, deduction.qty - alreadyConsumed);
+        if (toDeduct === 0) continue;
+
         const oldQty = Number(item.quantity_in_stock);
-        const toDeduct = Math.min(deduction.qty, oldQty);
-        item.quantity_in_stock = oldQty - toDeduct;
+        const applied = Math.min(toDeduct, oldQty);
+        item.quantity_in_stock = oldQty - applied;
         await menuItemRepo.save(item);
 
         const movement = movementRepo.create({
           branch_id: tab.branch_id,
           menu_item_id: item.id,
           type: StockMovementType.ORDER_CONSUMPTION,
-          quantity_change: -toDeduct,
+          quantity_change: -applied,
           quantity_after: Number(item.quantity_in_stock),
           reference_id: tab.id,
         });
@@ -357,6 +375,59 @@ export class IngredientService {
       await deductionFn(manager);
     } else {
       await this.dataSource.transaction(deductionFn);
+    }
+  }
+
+  /**
+   * Reverse the stock consumed by a single cancelled order item. Mirrors the
+   * reversal logic used when voiding an entire tab, but scoped to one order and
+   * tracked via a VOID_REVERSAL movement keyed to the order id so tab-level
+   * reversal/audit math stays consistent.
+   */
+  async reverseOrderConsumption(
+    order: { id: string; menu_item_id: string; quantity: number },
+    branchId: string,
+    manager?: EntityManager,
+  ) {
+    const reversalFn = async (mgr: EntityManager) => {
+      const menuItemRepo = mgr.getRepository(MenuItem);
+      const movementRepo = mgr.getRepository(StockMovement);
+
+      // Double-reversal guard: only reverse once per order.
+      const existing = await movementRepo.findOne({
+        where: {
+          reference_id: order.id,
+          type: StockMovementType.VOID_REVERSAL,
+        },
+      });
+      if (existing) return;
+
+      const item = await menuItemRepo.findOne({
+        where: { id: order.menu_item_id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!item || !item.track_stock) return;
+
+      item.quantity_in_stock = Number(item.quantity_in_stock) + order.quantity;
+      await menuItemRepo.save(item);
+
+      await movementRepo.save(
+        movementRepo.create({
+          branch_id: branchId,
+          menu_item_id: item.id,
+          type: StockMovementType.VOID_REVERSAL,
+          quantity_change: order.quantity,
+          quantity_after: Number(item.quantity_in_stock),
+          reference_id: order.id,
+          notes: `Stock reversal for cancelled order ${order.id.slice(0, 8)}`,
+        }),
+      );
+    };
+
+    if (manager) {
+      await reversalFn(manager);
+    } else {
+      await this.dataSource.transaction(reversalFn);
     }
   }
 

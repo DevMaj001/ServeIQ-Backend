@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, In, LessThanOrEqual } from 'typeorm';
@@ -43,7 +44,12 @@ export class OrderService {
     private realtimeService: RealtimeService,
   ) {}
 
-  async addOrderItems(tabId: string, items: any[], userId: string) {
+  async addOrderItems(
+    tabId: string,
+    items: any[],
+    userId: string,
+    userRole?: string,
+  ) {
     const ids = items.map((i) => i.menu_item_id);
     const menuItems = await this.menuRepository.find({
       where: { id: In(ids) },
@@ -71,10 +77,36 @@ export class OrderService {
         if (!tab) {
           throw new NotFoundException('Tab not found');
         }
-        if (tab.status !== 'open') {
+
+        // Waiter ownership guard: a different waiter must not add items to a tab
+        // another waiter is serving (parity with processPayment's 403).
+        if (
+          tab.waiter_id &&
+          userId &&
+          tab.waiter_id !== userId &&
+          (!userRole ||
+            (userRole !== 'owner' &&
+              userRole !== 'manager' &&
+              userRole !== 'cashier'))
+        ) {
+          throw new ForbiddenException(
+            'This tab is being served by another waiter',
+          );
+        }
+
+        // A 'billed' tab is still open for business in the multi-order flow: viewing a
+        // bill isn't final. Adding a new round reverts the tab to OPEN so the payment
+        // gate re-engages (spec: adding a new order re-locks payment until delivered).
+        if (tab.status !== 'open' && tab.status !== 'billed') {
           throw new BadRequestException(
             `Cannot add items to tab with status: ${tab.status}`,
           );
+        }
+        if (tab.status === 'billed') {
+          await this.tabRepository.update(tabId, {
+            status: 'open',
+            billed_at: null,
+          });
         }
 
         const branchId = tab.branch_id;
@@ -378,6 +410,83 @@ export class OrderService {
         );
         this.realtimeService.emitDashboardUpdate(tab.branch_id, {
           type: 'order_declined',
+          order: savedOrder,
+        });
+        return savedOrder;
+      });
+  }
+
+  async cancel(
+    id: string,
+    userId: string,
+    reason: string,
+    branchId?: string,
+  ) {
+    const { tab } = await this.getTabForOrder(id, branchId);
+    const alphaIds = [id].sort();
+    return this.dataSource
+      .transaction(async (manager) => {
+        const order = await manager.getRepository(Order).findOne({
+          where: { id: alphaIds[0] },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!order) throw new NotFoundException('Order not found');
+
+        // A delivered/completed item is past the point of no return. Declined and
+        // already-cancelled items are left untouched.
+        const terminal = [
+          OrderStatus.DELIVERED,
+          OrderStatus.COMPLETED,
+          OrderStatus.DECLINED,
+          OrderStatus.CANCELLED,
+        ];
+        if (terminal.includes(order.order_status as OrderStatus)) {
+          throw new BadRequestException(
+            `Cannot cancel order with status: ${order.order_status}`,
+          );
+        }
+
+        order.order_status = OrderStatus.CANCELLED;
+        order.cancelled_by = userId;
+        order.cancelled_at = new Date();
+        order.cancel_reason = reason;
+
+        await manager.getRepository(Order).save(order);
+
+        // Return the stock consumed by this order item.
+        await this.ingredientService.reverseOrderConsumption(
+          {
+            id: order.id,
+            menu_item_id: order.menu_item_id,
+            quantity: order.quantity,
+          },
+          tab.branch_id,
+          manager,
+        );
+
+        await this.auditService.log({
+          branchId: tab.branch_id,
+          userId,
+          action: 'order.cancel',
+          entityId: id,
+          entityType: 'order',
+          payload: { reason },
+        });
+
+        return order;
+      })
+      .then((savedOrder) => {
+        this.realtimeService.emitOrderUpdated(tab.branch_id, savedOrder.id, {
+          order_status: savedOrder.order_status,
+        });
+        this.realtimeService.emitOrderStatusChange(
+          tab.branch_id,
+          savedOrder.id,
+          savedOrder.order_status,
+          savedOrder.tab_id,
+        );
+        this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+          type: 'order_cancelled',
           order: savedOrder,
         });
         return savedOrder;

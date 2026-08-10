@@ -95,6 +95,15 @@ export class Order {
   @Column({ type: 'timestamp', nullable: true })
   delivered_at: Date | null;
 
+  @Column({ type: 'uuid', nullable: true })
+  cancelled_by: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  cancelled_at: Date | null;
+
+  @Column({ type: 'text', nullable: true })
+  cancel_reason: string | null;
+
   @Column({ type: 'timestamp', nullable: true })
   preparing_at: Date | null;
 

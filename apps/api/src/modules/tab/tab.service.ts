@@ -15,7 +15,7 @@ import { StockMovement } from '../ingredient/entities/stock-movement.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Shift } from '../shift/entities/shift.entity';
 import { Bill } from '../bill/entities/bill.entity';
-import { StockMovementType, TabType } from '../../common/shared';
+import { StockMovementType, TabType, isBillable } from '../../common/shared';
 import { TrackingService } from '../tracking/tracking.service';
 import { RealtimeService } from '../gateway/realtime.service';
 
@@ -191,10 +191,9 @@ export class TabService {
     const orders = await this.orderRepository.find({
       where: { tab_id: tab.id },
     });
-    const totalKobo = orders.reduce(
-      (sum, order) => sum + order.subtotal_kobo,
-      0,
-    );
+    const totalKobo = orders
+      .filter((o) => isBillable(o.order_status))
+      .reduce((sum, order) => sum + order.subtotal_kobo, 0);
 
     return {
       ...tab,
@@ -242,10 +241,9 @@ export class TabService {
       const orders = await this.orderRepository.find({
         where: { tab_id: tab.id },
       });
-      const totalKobo = orders.reduce(
-        (sum, order) => sum + order.subtotal_kobo,
-        0,
-      );
+      const totalKobo = orders
+        .filter((o) => isBillable(o.order_status))
+        .reduce((sum, order) => sum + order.subtotal_kobo, 0);
 
       tabsWithDetails.push({
         ...tab,

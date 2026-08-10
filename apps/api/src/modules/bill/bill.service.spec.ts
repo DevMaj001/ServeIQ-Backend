@@ -134,17 +134,52 @@ describe('BillService', () => {
       expect(result.total_kobo).toBe(17625);
     });
 
-    it('returns existing bill if already generated', async () => {
+    it('returns paid existing bill unchanged', async () => {
       tabRepo.findOne.mockResolvedValue({
         id: 'tab-1',
         branch_id: 'branch-1',
         waiter_id: null,
       });
-      const existing = { id: 'bill-1', tab_id: 'tab-1', total_kobo: 5000 };
+      const existing = {
+        id: 'bill-1',
+        tab_id: 'tab-1',
+        total_kobo: 5000,
+        paid_at: new Date(),
+      };
       billRepo.findOne.mockResolvedValue(existing);
 
       const result = await service.generateBill('tab-1', 'user-1', 'owner');
       expect(result).toEqual(existing);
+      expect(orderRepo.find).not.toHaveBeenCalled();
+    });
+
+    it('recomputes an existing unpaid bill from current items', async () => {
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        waiter_id: null,
+      });
+      const existing = {
+        id: 'bill-1',
+        tab_id: 'tab-1',
+        subtotal_kobo: 1000,
+        service_charge_kobo: 100,
+        tax_kobo: 75,
+        discount_kobo: 0,
+        total_kobo: 1175,
+        paid_at: null,
+      };
+      billRepo.findOne.mockResolvedValue(existing);
+      orderRepo.find.mockResolvedValue([{ subtotal_kobo: 10000 }]);
+      branchRepo.findOne.mockResolvedValue({
+        id: 'branch-1',
+        business_id: 'biz-1',
+      });
+      businessRepo.findOne.mockResolvedValue({ id: 'biz-1', tax_rate: 7.5 });
+
+      const result = await service.generateBill('tab-1', 'user-1', 'owner');
+      expect(result.subtotal_kobo).toBe(10000);
+      expect(result.total_kobo).toBe(11750);
     });
 
     it('throws ForbiddenException for another waiter tab', async () => {
@@ -251,6 +286,9 @@ describe('BillService', () => {
         tab_id: 'tab-1',
         total_kobo: 5000,
       });
+      orderRepo.find.mockResolvedValue([
+        { menu_item_id: 'mi-1', order_status: 'delivered' },
+      ]);
 
       const result = await service.processPayment('tab-1', 'user-1', 'owner', {
         amount: 5000,
@@ -268,6 +306,9 @@ describe('BillService', () => {
       billRepo.findOne.mockResolvedValueOnce(existing);
 
       tabRepo.findOne.mockResolvedValue({ id: 'tab-1', waiter_id: null });
+      orderRepo.find.mockResolvedValue([
+        { menu_item_id: 'mi-1', order_status: 'delivered' },
+      ]);
 
       const result = await service.processPayment('tab-1', 'user-1', 'owner', {
         amount: 5000,

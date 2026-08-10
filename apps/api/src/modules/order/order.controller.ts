@@ -28,6 +28,7 @@ import { CreateOrderItemDto } from './dto/create-order-item.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { ApproveOrderDto } from './dto/approve-order.dto';
 import { DeclineOrderDto } from './dto/decline-order.dto';
+import { CancelOrderDto } from './dto/cancel-order.dto';
 import { Order } from './entities/order.entity';
 import { getPaginationParams, paginate } from '../../common/pagination';
 
@@ -61,7 +62,12 @@ export class OrderController {
     @Request() req: any,
     @Body() items: CreateOrderItemDto[],
   ) {
-    return this.orderService.addOrderItems(tabId, items, req.user.userId);
+    return this.orderService.addOrderItems(
+      tabId,
+      items,
+      req.user.userId,
+      req.user.role,
+    );
   }
 
   // ── Static routes must come BEFORE :id ──
@@ -222,6 +228,31 @@ export class OrderController {
       id,
       req.user.userId,
       dto,
+      req.user.branchId,
+    );
+  }
+
+  @Post(':id/cancel')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.WAITER)
+  @ApiOperation({
+    summary:
+      'Cancel an undelivered order item (Owner/Manager/Supervisor/Waiter) — stock is returned',
+  })
+  @ApiParam({ name: 'id', description: 'Order item UUID' })
+  @ApiBody({ type: CancelOrderDto })
+  @ApiResponse({ status: 200, description: 'Order cancelled.' })
+  @ApiResponse({ status: 400, description: 'Order is delivered/completed.' })
+  @ApiResponse({ status: 404, description: 'Order not found.' })
+  async cancel(
+    @Param('id') id: string,
+    @Request() req: any,
+    @Body() dto: CancelOrderDto,
+  ) {
+    return this.orderService.cancel(
+      id,
+      req.user.userId,
+      dto.cancel_reason,
       req.user.branchId,
     );
   }

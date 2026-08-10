@@ -68,7 +68,7 @@ export class Tab {
   opened_at: Date;
 
   @Column({ nullable: true })
-  billed_at: Date;
+  billed_at: Date | null;
 
   @Column({ nullable: true })
   closed_at: Date;
