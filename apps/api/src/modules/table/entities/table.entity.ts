@@ -36,6 +36,9 @@ export class Table {
   @Column({ default: false })
   is_virtual: boolean;
 
+  @Column({ default: false })
+  is_vip: boolean;
+
   @Column({
     type: 'enum',
     enum: TableStatus,

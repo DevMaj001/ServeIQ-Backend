@@ -5,6 +5,7 @@ import {
   IsOptional,
   Min,
   IsEnum,
+  IsBoolean,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { TableStatus } from '../entities/table.entity';
@@ -35,6 +36,11 @@ export class CreateTableDto {
   @IsString()
   @IsOptional()
   branch_id?: string;
+
+  @ApiPropertyOptional({ example: false, default: false })
+  @IsBoolean()
+  @IsOptional()
+  is_vip?: boolean;
 }
 
 export class UpdateTableDto extends PartialType(CreateTableDto) {

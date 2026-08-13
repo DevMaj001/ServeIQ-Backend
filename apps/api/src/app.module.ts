@@ -62,6 +62,7 @@ import { BackfillUserRoleId1752892800000 } from './database/migrations/175289280
 import { MakeUserRoleIdNotNull1752892800001 } from './database/migrations/1752892800001-MakeUserRoleIdNotNull';
 import { CreatePlatformPaymentProvidersTable1801000000000 } from './database/migrations/1801000000000-CreatePlatformPaymentProvidersTable';
 import { CreateFeedbackTable1802000000000 } from './database/migrations/1802000000000-CreateFeedbackTable';
+import { AddIsVipToTables1804000000000 } from './database/migrations/1804000000000-AddIsVipToTables';
 import { PlatformPaymentProvider } from './modules/admin/entities/platform-payment-provider.entity';
 import { Feedback } from './modules/feedback/entities/feedback.entity';
 
@@ -163,6 +164,7 @@ import { GatewayModule } from './modules/gateway/gateway.module';
         MakeWaiterIdNullable1800000000004,
         CreatePlatformPaymentProvidersTable1801000000000,
         CreateFeedbackTable1802000000000,
+        AddIsVipToTables1804000000000,
       ],
       migrationsRun: true,
       synchronize: false,
