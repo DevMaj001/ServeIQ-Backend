@@ -701,6 +701,7 @@ async function seed() {
     const menuItem = menuRepo.create({
       ...item,
       branch_id: savedBranch.id,
+      created_by: savedOwner.id,
     });
     createdMenuItems.push(await menuRepo.save(menuItem));
   }
