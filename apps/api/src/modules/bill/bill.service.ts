@@ -90,10 +90,6 @@ export class BillService {
       0,
     );
 
-    const serviceChargePercent = generateBillDto?.service_charge_percent ?? 10;
-    const serviceCharge = Math.round(subtotal * (serviceChargePercent / 100));
-    const discount = generateBillDto?.discount_kobo ?? 0;
-
     const tabBranch = await this.branchRepository.findOne({
       where: { id: tab.branch_id },
     });
@@ -102,6 +98,12 @@ export class BillService {
           where: { id: tabBranch.business_id },
         })
       : null;
+
+    const serviceChargePercent =
+      generateBillDto?.service_charge_percent ??
+      Number(business?.service_charge_percent ?? 10);
+    const serviceCharge = Math.round(subtotal * (serviceChargePercent / 100));
+    const discount = generateBillDto?.discount_kobo ?? 0;
     const effectiveTaxRate =
       generateBillDto?.tax_rate_percent ?? Number(business?.tax_rate ?? 7.5);
     const tax = Math.round(subtotal * (effectiveTaxRate / 100));

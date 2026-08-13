@@ -37,6 +37,13 @@ export class UpdateBusinessDto {
   vip_surcharge_percent?: number;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  service_charge_percent?: number;
+
+  @IsOptional()
   @IsString()
   timezone?: string;
 

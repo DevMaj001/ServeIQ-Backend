@@ -29,6 +29,7 @@ import { Bill } from '../bill/entities/bill.entity';
 import { Order } from '../order/entities/order.entity';
 import { PosTerminal } from '../pos/entities/pos-terminal.entity';
 import { Branch } from '../branch/entities/branch.entity';
+import { Business } from '../business/entities/business.entity';
 import { BillService } from '../bill/bill.service';
 import { ProcessPaymentDto } from '../bill/dto/process-payment.dto';
 import { PaymentMethod } from '../../common/shared';
@@ -58,6 +59,8 @@ export class PaymentController {
     private posTerminalRepo: Repository<PosTerminal>,
     @InjectRepository(Branch)
     private branchRepo: Repository<Branch>,
+    @InjectRepository(Business)
+    private businessRepo: Repository<Business>,
     private billService: BillService,
   ) {}
 
@@ -85,7 +88,20 @@ export class PaymentController {
     if (orders.length === 0) throw new BadRequestException('Tab has no orders');
 
     const subtotalKobo = orders.reduce((sum, o) => sum + o.subtotal_kobo, 0);
-    const serviceChargeKobo = Math.round(subtotalKobo * 0.1);
+    const tabBranch = await this.branchRepo.findOne({
+      where: { id: tab.branch_id },
+    });
+    const business = tabBranch
+      ? await this.businessRepo.findOne({
+          where: { id: tabBranch.business_id },
+        })
+      : null;
+    const serviceChargePercent = Number(
+      business?.service_charge_percent ?? 10,
+    );
+    const serviceChargeKobo = Math.round(
+      subtotalKobo * (serviceChargePercent / 100),
+    );
 
     let bill = await this.billRepo.findOne({
       where: { tab_id: tab.id, payment_status: 'pending' },

@@ -50,6 +50,9 @@ export class Business {
   @Column({ type: 'integer', default: 0 })
   vip_surcharge_percent: number;
 
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 10 })
+  service_charge_percent: number;
+
   @Column({ default: 'Africa/Lagos' })
   timezone: string;
 
