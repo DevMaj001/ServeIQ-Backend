@@ -54,12 +54,15 @@ export class BillService {
 
   async generateBill(
     tabId: string,
+    branchId: string,
     userId: string,
     userRole: string,
     generateBillDto?: GenerateBillDto,
   ) {
     const tab = await this.tabRepository.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
+    if (tab.branch_id !== branchId)
+      throw new ForbiddenException('Tab does not belong to your branch');
 
     if (
       tab.waiter_id &&
@@ -194,12 +197,15 @@ export class BillService {
 
   async processPayment(
     tabId: string,
+    branchId: string,
     userId: string,
     userRole: string,
     paymentDto: ProcessPaymentDto,
   ) {
     const tab = await this.tabRepository.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
+    if (tab.branch_id !== branchId)
+      throw new ForbiddenException('Tab does not belong to your branch');
 
     if (
       tab.waiter_id &&
@@ -410,12 +416,15 @@ export class BillService {
 
   async splitEvenly(
     tabId: string,
+    branchId: string,
     userId: string,
     userRole: string,
     numSplits: number,
   ) {
     const tab = await this.tabRepository.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
+    if (tab.branch_id !== branchId)
+      throw new ForbiddenException('Tab does not belong to your branch');
 
     const orders = await this.orderRepository.find({
       where: { tab_id: tabId },
@@ -471,12 +480,15 @@ export class BillService {
 
   async splitByItem(
     tabId: string,
+    branchId: string,
     userId: string,
     userRole: string,
     allocations: { order_ids: string[]; label?: string }[],
   ) {
     const tab = await this.tabRepository.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
+    if (tab.branch_id !== branchId)
+      throw new ForbiddenException('Tab does not belong to your branch');
 
     const allOrders = await this.orderRepository.find({
       where: { tab_id: tabId },
@@ -544,10 +556,16 @@ export class BillService {
   async processSplitPayment(
     tabId: string,
     billId: string,
+    branchId: string,
     userId: string,
     userRole: string,
     paymentDto: ProcessPaymentDto,
   ) {
+    const tab = await this.tabRepository.findOne({ where: { id: tabId } });
+    if (!tab) throw new NotFoundException('Tab not found');
+    if (tab.branch_id !== branchId)
+      throw new ForbiddenException('Tab does not belong to your branch');
+
     const bill = await this.billRepository.findOne({
       where: { id: billId, tab_id: tabId },
     });

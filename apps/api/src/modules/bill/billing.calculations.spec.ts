@@ -151,7 +151,7 @@ describe('BillService — V1 billing calculations', () => {
     if (c?.tax_rate_percent !== undefined)
       dto.tax_rate_percent = c.tax_rate_percent;
     if (c?.discount_kobo !== undefined) dto.discount_kobo = c.discount_kobo;
-    return service.generateBill('tab-1', 'waiter-1', 'waiter', dto);
+    return service.generateBill('tab-1', 'branch-1', 'waiter-1', 'waiter', dto);
   };
 
   // 50 scenarios covering PRD §F-10 / §F-11 billing + edge cases.
@@ -512,7 +512,7 @@ describe('BillService — V1 billing calculations', () => {
       service = moduleRef.get<BillService>(BillService);
       tabRepo.findOne.mockResolvedValue(null);
       await expect(
-        service.generateBill('missing-tab', 'waiter-1', 'waiter'),
+        service.generateBill('missing-tab', 'branch-1', 'waiter-1', 'waiter'),
       ).rejects.toThrow(NotFoundException);
     });
   });

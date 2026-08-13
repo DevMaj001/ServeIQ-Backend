@@ -200,13 +200,19 @@ export class PaymentController {
 
     if (bill.paid_at) return { received: true, status: 'already_paid' };
 
-    await this.billService.processPayment(tab.id, 'system-webhook', 'owner', {
-      method: PaymentMethod.POS,
-      amount: amount,
-      reference: reference,
-      terminal_id: terminalId,
-      idempotency_key: `monniepoint-${reference}`,
-    });
+    await this.billService.processPayment(
+      tab.id,
+      tab.branch_id,
+      'system-webhook',
+      'owner',
+      {
+        method: PaymentMethod.POS,
+        amount: amount,
+        reference: reference,
+        terminal_id: terminalId,
+        idempotency_key: `monniepoint-${reference}`,
+      },
+    );
 
     return { received: true, status: 'processed' };
   }
@@ -270,12 +276,18 @@ export class PaymentController {
 
     const method =
       transactionType === 'POS' ? PaymentMethod.POS : PaymentMethod.TRANSFER;
-    await this.billService.processPayment(tab.id, 'system-webhook', 'owner', {
-      method,
-      amount: amount,
-      reference: reference,
-      idempotency_key: `opay-${reference}`,
-    });
+    await this.billService.processPayment(
+      tab.id,
+      tab.branch_id,
+      'system-webhook',
+      'owner',
+      {
+        method,
+        amount: amount,
+        reference: reference,
+        idempotency_key: `opay-${reference}`,
+      },
+    );
 
     return { received: true, status: 'processed' };
   }

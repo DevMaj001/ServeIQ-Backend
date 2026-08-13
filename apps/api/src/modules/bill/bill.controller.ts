@@ -53,6 +53,7 @@ export class BillController {
   ) {
     return this.billService.generateBill(
       tabId,
+      req.user.branchId,
       req.user.userId,
       req.user.role,
       generateBillDto,
@@ -94,6 +95,7 @@ export class BillController {
   ) {
     return this.billService.processPayment(
       tabId,
+      req.user.branchId,
       req.user.userId,
       req.user.role,
       paymentDto,
@@ -112,6 +114,7 @@ export class BillController {
   ) {
     return this.billService.splitEvenly(
       tabId,
+      req.user.branchId,
       req.user.userId,
       req.user.role,
       dto.splits,
@@ -130,6 +133,7 @@ export class BillController {
   ) {
     return this.billService.splitByItem(
       tabId,
+      req.user.branchId,
       req.user.userId,
       req.user.role,
       dto.allocations,
@@ -160,6 +164,7 @@ export class BillController {
     return this.billService.processSplitPayment(
       tabId,
       billId,
+      req.user.branchId,
       req.user.userId,
       req.user.role,
       paymentDto,

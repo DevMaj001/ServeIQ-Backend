@@ -188,6 +188,7 @@ export class SyncService {
         case 'bill.create': {
           await this.billService.generateBill(
             payload.tab_id,
+            payload.branch_id || branch_id,
             'offline-sync',
             'owner',
             {
@@ -201,6 +202,7 @@ export class SyncService {
         case 'bill.pay': {
           await this.billService.processPayment(
             payload.tab_id,
+            payload.branch_id || branch_id,
             'offline-sync',
             'owner',
             {

@@ -200,7 +200,7 @@ describe('BillService â€” Billing Calculation Accuracy (50 scenarios)', () 
     if (discount_kobo !== undefined) dto.discount_kobo = discount_kobo;
     if (tax_rate !== undefined) dto.tax_rate_percent = tax_rate;
 
-    return service.generateBill('tab-1', 'waiter-1', 'waiter', dto);
+    return service.generateBill('tab-1', 'branch-1', 'waiter-1', 'waiter', dto);
   };
 
   it('S001 â€” single item, default 10% service, 7.5% tax, no discount', async () => {
@@ -443,6 +443,7 @@ describe('BillService â€” Billing Calculation Accuracy (50 scenarios)', () 
 
     const result = await service.generateBill(
       'tab-no-orders',
+      'branch-1',
       'waiter-1',
       'waiter',
     );
@@ -866,7 +867,7 @@ describe('BillService â€” Tab State Machine Transitions', () => {
     repos.billRepo.findOne.mockResolvedValue(null);
     repos.orderRepo.find.mockResolvedValue([]);
 
-    const result = await service.generateBill('tab-1', 'user-1', 'owner');
+    const result = await service.generateBill('tab-1', 'b', 'user-1', 'owner');
     expect(result.status).toBeUndefined(); // generateBill doesn't return tab, but updates it
     expect(repos.tabRepo.update).toHaveBeenCalledWith(
       'tab-1',
@@ -886,9 +887,18 @@ describe('BillService â€” Tab State Machine Transitions', () => {
       paid_at: null,
     };
     repos.billRepo.findOne.mockResolvedValue(existingBill);
-    repos.tabRepo.findOne.mockResolvedValue({ id: 'tab-1', status: 'billed' });
+    repos.tabRepo.findOne.mockResolvedValue({
+      id: 'tab-1',
+      branch_id: 'branch-1',
+      status: 'billed',
+    });
 
-    const result = await service.generateBill('tab-1', 'user-1', 'owner');
+    const result = await service.generateBill(
+      'tab-1',
+      'branch-1',
+      'user-1',
+      'owner',
+    );
     expect(result).toEqual(existingBill);
   });
 
@@ -922,7 +932,7 @@ describe('BillService â€” Tab State Machine Transitions', () => {
       is_virtual: false,
     });
 
-    await service.processPayment('tab-1', 'user-1', 'owner', {
+    await service.processPayment('tab-1', 'branch-1', 'user-1', 'owner', {
       amount: 5000,
       method: 'cash',
     });
@@ -941,38 +951,48 @@ describe('BillService â€” Tab State Machine Transitions', () => {
     repos.billRepo.findOne
       .mockResolvedValueOnce({ id: 'bill-1', tab_id: 'tab-1' }) // first find for tab
       .mockResolvedValueOnce(existing); // idempotency check
-    repos.tabRepo.findOne.mockResolvedValue({ id: 'tab-1', waiter_id: null });
-
-    const result = await service.processPayment('tab-1', 'user-1', 'owner', {
-      amount: 5000,
-      method: 'transfer',
-      idempotency_key: 'key-123',
+    repos.tabRepo.findOne.mockResolvedValue({
+      id: 'tab-1',
+      branch_id: 'branch-1',
+      waiter_id: null,
     });
+
+    const result = await service.processPayment(
+      'tab-1',
+      'branch-1',
+      'user-1',
+      'owner',
+      {
+        amount: 5000,
+        method: 'transfer',
+        idempotency_key: 'key-123',
+      },
+    );
 
     expect(result).toEqual(existing);
   });
 
   it('TSM-06: splitEvenly sets tab status to "billed"', async () => {
-    repos.tabRepo.findOne.mockResolvedValue({ id: 'tab-1' });
+    repos.tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
     repos.orderRepo.find.mockResolvedValue([
       { subtotal_kobo: 10000 },
       { subtotal_kobo: 5000 },
     ]);
 
-    await service.splitEvenly('tab-1', 'user-1', 'owner', 2);
+    await service.splitEvenly('tab-1', 'branch-1', 'user-1', 'owner', 2);
     expect(repos.tabRepo.update).toHaveBeenCalledWith('tab-1', {
       status: 'billed',
     });
   });
 
   it('TSM-07: splitByItem sets tab status to "billed"', async () => {
-    repos.tabRepo.findOne.mockResolvedValue({ id: 'tab-1' });
+    repos.tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
     repos.orderRepo.find.mockResolvedValue([
       { id: 'o1', subtotal_kobo: 10000 },
       { id: 'o2', subtotal_kobo: 5000 },
     ]);
 
-    await service.splitByItem('tab-1', 'user-1', 'owner', [
+    await service.splitByItem('tab-1', 'branch-1', 'user-1', 'owner', [
       { order_ids: ['o1'] },
       { order_ids: ['o2'] },
     ]);
@@ -982,7 +1002,7 @@ describe('BillService â€” Tab State Machine Transitions', () => {
   });
 
   it('TSM-08: processSplitPayment â†’ all split bills paid â†’ tab "paid", table available', async () => {
-    const tab = { id: 'tab-1', table_id: 'table-1' };
+    const tab = { id: 'tab-1', branch_id: 'branch-1', table_id: 'table-1' };
     repos.tabRepo.findOne.mockResolvedValue(tab);
     repos.tableRepo.findOne.mockResolvedValue({
       id: 'table-1',
@@ -1015,6 +1035,7 @@ describe('BillService â€” Tab State Machine Transitions', () => {
     const result = await service.processSplitPayment(
       'tab-1',
       'b1',
+      'branch-1',
       'user-1',
       'owner',
       { amount: 5000, method: 'cash' },
