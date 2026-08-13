@@ -18,6 +18,8 @@ import { Subscription } from '../subscription/entities/subscription.entity';
 import { SubscriptionService } from '../subscription/subscription.service';
 import { RefreshToken } from '../../entities/refresh-token.entity';
 import { VerificationToken } from '../../entities/verification-token.entity';
+import { Role } from '../role/entities/role.entity';
+import { Permission } from '../role/entities/permission.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { WaiterLoginDto } from './dto/waiter-login.dto';
@@ -85,6 +87,26 @@ export class AuthService {
         is_active: true,
       });
       const savedUser = await queryRunner.manager.save(user);
+
+      // 3b. Link the owner to the global Owner role so PBAC permission
+      // checks pass. A fresh business has no roles yet; owners bypass the
+      // permission system only when their role entity resolves to 'Owner'.
+      const roleRepo = queryRunner.manager.getRepository(Role);
+      const permissionRepo = queryRunner.manager.getRepository(Permission);
+      let ownerRole = await roleRepo.findOne({ where: { name: 'Owner' } });
+      if (!ownerRole) {
+        const allPermissions = await permissionRepo.find();
+        ownerRole = await roleRepo.save(
+          roleRepo.create({
+            name: 'Owner',
+            description: 'Business owner with full access',
+            is_system: true,
+            permissions: allPermissions,
+          }),
+        );
+      }
+      savedUser.role_id = ownerRole.id;
+      await queryRunner.manager.save(savedUser);
 
       // 4. Update Business with Owner ID
       savedBusiness.owner_id = savedUser.id;
