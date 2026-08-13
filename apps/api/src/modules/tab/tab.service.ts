@@ -429,6 +429,125 @@ export class TabService {
     }
   }
 
+  async mergeTab(
+    id: string,
+    branchId: string,
+    targetTabId: string,
+    currentUserId?: string,
+    currentUserRole?: string,
+  ) {
+    if (id === targetTabId) {
+      throw new BadRequestException('Cannot merge a tab into itself');
+    }
+
+    const sourceTab = await this.findOne(id, branchId);
+    const targetTab = await this.findOne(targetTabId, branchId);
+
+    if (sourceTab.status !== 'open' || targetTab.status !== 'open') {
+      throw new BadRequestException('Only open tabs can be merged');
+    }
+
+    if (
+      sourceTab.waiter_id &&
+      currentUserId &&
+      sourceTab.waiter_id !== currentUserId &&
+      currentUserRole !== 'owner' &&
+      currentUserRole !== 'manager' &&
+      currentUserRole !== 'supervisor'
+    ) {
+      throw new ForbiddenException(
+        "You cannot merge another waiter's tab",
+      );
+    }
+
+    // Orders must land on a seatable (dine-in) tab
+    if (targetTab.tab_type === TabType.TAKEAWAY) {
+      throw new BadRequestException(
+        'Cannot merge into a takeaway tab.',
+      );
+    }
+
+    // Reject tabs that have already moved into billing
+    const existingBill = await this.billRepository.findOne({
+      where: [{ tab_id: id }, { tab_id: targetTabId }],
+    });
+    if (existingBill) {
+      throw new BadRequestException(
+        'Cannot merge tabs that already have a bill generated',
+      );
+    }
+
+    const sourceTable = await this.tableRepository.findOne({
+      where: { id: sourceTab.table_id },
+    });
+
+    await this.dataSource.transaction(async (manager) => {
+      const tabRepo = manager.getRepository(Tab);
+      const tableRepo = manager.getRepository(Table);
+      const orderRepo = manager.getRepository(Order);
+      const movementRepo = manager.getRepository(StockMovement);
+
+      // Move orders onto the target tab
+      await orderRepo.update({ tab_id: id }, { tab_id: targetTabId });
+
+      // Repoint stock consumption so void reversal on the target later is accurate.
+      // When both tabs consumed the same item, fold quantities to keep the ledger clean.
+      const sourceMovements = await movementRepo.find({
+        where: { reference_id: id },
+      });
+      for (const mv of sourceMovements) {
+        const existing = await movementRepo.findOne({
+          where: {
+            reference_id: targetTabId,
+            menu_item_id: mv.menu_item_id,
+            type: mv.type,
+          },
+        });
+        if (existing) {
+          existing.quantity_change =
+            Number(existing.quantity_change) + Number(mv.quantity_change);
+          await movementRepo.save(existing);
+          await movementRepo.remove(mv);
+        } else {
+          mv.reference_id = targetTabId;
+          await movementRepo.save(mv);
+        }
+      }
+
+      // Close the source tab (its orders now live on the target)
+      await tabRepo.update(id, {
+        status: 'voided',
+        notes: `MERGED INTO ${targetTab.tab_number}`,
+        closed_at: new Date(),
+      });
+
+      // Virtual tables never participate in occupancy logic
+      if (sourceTable && !sourceTable.is_virtual) {
+        await tableRepo.update(sourceTab.table_id, {
+          status: TableStatus.AVAILABLE,
+        });
+      }
+    });
+
+    // Emit real-time events
+    this.realtimeService.emitTabUpdate(branchId, id, {
+      status: 'voided',
+      notes: `MERGED INTO ${targetTab.tab_number}`,
+    });
+    this.realtimeService.emitTabUpdate(branchId, targetTabId, {
+      merged: true,
+    });
+    if (sourceTable && !sourceTable.is_virtual) {
+      this.realtimeService.emitTableStatusChange(
+        branchId,
+        sourceTab.table_id,
+        TableStatus.AVAILABLE,
+      );
+    }
+
+    return this.findOne(targetTabId, branchId);
+  }
+
   async voidTab(
     id: string,
     branchId: string,

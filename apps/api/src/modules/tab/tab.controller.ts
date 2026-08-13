@@ -27,6 +27,7 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { OpenTabDto } from './dto/open-tab.dto';
+import { MergeTabDto } from './dto/merge-tab.dto';
 import { TransferTabDto } from './dto/transfer-tab.dto';
 import { UpdateTabDto } from './dto/update-tab.dto';
 import { VoidTabDto } from './dto/void-tab.dto';
@@ -194,6 +195,32 @@ export class TabController {
       id,
       req.user.branchId,
       transferDto.target_table_id,
+    );
+  }
+
+  @Post(':id/merge')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.MERGE_TABLES)
+  @ApiOperation({
+    summary:
+      'Merge an open tab into another open tab (orders move onto the target)',
+  })
+  @ApiParam({ name: 'id', description: 'Source tab UUID' })
+  @ApiResponse({ status: 200, description: 'Tab merged into target tab.' })
+  @ApiResponse({ status: 400, description: 'Merge validation error.' })
+  @ApiResponse({ status: 404, description: 'Tab not found.' })
+  async mergeTab(
+    @Param('id') id: string,
+    @Request() req: any,
+    @Body() mergeDto: MergeTabDto,
+  ) {
+    return this.tabService.mergeTab(
+      id,
+      req.user.branchId,
+      mergeDto.target_tab_id,
+      req.user.userId,
+      req.user.role,
     );
   }
 
