@@ -6,6 +6,9 @@ import { OrderController } from './order.controller';
 import { Order } from './entities/order.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Tab } from '../tab/entities/tab.entity';
+import { Table } from '../table/entities/table.entity';
+import { Branch } from '../branch/entities/branch.entity';
+import { Business } from '../business/entities/business.entity';
 import { Department } from '../department/entities/department.entity';
 import { AuditLog } from '../../entities/audit-log.entity';
 import { AuditService } from '../../common/services/audit.service';
@@ -16,7 +19,7 @@ import { GatewayModule } from '../gateway/gateway.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Order, MenuItem, Tab, Department, AuditLog]),
+    TypeOrmModule.forFeature([Order, MenuItem, Tab, Table, Branch, Business, Department, AuditLog]),
     IngredientModule,
     NotificationModule,
     TrackingModule,

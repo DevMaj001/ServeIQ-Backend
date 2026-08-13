@@ -31,6 +31,18 @@ describe('OrderService', () => {
     findOne: jest.fn(),
   });
 
+  const mockTableRepository = () => ({
+    findOne: jest.fn(),
+  });
+
+  const mockBranchRepository = () => ({
+    findOne: jest.fn(),
+  });
+
+  const mockBusinessRepository = () => ({
+    findOne: jest.fn(),
+  });
+
   const mockDataSource = () => ({
     transaction: jest.fn(async (cb) => cb(manager)),
     query: jest.fn(),
@@ -64,6 +76,10 @@ describe('OrderService', () => {
     const orderRepo = overrides.orderRepository ?? mockOrderRepository();
     const menuRepo = overrides.menuRepository ?? mockMenuRepository();
     const tabRepo = overrides.tabRepository ?? mockTabRepository();
+    const tableRepo = overrides.tableRepository ?? mockTableRepository();
+    const branchRepo = overrides.branchRepository ?? mockBranchRepository();
+    const businessRepo =
+      overrides.businessRepository ?? mockBusinessRepository();
     const deptRepo = overrides.departmentRepo ?? mockDepartmentRepo();
     const dataSource = overrides.dataSource ?? mockDataSource();
     const ingredientService =
@@ -77,6 +93,9 @@ describe('OrderService', () => {
       orderRepo,
       menuRepo,
       tabRepo,
+      tableRepo,
+      branchRepo,
+      businessRepo,
       deptRepo,
       dataSource,
       ingredientService,
@@ -167,6 +186,133 @@ describe('OrderService', () => {
           'user-1',
         ),
       ).rejects.toThrow('Insufficient stock');
+    });
+
+    it('applies the VIP surcharge to a tab sitting on a VIP table', async () => {
+      const tabRepo = mockTabRepository();
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        table_id: 'table-1',
+        status: 'open',
+      });
+
+      const menuRepo = mockMenuRepository();
+      menuRepo.find.mockResolvedValue([
+        {
+          id: 'menu-1',
+          name: 'Pizza',
+          price_kobo: 5000,
+          track_stock: false,
+          quantity_in_stock: 10,
+        },
+      ]);
+
+      const vipManager = {
+        getRepository: jest.fn((entity) => {
+          const repos = {
+            table: {
+              findOne: jest.fn().mockResolvedValue({ is_vip: true }),
+            },
+            branch: {
+              findOne: jest
+                .fn()
+                .mockResolvedValue({ business_id: 'business-1' }),
+            },
+            business: {
+              findOne: jest
+                .fn()
+                .mockResolvedValue({ vip_surcharge_percent: 10 }),
+            },
+            order: {
+              create: jest.fn((dto) => dto),
+              save: jest.fn(async (order) => ({ ...order, id: 'order-1' })),
+              findOne: jest.fn(),
+            },
+          };
+          if (entity?.name === 'Table') return repos.table;
+          if (entity?.name === 'Branch') return repos.branch;
+          if (entity?.name === 'Business') return repos.business;
+          return repos.order;
+        }),
+      };
+      const dataSource: any = {
+        transaction: jest.fn(async (cb) => cb(vipManager)),
+        query: jest.fn(),
+      };
+
+      const service = buildService({
+        tabRepository: tabRepo,
+        menuRepository: menuRepo,
+        dataSource,
+      });
+
+      const result = await service.addOrderItems(
+        'tab-1',
+        [{ menu_item_id: 'menu-1', quantity: 2 }],
+        'user-1',
+      );
+
+      // 5000 kobo + 10% = 5500 per unit; 2 x 5500 = 11000.
+      expect(result[0].unit_price_kobo).toBe(5500);
+      expect(result[0].subtotal_kobo).toBe(11000);
+    });
+
+    it('does not apply the VIP surcharge on a regular table', async () => {
+      const tabRepo = mockTabRepository();
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        table_id: 'table-1',
+        status: 'open',
+      });
+
+      const menuRepo = mockMenuRepository();
+      menuRepo.find.mockResolvedValue([
+        {
+          id: 'menu-1',
+          name: 'Pizza',
+          price_kobo: 5000,
+          track_stock: false,
+          quantity_in_stock: 10,
+        },
+      ]);
+
+      const vipManager = {
+        getRepository: jest.fn((entity) => {
+          const repos = {
+            table: {
+              findOne: jest.fn().mockResolvedValue({ is_vip: false }),
+            },
+            order: {
+              create: jest.fn((dto) => dto),
+              save: jest.fn(async (order) => ({ ...order, id: 'order-1' })),
+              findOne: jest.fn(),
+            },
+          };
+          if (entity?.name === 'Table') return repos.table;
+          return repos.order;
+        }),
+      };
+      const dataSource: any = {
+        transaction: jest.fn(async (cb) => cb(vipManager)),
+        query: jest.fn(),
+      };
+
+      const service = buildService({
+        tabRepository: tabRepo,
+        menuRepository: menuRepo,
+        dataSource,
+      });
+
+      const result = await service.addOrderItems(
+        'tab-1',
+        [{ menu_item_id: 'menu-1', quantity: 2 }],
+        'user-1',
+      );
+
+      expect(result[0].unit_price_kobo).toBe(5000);
+      expect(result[0].subtotal_kobo).toBe(10000);
     });
 
     it('calculates subtotal with modifiers', async () => {

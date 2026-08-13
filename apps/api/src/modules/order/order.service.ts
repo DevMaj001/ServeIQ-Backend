@@ -10,6 +10,9 @@ import { Repository, DataSource, In, LessThanOrEqual } from 'typeorm';
 import { Order } from './entities/order.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Tab } from '../tab/entities/tab.entity';
+import { Table } from '../table/entities/table.entity';
+import { Branch } from '../branch/entities/branch.entity';
+import { Business } from '../business/entities/business.entity';
 import { IngredientService } from '../ingredient/ingredient.service';
 import {
   OrderStatus,
@@ -34,6 +37,12 @@ export class OrderService {
     private menuRepository: Repository<MenuItem>,
     @InjectRepository(Tab)
     private tabRepository: Repository<Tab>,
+    @InjectRepository(Table)
+    private tableRepository: Repository<Table>,
+    @InjectRepository(Branch)
+    private branchRepository: Repository<Branch>,
+    @InjectRepository(Business)
+    private businessRepository: Repository<Business>,
     @InjectRepository(Department)
     private departmentRepo: Repository<Department>,
     @Inject(DataSource)
@@ -115,6 +124,30 @@ export class OrderService {
             ? FulfillmentType.PACK
             : FulfillmentType.SERVE;
 
+        // VIP pricing: when the tab sits on a VIP table, every item's unit price
+        // is raised by the business-configured percentage. Admin controls the
+        // percentage (settings > vip_surcharge_percent); 0 (default) = no change.
+        let vipMultiplier = 1;
+        if (tab.table_id) {
+          const tabTable = await manager
+            .getRepository(Table)
+            .findOne({ where: { id: tab.table_id } });
+          if (tabTable?.is_vip) {
+            const tabBranch = await manager
+              .getRepository(Branch)
+              .findOne({ where: { id: tab.branch_id } });
+            const tabBusiness = tabBranch
+              ? await manager
+                  .getRepository(Business)
+                  .findOne({ where: { id: tabBranch.business_id } })
+              : null;
+            const vipPercent = Number(
+              tabBusiness?.vip_surcharge_percent ?? 0,
+            );
+            vipMultiplier = 1 + vipPercent / 100;
+          }
+        }
+
         for (const item of items) {
           const menuItem = menuMap.get(item.menu_item_id);
           if (!menuItem) {
@@ -127,12 +160,13 @@ export class OrderService {
             (sum: number, m: any) => sum + m.price_kobo * m.qty,
             0,
           );
+          const unitPrice = Math.round(menuItem.price_kobo * vipMultiplier);
           const order = manager.getRepository(Order).create({
             tab_id: tabId,
             menu_item_id: item.menu_item_id,
             quantity: item.quantity,
-            unit_price_kobo: menuItem.price_kobo,
-            subtotal_kobo: item.quantity * menuItem.price_kobo + modifierTotal,
+            unit_price_kobo: unitPrice,
+            subtotal_kobo: item.quantity * unitPrice + modifierTotal,
             round_number: item.round_number || 1,
             created_by: userId,
             notes: item.notes,

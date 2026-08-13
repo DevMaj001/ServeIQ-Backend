@@ -47,6 +47,9 @@ export class Business {
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 7.5 })
   tax_rate: number;
 
+  @Column({ type: 'integer', default: 0 })
+  vip_surcharge_percent: number;
+
   @Column({ default: 'Africa/Lagos' })
   timezone: string;
 

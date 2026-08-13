@@ -63,6 +63,7 @@ import { MakeUserRoleIdNotNull1752892800001 } from './database/migrations/175289
 import { CreatePlatformPaymentProvidersTable1801000000000 } from './database/migrations/1801000000000-CreatePlatformPaymentProvidersTable';
 import { CreateFeedbackTable1802000000000 } from './database/migrations/1802000000000-CreateFeedbackTable';
 import { AddIsVipToTables1804000000000 } from './database/migrations/1804000000000-AddIsVipToTables';
+import { AddVipSurchargePercentToBusinesses1805000000000 } from './database/migrations/1805000000000-AddVipSurchargePercentToBusinesses';
 import { PlatformPaymentProvider } from './modules/admin/entities/platform-payment-provider.entity';
 import { Feedback } from './modules/feedback/entities/feedback.entity';
 
@@ -165,6 +166,7 @@ import { GatewayModule } from './modules/gateway/gateway.module';
         CreatePlatformPaymentProvidersTable1801000000000,
         CreateFeedbackTable1802000000000,
         AddIsVipToTables1804000000000,
+        AddVipSurchargePercentToBusinesses1805000000000,
       ],
       migrationsRun: true,
       synchronize: false,

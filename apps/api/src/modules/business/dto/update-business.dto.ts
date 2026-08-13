@@ -28,6 +28,12 @@ export class UpdateBusinessDto {
   tax_rate?: number;
 
   @IsOptional()
+  @IsNumber()
+  @Min(-100)
+  @Max(400)
+  vip_surcharge_percent?: number;
+
+  @IsOptional()
   @IsString()
   timezone?: string;
 
