@@ -67,7 +67,7 @@ export class Tab {
   @CreateDateColumn()
   opened_at: Date;
 
-  @Column({ nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   billed_at: Date | null;
 
   @Column({ nullable: true })
