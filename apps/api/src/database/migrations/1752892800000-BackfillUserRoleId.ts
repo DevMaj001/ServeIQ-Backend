@@ -6,6 +6,19 @@ export class BackfillUserRoleId1752892800000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     console.log('Starting role_id backfill for users with NULL role_id...');
 
+    // This migration predates the base schema in a fresh-install ordering.
+    // Skip cleanly when the tables it depends on do not exist yet; the base
+    // schema is created by a later migration and has no legacy rows to backfill.
+    const tables = (await queryRunner.query(
+      `SELECT to_regclass('public.users') IS NOT NULL AS has_users, to_regclass('public.roles') IS NOT NULL AS has_roles`,
+    )) as Array<{ has_users: boolean; has_roles: boolean }>;
+    if (!tables[0]?.has_users || !tables[0]?.has_roles) {
+      console.log(
+        'Skipping role_id backfill: users/roles tables do not exist yet (fresh install).',
+      );
+      return;
+    }
+
     // Map legacy users.role enum values to roles.name
     // First, ensure all expected roles exist
     const roles = (await queryRunner.query(

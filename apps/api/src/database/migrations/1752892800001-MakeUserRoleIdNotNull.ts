@@ -6,6 +6,19 @@ export class MakeUserRoleIdNotNull1752892800001 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     console.log('Enforcing NOT NULL constraint on users.role_id...');
 
+    // This migration predates the base schema in a fresh-install ordering.
+    // Skip cleanly when the users table does not exist yet (it is created by
+    // a later migration); the backfill that precedes this also skips then.
+    const tables = (await queryRunner.query(
+      `SELECT to_regclass('public.users') IS NOT NULL AS has_users`,
+    )) as Array<{ has_users: boolean }>;
+    if (!tables[0]?.has_users) {
+      console.log(
+        'Skipping role_id NOT NULL constraint: users table does not exist yet (fresh install).',
+      );
+      return;
+    }
+
     // Verify no NULLs remain before applying constraint
     const nullCount = (await queryRunner.query(
       `SELECT COUNT(*) as count FROM users WHERE role_id IS NULL`,
