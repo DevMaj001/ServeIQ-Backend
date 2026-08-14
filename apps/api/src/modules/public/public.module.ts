@@ -9,6 +9,7 @@ import { Advertisement } from '../advertisement/entities/advertisement.entity';
 import { Tab } from '../tab/entities/tab.entity';
 import { Table } from '../table/entities/table.entity';
 import { Order } from '../order/entities/order.entity';
+import { Review } from '../review/entities/review.entity';
 import { TrackingModule } from '../tracking/tracking.module';
 
 @Module({
@@ -20,6 +21,7 @@ import { TrackingModule } from '../tracking/tracking.module';
       Tab,
       Table,
       Order,
+      Review,
     ]),
     TrackingModule,
   ],

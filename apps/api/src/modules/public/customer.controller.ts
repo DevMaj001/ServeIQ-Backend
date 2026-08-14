@@ -170,4 +170,36 @@ export class CustomerController {
       throw new BadRequestException('x-tracking-code header is required');
     return this.customerService.confirmReceived(tabId, trackingCode);
   }
+
+  @Post('tabs/:tabId/review')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @ApiOperation({
+    summary: 'Self-service: submit a customer review (rating 1-5) after payment',
+  })
+  @ApiParam({ name: 'tabId', description: 'Tab UUID' })
+  @ApiHeader({
+    name: 'x-tracking-code',
+    required: true,
+    description: 'Tracking code for the tab',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['rating'],
+      properties: {
+        rating: { type: 'number', example: 5 },
+        comment: { type: 'string', example: 'Food was great!' },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Review submitted.' })
+  async submitReview(
+    @Param('tabId') tabId: string,
+    @Headers('x-tracking-code') trackingCode: string,
+    @Body() body: { rating: number; comment?: string },
+  ) {
+    if (!trackingCode)
+      throw new BadRequestException('x-tracking-code header is required');
+    return this.customerService.submitReview(tabId, trackingCode, body);
+  }
 }

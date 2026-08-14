@@ -12,6 +12,7 @@ import { Order } from '../order/entities/order.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Table } from '../table/entities/table.entity';
 import { Branch } from '../branch/entities/branch.entity';
+import { Review } from '../review/entities/review.entity';
 import { TrackingService } from '../tracking/tracking.service';
 import { RealtimeService } from '../gateway/realtime.service';
 import { TabType, FulfillmentType, OrderStatus } from '../../common/shared';
@@ -29,6 +30,8 @@ export class CustomerService {
     private orderRepo: Repository<Order>,
     @InjectRepository(Branch)
     private branchRepo: Repository<Branch>,
+    @InjectRepository(Review)
+    private reviewRepo: Repository<Review>,
     @Inject(DataSource)
     private dataSource: DataSource,
     private trackingService: TrackingService,
@@ -265,6 +268,64 @@ export class CustomerService {
     }
 
     return this.getTabResponse(tabId);
+  }
+
+  /** Self-service: customer submits a star rating + optional comment after a
+   *  successful payment. Tracked against the tab so it can't be spammed. */
+  async submitReview(
+    tabId: string,
+    trackingCode: string,
+    body: { rating: number; comment?: string },
+  ) {
+    const tab = await this.tabRepo.findOne({ where: { id: tabId } });
+    if (!tab) throw new NotFoundException('Tab not found');
+    if (tab.tracking_code !== trackingCode)
+      throw new ForbiddenException('Invalid tracking code');
+    if (tab.status !== 'open' && tab.status !== 'paid')
+      throw new BadRequestException('Tab is not open');
+
+    const rating = Number(body?.rating);
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      throw new BadRequestException('rating must be an integer between 1 and 5');
+    }
+
+    const branch = await this.branchRepo.findOne({
+      where: { id: tab.branch_id },
+    });
+    const existing = await this.reviewRepo.findOne({
+      where: { tab_id: tab.id },
+    });
+    const comment =
+      typeof body?.comment === 'string' && body.comment.trim()
+        ? body.comment.trim().slice(0, 2000)
+        : null;
+
+    let saved: Review;
+    if (existing) {
+      existing.rating = rating;
+      existing.comment = comment;
+      saved = await this.reviewRepo.save(existing);
+    } else {
+      saved = await this.reviewRepo.save(
+        this.reviewRepo.create({
+          business_id: branch?.business_id || '',
+          branch_id: tab.branch_id,
+          tab_id: tab.id,
+          rating,
+          comment,
+        }),
+      );
+    }
+
+    return {
+      success: true,
+      review: {
+        id: saved.id,
+        rating: saved.rating,
+        comment: saved.comment,
+        created_at: saved.created_at,
+      },
+    };
   }
 
   private async getTabResponse(tabId: string) {

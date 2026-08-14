@@ -64,6 +64,9 @@ import { CreatePlatformPaymentProvidersTable1801000000000 } from './database/mig
 import { CreateFeedbackTable1802000000000 } from './database/migrations/1802000000000-CreateFeedbackTable';
 import { AddIsVipToTables1804000000000 } from './database/migrations/1804000000000-AddIsVipToTables';
 import { AddVipSurchargePercentToBusinesses1805000000000 } from './database/migrations/1805000000000-AddVipSurchargePercentToBusinesses';
+import { AddServiceChargePercentToBusinesses1806000000000 } from './database/migrations/1806000000000-AddServiceChargePercentToBusinesses';
+import { AddInactiveToTableStatus1807000000000 } from './database/migrations/1807000000000-AddInactiveToTableStatus';
+import { CreateReviewsTable1808000000000 } from './database/migrations/1808000000000-CreateReviewsTable';
 import { PlatformPaymentProvider } from './modules/admin/entities/platform-payment-provider.entity';
 import { Feedback } from './modules/feedback/entities/feedback.entity';
 
@@ -167,6 +170,9 @@ import { GatewayModule } from './modules/gateway/gateway.module';
         CreateFeedbackTable1802000000000,
         AddIsVipToTables1804000000000,
         AddVipSurchargePercentToBusinesses1805000000000,
+        AddServiceChargePercentToBusinesses1806000000000,
+        AddInactiveToTableStatus1807000000000,
+        CreateReviewsTable1808000000000,
       ],
       migrationsRun: true,
       synchronize: false,
