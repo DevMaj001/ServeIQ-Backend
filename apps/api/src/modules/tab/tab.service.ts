@@ -79,6 +79,12 @@ export class TabService {
     // Virtual tables never participate in occupancy logic — they are system records, not seatable tables.
     // For dine-in tables, check if the table already has an open tab.
     if (tabType !== TabType.TAKEAWAY) {
+      const table = await this.tableRepository.findOne({
+        where: { id: tableId },
+      });
+      if (table && table.status === TableStatus.INACTIVE) {
+        throw new BadRequestException('This table is out of service.');
+      }
       const existingOpenTab = await this.tabRepository.findOne({
         where: { table_id: tableId, status: 'open' },
       });
@@ -524,7 +530,7 @@ export class TabService {
       // Virtual tables never participate in occupancy logic
       if (sourceTable && !sourceTable.is_virtual) {
         await tableRepo.update(sourceTab.table_id, {
-          status: TableStatus.AVAILABLE,
+          status: TableStatus.INACTIVE,
         });
       }
     });
@@ -541,7 +547,7 @@ export class TabService {
       this.realtimeService.emitTableStatusChange(
         branchId,
         sourceTab.table_id,
-        TableStatus.AVAILABLE,
+        TableStatus.INACTIVE,
       );
     }
 
