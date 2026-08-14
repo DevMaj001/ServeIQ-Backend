@@ -108,6 +108,7 @@ export class TrackingService {
         paymentAccountNumber,
         tabStatus: tab.status,
         tabId: tab.id,
+        tabType: tab.tab_type,
         trackingGeneratedAt: tab.tracking_generated_at,
         orders: [],
       };
@@ -153,6 +154,7 @@ export class TrackingService {
       paymentAccountNumber,
       tabStatus: tab.status,
       tabId: tab.id,
+      tabType: tab.tab_type,
       trackingGeneratedAt: tab.tracking_generated_at,
       overallStatus: hasDeclined ? 'PARTIALLY_DECLINED' : 'ACTIVE',
       orders: items,
