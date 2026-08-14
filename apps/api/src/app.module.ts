@@ -67,6 +67,7 @@ import { AddVipSurchargePercentToBusinesses1805000000000 } from './database/migr
 import { AddServiceChargePercentToBusinesses1806000000000 } from './database/migrations/1806000000000-AddServiceChargePercentToBusinesses';
 import { AddInactiveToTableStatus1807000000000 } from './database/migrations/1807000000000-AddInactiveToTableStatus';
 import { CreateReviewsTable1808000000000 } from './database/migrations/1808000000000-CreateReviewsTable';
+import { AddNavigationPermissions1809000000000 } from './database/migrations/1809000000000-AddNavigationPermissions';
 import { PlatformPaymentProvider } from './modules/admin/entities/platform-payment-provider.entity';
 import { Feedback } from './modules/feedback/entities/feedback.entity';
 
@@ -173,6 +174,7 @@ import { GatewayModule } from './modules/gateway/gateway.module';
         AddServiceChargePercentToBusinesses1806000000000,
         AddInactiveToTableStatus1807000000000,
         CreateReviewsTable1808000000000,
+        AddNavigationPermissions1809000000000,
       ],
       migrationsRun: true,
       synchronize: false,

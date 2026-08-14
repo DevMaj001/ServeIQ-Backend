@@ -100,6 +100,12 @@ const ALL_PERMISSIONS: PermissionDef[] = [
     description: 'Assign a waiter to a table',
     category: 'Tables',
   },
+  {
+    code: PERMISSIONS.VIEW_TABS,
+    name: 'View Tabs',
+    description: 'View open tabs',
+    category: 'Tables',
+  },
 
   // Payments
   {
@@ -196,6 +202,24 @@ const ALL_PERMISSIONS: PermissionDef[] = [
     description: 'Manage supplier records',
     category: 'Inventory',
   },
+  {
+    code: PERMISSIONS.VIEW_INVENTORY_AUDIT,
+    name: 'View Inventory Audit',
+    description: 'View inventory audit log',
+    category: 'Inventory',
+  },
+  {
+    code: PERMISSIONS.VIEW_INVENTORY_TALLY,
+    name: 'View Daily Tally',
+    description: 'View daily inventory tally',
+    category: 'Inventory',
+  },
+  {
+    code: PERMISSIONS.RECONCILE_INVENTORY,
+    name: 'Reconcile Inventory',
+    description: 'Reconcile inventory levels',
+    category: 'Inventory',
+  },
 
   // Reports
   {
@@ -226,6 +250,48 @@ const ALL_PERMISSIONS: PermissionDef[] = [
     code: PERMISSIONS.EXPORT_REPORTS,
     name: 'Export Reports',
     description: 'Export reports to CSV/PDF',
+    category: 'Reports',
+  },
+  {
+    code: PERMISSIONS.VIEW_ANALYTICS,
+    name: 'View Analytics',
+    description: 'View the analytics dashboard',
+    category: 'Reports',
+  },
+  {
+    code: PERMISSIONS.VIEW_BRANCH_ANALYTICS,
+    name: 'View Branch Analytics',
+    description: 'View branch-level analytics',
+    category: 'Reports',
+  },
+  {
+    code: PERMISSIONS.VIEW_REPORTS,
+    name: 'View Reports',
+    description: 'View sales reports',
+    category: 'Reports',
+  },
+  {
+    code: PERMISSIONS.VIEW_SHIFTS,
+    name: 'View Shifts',
+    description: 'View shift schedules',
+    category: 'Reports',
+  },
+  {
+    code: PERMISSIONS.VIEW_POS,
+    name: 'View POS',
+    description: 'View the point-of-sale interface',
+    category: 'Reports',
+  },
+  {
+    code: PERMISSIONS.VIEW_PULSE,
+    name: 'View Pulse',
+    description: 'View the real-time pulse dashboard',
+    category: 'Reports',
+  },
+  {
+    code: PERMISSIONS.VIEW_PREMIUM_DASHBOARD,
+    name: 'View Premium Dashboard',
+    description: 'View the premium dashboard',
     category: 'Reports',
   },
 
@@ -266,6 +332,18 @@ const ALL_PERMISSIONS: PermissionDef[] = [
     description: 'Reset staff passwords and PINs',
     category: 'Staff',
   },
+  {
+    code: PERMISSIONS.VIEW_DEPARTMENTS,
+    name: 'View Departments',
+    description: 'View department management',
+    category: 'Staff',
+  },
+  {
+    code: PERMISSIONS.VIEW_NOTIFICATIONS,
+    name: 'View Notifications',
+    description: 'View system notifications',
+    category: 'Staff',
+  },
 
   // Customers
   {
@@ -284,6 +362,12 @@ const ALL_PERMISSIONS: PermissionDef[] = [
     code: PERMISSIONS.MANAGE_RESERVATIONS,
     name: 'Manage Reservations',
     description: 'Manage table reservations',
+    category: 'Customers',
+  },
+  {
+    code: PERMISSIONS.VIEW_FEEDBACK,
+    name: 'View Feedback',
+    description: 'Submit and view feedback',
     category: 'Customers',
   },
 
@@ -322,6 +406,18 @@ const ALL_PERMISSIONS: PermissionDef[] = [
     code: PERMISSIONS.BRANDING,
     name: 'Branding',
     description: 'Manage branding and appearance',
+    category: 'System',
+  },
+  {
+    code: PERMISSIONS.VIEW_BILLING,
+    name: 'View Billing',
+    description: 'View billing and subscription',
+    category: 'System',
+  },
+  {
+    code: PERMISSIONS.VIEW_BUSINESS_SETUP,
+    name: 'View Business Setup',
+    description: 'View the business setup wizard',
     category: 'System',
   },
 ];
@@ -364,11 +460,26 @@ const DEFAULT_ROLES: RoleDef[] = [
       PERMISSIONS.VIEW_DAILY_SALES,
       PERMISSIONS.VIEW_MONTHLY_SALES,
       PERMISSIONS.VIEW_PROFIT,
+      PERMISSIONS.VIEW_ANALYTICS,
+      PERMISSIONS.VIEW_BRANCH_ANALYTICS,
+      PERMISSIONS.VIEW_REPORTS,
+      PERMISSIONS.VIEW_SHIFTS,
+      PERMISSIONS.VIEW_POS,
+      PERMISSIONS.VIEW_PULSE,
+      PERMISSIONS.VIEW_PREMIUM_DASHBOARD,
       PERMISSIONS.VIEW_INVENTORY,
       PERMISSIONS.UPDATE_INVENTORY,
       PERMISSIONS.ADJUST_STOCK,
+      PERMISSIONS.VIEW_INVENTORY_AUDIT,
+      PERMISSIONS.VIEW_INVENTORY_TALLY,
+      PERMISSIONS.RECONCILE_INVENTORY,
       PERMISSIONS.MARK_UNAVAILABLE,
       PERMISSIONS.VIEW_STAFF,
+      PERMISSIONS.VIEW_DEPARTMENTS,
+      PERMISSIONS.VIEW_NOTIFICATIONS,
+      PERMISSIONS.VIEW_TABS,
+      PERMISSIONS.VIEW_BILLING,
+      PERMISSIONS.VIEW_BUSINESS_SETUP,
       PERMISSIONS.VIEW_TRACKING,
       PERMISSIONS.GENERATE_TRACKING,
       PERMISSIONS.MANAGE_RESERVATIONS,
