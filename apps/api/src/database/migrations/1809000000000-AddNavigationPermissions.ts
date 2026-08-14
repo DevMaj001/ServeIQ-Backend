@@ -32,30 +32,32 @@ export class AddNavigationPermissions1809000000000 implements MigrationInterface
     // 2. Grant each new permission to roles that already hold its parent permission
     //    so nobody loses existing access while gaining granular control.
     await queryRunner.query(`
+      WITH v(new_code, parent_code) AS (
+        VALUES
+          ('view_analytics', 'view_dashboard'),
+          ('view_branch_analytics', 'view_daily_sales'),
+          ('view_reports', 'view_daily_sales'),
+          ('view_departments', 'view_staff'),
+          ('view_shifts', 'view_dashboard'),
+          ('view_pos', 'view_dashboard'),
+          ('view_notifications', 'view_dashboard'),
+          ('view_billing', 'view_dashboard'),
+          ('view_billing', 'manage_subscription'),
+          ('view_pulse', 'view_dashboard'),
+          ('view_premium_dashboard', 'view_dashboard'),
+          ('view_inventory_audit', 'view_inventory'),
+          ('view_inventory_tally', 'view_inventory'),
+          ('reconcile_inventory', 'adjust_stock'),
+          ('view_tabs', 'open_table'),
+          ('view_business_setup', 'restaurant_settings')
+      )
       INSERT INTO "role_permissions" ("role_id", "permission_id")
       SELECT DISTINCT r.id, np.id
       FROM "roles" r
       JOIN "role_permissions" rp ON rp.role_id = r.id
       JOIN "permissions" op ON op.id = rp.permission_id
+      JOIN v ON v.parent_code = op.code
       JOIN "permissions" np ON np.code = v.new_code
-      JOIN (VALUES
-        ('view_analytics', 'view_dashboard'),
-        ('view_branch_analytics', 'view_daily_sales'),
-        ('view_reports', 'view_daily_sales'),
-        ('view_departments', 'view_staff'),
-        ('view_shifts', 'view_dashboard'),
-        ('view_pos', 'view_dashboard'),
-        ('view_notifications', 'view_dashboard'),
-        ('view_billing', 'view_dashboard'),
-        ('view_billing', 'manage_subscription'),
-        ('view_pulse', 'view_dashboard'),
-        ('view_premium_dashboard', 'view_dashboard'),
-        ('view_inventory_audit', 'view_inventory'),
-        ('view_inventory_tally', 'view_inventory'),
-        ('reconcile_inventory', 'adjust_stock'),
-        ('view_tabs', 'open_table'),
-        ('view_business_setup', 'restaurant_settings')
-      ) AS v(new_code, parent_code) ON v.new_code = np.code AND v.parent_code = op.code
       WHERE NOT EXISTS (
         SELECT 1 FROM "role_permissions" x WHERE x.role_id = r.id AND x.permission_id = np.id
       )
