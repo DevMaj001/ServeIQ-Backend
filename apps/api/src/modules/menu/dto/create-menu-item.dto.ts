@@ -4,6 +4,7 @@ import {
   IsNumber,
   IsOptional,
   IsBoolean,
+  IsIn,
   Min,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
@@ -113,4 +114,17 @@ export class CreateMenuItemDto {
   @IsString()
   @IsOptional()
   created_by?: string;
+
+  @ApiProperty({
+    example: 'cook',
+    enum: ['instant', 'cook'],
+    description:
+      "Fulfillment routing: 'instant' = ready to serve immediately (e.g. drinks), 'cook' = go to kitchen/supervisor pipeline.",
+    required: false,
+    default: 'cook',
+  })
+  @IsString()
+  @IsIn(['instant', 'cook'])
+  @IsOptional()
+  prep_type?: string;
 }

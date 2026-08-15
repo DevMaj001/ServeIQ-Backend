@@ -161,6 +161,14 @@ export class OrderService {
             0,
           );
           const unitPrice = Math.round(menuItem.price_kobo * vipMultiplier);
+          // Instant (ready-to-serve) items — e.g. drinks — skip the supervisor
+          // approval + timer pipeline and land directly in "ready for pickup"
+          // so the waiter/bar can serve them immediately. Cook items keep the
+          // existing pending → approve → timer flow.
+          const orderStatus =
+            menuItem.prep_type === 'instant'
+              ? OrderStatus.READY_FOR_PICKUP
+              : OrderStatus.PENDING_SUPERVISOR_APPROVAL;
           const order = manager.getRepository(Order).create({
             tab_id: tabId,
             menu_item_id: item.menu_item_id,
@@ -172,7 +180,7 @@ export class OrderService {
             notes: item.notes,
             modifiers: item.modifiers || null,
             fulfillment_type: item.fulfillment_type || tabDefault,
-            order_status: OrderStatus.PENDING_SUPERVISOR_APPROVAL,
+            order_status: orderStatus,
           });
           orders.push(await manager.getRepository(Order).save(order));
         }

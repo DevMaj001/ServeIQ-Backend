@@ -47,6 +47,9 @@ export class MenuItem {
   @Column({ default: true })
   is_available: boolean;
 
+  @Column({ type: 'varchar', length: 20, default: 'cook' })
+  prep_type: string;
+
   @Column({ type: 'decimal', precision: 12, scale: 3, default: 0 })
   quantity_in_stock: number;
 

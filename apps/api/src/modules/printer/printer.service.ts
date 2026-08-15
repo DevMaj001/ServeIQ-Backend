@@ -13,6 +13,7 @@ import { Order } from '../order/entities/order.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Tab } from '../tab/entities/tab.entity';
 import { Table } from '../table/entities/table.entity';
+import { OrderStatus } from '../../common/shared';
 
 @Injectable()
 export class PrinterService {
@@ -247,9 +248,18 @@ export class PrinterService {
     });
     const items = [];
     for (const order of orders) {
+      if (
+        order.order_status === OrderStatus.DELIVERED ||
+        order.order_status === OrderStatus.CANCELLED
+      ) {
+        continue;
+      }
       const menuItem = await this.menuItemRepo.findOne({
         where: { id: order.menu_item_id },
       });
+      if (menuItem?.prep_type === 'instant') {
+        continue;
+      }
       items.push({
         id: order.id,
         name: menuItem?.name || 'Unknown',

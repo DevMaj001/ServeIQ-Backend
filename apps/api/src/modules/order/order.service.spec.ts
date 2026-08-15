@@ -356,6 +356,138 @@ describe('OrderService', () => {
         { name: 'Extra Cheese', price_kobo: 1500, qty: 1 },
       ]);
     });
+
+    it('routes instant items to ready_for_pickup immediately', async () => {
+      const tabRepo = mockTabRepository();
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        status: 'open',
+      });
+
+      const menuRepo = mockMenuRepository();
+      menuRepo.find.mockResolvedValue([
+        {
+          id: 'menu-1',
+          name: 'Coke',
+          price_kobo: 1500,
+          track_stock: false,
+          prep_type: 'instant',
+        },
+      ]);
+
+      manager.getRepository = jest.fn().mockReturnValue({
+        create: jest.fn((dto) => dto),
+        save: jest.fn(async (order) => ({ ...order, id: 'order-1' })),
+        findOne: jest.fn(),
+      });
+
+      const service = buildService({
+        tabRepository: tabRepo,
+        menuRepository: menuRepo,
+        dataSource: {
+          transaction: jest.fn(async (cb) => cb(manager)),
+          query: jest.fn(),
+        },
+      });
+
+      const result = await service.addOrderItems(
+        'tab-1',
+        [{ menu_item_id: 'menu-1', quantity: 1 }],
+        'user-1',
+      );
+
+      expect(result[0].order_status).toBe(OrderStatus.READY_FOR_PICKUP);
+    });
+
+    it('routes cook items to pending supervisor approval', async () => {
+      const tabRepo = mockTabRepository();
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        status: 'open',
+      });
+
+      const menuRepo = mockMenuRepository();
+      menuRepo.find.mockResolvedValue([
+        {
+          id: 'menu-1',
+          name: 'Jollof Rice',
+          price_kobo: 5000,
+          track_stock: false,
+          prep_type: 'cook',
+        },
+      ]);
+
+      manager.getRepository = jest.fn().mockReturnValue({
+        create: jest.fn((dto) => dto),
+        save: jest.fn(async (order) => ({ ...order, id: 'order-1' })),
+        findOne: jest.fn(),
+      });
+
+      const service = buildService({
+        tabRepository: tabRepo,
+        menuRepository: menuRepo,
+        dataSource: {
+          transaction: jest.fn(async (cb) => cb(manager)),
+          query: jest.fn(),
+        },
+      });
+
+      const result = await service.addOrderItems(
+        'tab-1',
+        [{ menu_item_id: 'menu-1', quantity: 1 }],
+        'user-1',
+      );
+
+      expect(result[0].order_status).toBe(
+        OrderStatus.PENDING_SUPERVISOR_APPROVAL,
+      );
+    });
+
+    it('defaults items without prep_type to pending supervisor approval', async () => {
+      const tabRepo = mockTabRepository();
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        status: 'open',
+      });
+
+      const menuRepo = mockMenuRepository();
+      menuRepo.find.mockResolvedValue([
+        {
+          id: 'menu-1',
+          name: 'Jollof Rice',
+          price_kobo: 5000,
+          track_stock: false,
+        },
+      ]);
+
+      manager.getRepository = jest.fn().mockReturnValue({
+        create: jest.fn((dto) => dto),
+        save: jest.fn(async (order) => ({ ...order, id: 'order-1' })),
+        findOne: jest.fn(),
+      });
+
+      const service = buildService({
+        tabRepository: tabRepo,
+        menuRepository: menuRepo,
+        dataSource: {
+          transaction: jest.fn(async (cb) => cb(manager)),
+          query: jest.fn(),
+        },
+      });
+
+      const result = await service.addOrderItems(
+        'tab-1',
+        [{ menu_item_id: 'menu-1', quantity: 1 }],
+        'user-1',
+      );
+
+      expect(result[0].order_status).toBe(
+        OrderStatus.PENDING_SUPERVISOR_APPROVAL,
+      );
+    });
   });
 
   describe('findByTab', () => {
