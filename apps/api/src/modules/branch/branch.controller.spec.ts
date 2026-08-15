@@ -4,6 +4,7 @@ import { BranchService } from './branch.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Branch } from './entities/branch.entity';
 import { PlatformPaymentProvider } from '../admin/entities/platform-payment-provider.entity';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Repository } from 'typeorm';
 
 const mockRepo = () => ({
@@ -41,7 +42,10 @@ describe('BranchController', () => {
           useValue: mockRepo(),
         },
       ],
-    }).compile();
+    })
+      .overrideGuard(PermissionsGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<BranchController>(BranchController);
   });

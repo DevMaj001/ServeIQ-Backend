@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserController } from './user.controller';
 import { UserService } from './user.service';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
 
 describe('UserController', () => {
   let controller: UserController;
@@ -9,7 +10,10 @@ describe('UserController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [UserController],
       providers: [{ provide: UserService, useValue: {} }],
-    }).compile();
+    })
+      .overrideGuard(PermissionsGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<UserController>(UserController);
   });

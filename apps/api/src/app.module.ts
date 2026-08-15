@@ -101,6 +101,7 @@ import { RoleModule } from './modules/role/role.module';
 import { MenuCategoryModule } from './modules/menu-category/menu-category.module';
 import { UnitModule } from './modules/unit/unit.module';
 import { FeedbackModule } from './modules/feedback/feedback.module';
+import { ReviewModule } from './modules/review/review.module';
 import { GatewayModule } from './modules/gateway/gateway.module';
 
 @Module({
@@ -225,6 +226,7 @@ import { GatewayModule } from './modules/gateway/gateway.module';
     MenuCategoryModule,
     UnitModule,
     FeedbackModule,
+    ReviewModule,
     GatewayModule,
   ],
   controllers: [AppController],

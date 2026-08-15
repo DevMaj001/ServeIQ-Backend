@@ -7,8 +7,10 @@ import { Tab } from '../tab/entities/tab.entity';
 import { Order } from '../order/entities/order.entity';
 import { PosTerminal } from '../pos/entities/pos-terminal.entity';
 import { Branch } from '../branch/entities/branch.entity';
+import { Business } from '../business/entities/business.entity';
 import { Repository } from 'typeorm';
 import { PaymentMethod } from '../../common/shared';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
 
 const mockRepo = () => ({
   findOne: jest.fn(),
@@ -27,7 +29,7 @@ const mockRepo = () => ({
   createQueryBuilder: jest.fn().mockReturnThis(),
 });
 
-const mockReq = { rawBody: undefined } as any;
+const mockReq = { rawBody: undefined, headers: {} } as any;
 
 describe('PaymentController', () => {
   let controller: PaymentController;
@@ -54,9 +56,13 @@ describe('PaymentController', () => {
         { provide: getRepositoryToken(Order), useValue: orderRepo },
         { provide: getRepositoryToken(PosTerminal), useValue: posTerminalRepo },
         { provide: getRepositoryToken(Branch), useValue: branchRepo },
+        { provide: getRepositoryToken(Business), useValue: mockRepo() },
         { provide: BillService, useValue: billService },
       ],
-    }).compile();
+    })
+      .overrideGuard(PermissionsGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<PaymentController>(PaymentController);
   });
@@ -142,6 +148,7 @@ describe('PaymentController', () => {
       expect(result.status).toBe('processed');
       expect(billService.processPayment).toHaveBeenCalledWith(
         'tab-1',
+        'branch-1',
         'system-webhook',
         'owner',
         expect.objectContaining({
@@ -161,6 +168,19 @@ describe('PaymentController', () => {
         payment_reference: 'ref-1',
       });
       tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
+      branchRepo.findOne.mockResolvedValue({
+        settings: {
+          payment_providers: [
+            {
+              name: 'monniepoint',
+              type: 'webhook',
+              label: 'Moniepoint',
+              verification_method: 'none',
+              config: {},
+            },
+          ],
+        },
+      });
       const result = await controller.monniepointWebhook(mockReq, 'sig', {
         data: { reference: 'ref-1', amount: 100, status: 'SUCCESSFUL' },
       });
@@ -215,6 +235,7 @@ describe('PaymentController', () => {
       expect(result.status).toBe('processed');
       expect(billService.processPayment).toHaveBeenCalledWith(
         'tab-1',
+        'branch-1',
         'system-webhook',
         'owner',
         expect.objectContaining({
@@ -257,6 +278,7 @@ describe('PaymentController', () => {
       expect(result.status).toBe('processed');
       expect(billService.processPayment).toHaveBeenCalledWith(
         'tab-1',
+        'branch-1',
         'system-webhook',
         'owner',
         expect.objectContaining({
