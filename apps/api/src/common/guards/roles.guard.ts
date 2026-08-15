@@ -19,9 +19,17 @@ export class RolesGuard implements CanActivate {
     }>();
     const user = request.user;
 
-    // Prefer roleEntity.name (PBAC) over legacy role string
-    // Case-insensitive comparison since DB has "Owner" but enum is "owner"
-    const userRole = (user?.roleEntity?.name || user?.role || '').toLowerCase();
-    return requiredRoles.some((role: string) => userRole === role.toLowerCase());
+    // Accept either the PBAC roleEntity.name or the legacy role claim.
+    // Case-insensitive comparison since DB has "Owner" but enum is "owner".
+    // Superadmin accounts have no dedicated role entity (role_id points at the
+    // global Owner role), so their legacy 'superadmin' claim must satisfy the
+    // SUPERADMIN requirement.
+    const roleEntityName = (user?.roleEntity?.name || '').toLowerCase();
+    const legacyRole = (user?.role || '').toLowerCase();
+    return requiredRoles.some(
+      (role: string) =>
+        roleEntityName === role.toLowerCase() ||
+        legacyRole === role.toLowerCase(),
+    );
   }
 }
