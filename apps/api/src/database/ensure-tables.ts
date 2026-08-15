@@ -96,6 +96,9 @@ export async function ensureTables(ds: DataSource) {
   await ds.query(
     `ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "modifiers" jsonb`,
   );
+  await ds.query(
+    `ALTER TABLE "menu_items" ADD COLUMN IF NOT EXISTS "prep_type" varchar(20) NOT NULL DEFAULT 'cook'`,
+  );
 
   await ds.query(`CREATE TABLE IF NOT EXISTS "printers" (
     "id" uuid NOT NULL DEFAULT gen_random_uuid(),
