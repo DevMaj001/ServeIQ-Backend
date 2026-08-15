@@ -73,24 +73,10 @@ export class AuthService {
         queryRunner.manager,
       );
 
-      // 3. Create Owner User
-      const salt = await bcrypt.genSalt();
-      const passwordHash = await bcrypt.hash(dto.password, salt);
-
-      const user = queryRunner.manager.create(User, {
-        business_id: savedBusiness.id,
-        branch_id: savedBranch.id,
-        full_name: dto.fullName,
-        email: dto.email,
-        password_hash: passwordHash,
-        role: UserRole.OWNER,
-        is_active: true,
-      });
-      const savedUser = await queryRunner.manager.save(user);
-
-      // 3b. Link the owner to the global Owner role so PBAC permission
-      // checks pass. A fresh business has no roles yet; owners bypass the
-      // permission system only when their role entity resolves to 'Owner'.
+      // 3. Resolve the global Owner role first so the owner's role_id is
+      // set on insert (users.role_id is NOT NULL). A fresh business has no
+      // roles yet; owners bypass the permission system only when their role
+      // entity resolves to 'Owner'.
       const roleRepo = queryRunner.manager.getRepository(Role);
       const permissionRepo = queryRunner.manager.getRepository(Permission);
       let ownerRole = await roleRepo.findOne({ where: { name: 'Owner' } });
@@ -105,8 +91,22 @@ export class AuthService {
           }),
         );
       }
-      savedUser.role_id = ownerRole.id;
-      await queryRunner.manager.save(savedUser);
+
+      // 4. Create Owner User
+      const salt = await bcrypt.genSalt();
+      const passwordHash = await bcrypt.hash(dto.password, salt);
+
+      const user = queryRunner.manager.create(User, {
+        business_id: savedBusiness.id,
+        branch_id: savedBranch.id,
+        full_name: dto.fullName,
+        email: dto.email,
+        password_hash: passwordHash,
+        role: UserRole.OWNER,
+        role_id: ownerRole.id,
+        is_active: true,
+      });
+      const savedUser = await queryRunner.manager.save(user);
 
       // 4. Update Business with Owner ID
       savedBusiness.owner_id = savedUser.id;
