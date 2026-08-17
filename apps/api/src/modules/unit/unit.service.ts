@@ -11,9 +11,11 @@ export class UnitService {
   ) {}
 
   async create(data: Partial<Unit>) {
-    const existing = await this.unitRepo.findOne({
-      where: { branch_id: data.branch_id, name: data.name },
-    });
+    const existing = await this.unitRepo
+      .createQueryBuilder('unit')
+      .where('unit.branch_id = :branchId', { branchId: data.branch_id })
+      .andWhere('LOWER(unit.name) = LOWER(:name)', { name: data.name })
+      .getOne();
     if (existing) return existing;
     const unit = this.unitRepo.create(data);
     return this.unitRepo.save(unit);

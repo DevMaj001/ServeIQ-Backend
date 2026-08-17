@@ -11,9 +11,11 @@ export class MenuCategoryService {
   ) {}
 
   async create(data: Partial<MenuCategory>) {
-    const existing = await this.categoryRepo.findOne({
-      where: { branch_id: data.branch_id, name: data.name },
-    });
+    const existing = await this.categoryRepo
+      .createQueryBuilder('cat')
+      .where('cat.branch_id = :branchId', { branchId: data.branch_id })
+      .andWhere('LOWER(cat.name) = LOWER(:name)', { name: data.name })
+      .getOne();
     if (existing) return existing;
     const category = this.categoryRepo.create(data);
     return this.categoryRepo.save(category);
