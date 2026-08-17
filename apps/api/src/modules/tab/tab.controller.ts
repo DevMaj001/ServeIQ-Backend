@@ -50,6 +50,8 @@ export class TabController {
     name: 'status',
     required: false,
     enum: ['open', 'billed', 'paid', 'voided'],
+    description:
+      'Filter by tab status. Multiple statuses can be comma-separated, e.g. "open,billed".',
   })
   @ApiQuery({
     name: 'waiter_id',

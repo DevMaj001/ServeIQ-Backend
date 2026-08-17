@@ -6,7 +6,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, In } from 'typeorm';
 import { Tab } from './entities/tab.entity';
 import { Table, TableStatus } from '../table/entities/table.entity';
 import { User } from '../user/entities/user.entity';
@@ -218,7 +218,11 @@ export class TabService {
   ) {
     const where: any = { branch_id: branchId };
     if (status) {
-      where.status = status;
+      const statuses = status
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+      where.status = statuses.length > 1 ? In(statuses) : statuses[0];
     }
     if (waiterId) {
       where.waiter_id = waiterId;
