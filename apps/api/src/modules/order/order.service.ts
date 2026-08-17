@@ -225,9 +225,15 @@ export class OrderService {
       });
       if (!tab) throw new NotFoundException('Tab not found in this branch');
     }
-    return this.orderRepository.find({
-      where: { tab_id: tabId },
-    });
+    const rows = await this.dataSource.query(
+      `SELECT o.*, mi.name AS menu_item_name
+         FROM orders o
+         LEFT JOIN menu_items mi ON mi.id = o.menu_item_id
+        WHERE o.tab_id = $1
+        ORDER BY o.created_at ASC`,
+      [tabId],
+    );
+    return rows;
   }
 
   async findOne(id: string, branchId?: string) {

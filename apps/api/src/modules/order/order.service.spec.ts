@@ -491,19 +491,27 @@ describe('OrderService', () => {
   });
 
   describe('findByTab', () => {
-    it('returns orders for a tab', async () => {
-      const orderRepo = mockOrderRepository();
-      orderRepo.find.mockResolvedValue([
-        { id: 'o1', tab_id: 'tab-1', subtotal_kobo: 5000 },
-      ]);
+    it('returns orders for a tab with menu item name', async () => {
+      const dataSource = {
+        query: jest.fn().mockResolvedValue([
+          {
+            id: 'o1',
+            tab_id: 'tab-1',
+            subtotal_kobo: 5000,
+            menu_item_name: 'Jollof Rice',
+          },
+        ]),
+      };
 
-      const service = buildService({ orderRepository: orderRepo });
+      const service = buildService({ dataSource });
       const result = await service.findByTab('tab-1');
 
-      expect(orderRepo.find).toHaveBeenCalledWith({
-        where: { tab_id: 'tab-1' },
-      });
+      expect(dataSource.query).toHaveBeenCalledWith(
+        expect.stringContaining('LEFT JOIN menu_items'),
+        ['tab-1'],
+      );
       expect(result).toHaveLength(1);
+      expect(result[0].menu_item_name).toBe('Jollof Rice');
     });
   });
 
