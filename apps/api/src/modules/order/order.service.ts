@@ -89,7 +89,11 @@ export class OrderService {
 
         // Waiter ownership guard: a different waiter must not add items to a tab
         // another waiter is serving (parity with processPayment's 403).
+        // Only enforced while the tab is actively open — a 'billed' tab is still
+        // open for business in the multi-order flow and may receive a new round
+        // from any branch waiter (mirrors tab.service.findOne's open-only guard).
         if (
+          tab.status === 'open' &&
           tab.waiter_id &&
           userId &&
           tab.waiter_id !== userId &&
