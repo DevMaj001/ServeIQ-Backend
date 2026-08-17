@@ -16,6 +16,10 @@ export class MenuService {
   ) {}
 
   async create(createDto: CreateMenuItemDto) {
+    const existing = await this.menuRepository.findOne({
+      where: { branch_id: createDto.branch_id, name: createDto.name },
+    });
+    if (existing) return existing;
     const item = this.menuRepository.create(createDto);
     return this.menuRepository.save(item);
   }
@@ -84,6 +88,14 @@ export class MenuService {
       try {
         const price = parseFloat(cols[priceIdx]);
         if (isNaN(price) || price <= 0) throw new Error('Invalid price');
+
+        const existing = await this.menuRepository.findOne({
+          where: { branch_id: branchId, name: cols[nameIdx] },
+        });
+        if (existing) {
+          created.push(existing);
+          continue;
+        }
 
         const item = this.menuRepository.create({
           branch_id: branchId,
