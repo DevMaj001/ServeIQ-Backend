@@ -22,6 +22,21 @@ export class Shift {
   @Column({ type: 'uuid', nullable: true })
   closed_by: string;
 
+  @Column({ type: 'uuid', nullable: true })
+  template_id: string | null;
+
+  @Column({ type: 'varchar', length: 5, nullable: true })
+  scheduled_start_time: string;
+
+  @Column({ type: 'varchar', length: 5, nullable: true })
+  scheduled_end_time: string;
+
+  @Column({ type: 'varchar', length: 20, default: 'custom' })
+  shift_type: string;
+
+  @Column({ type: 'uuid', array: true, default: '{}' })
+  assigned_staff_ids: string[];
+
   @Column({ type: 'integer', default: 0 })
   starting_cash_kobo: number;
 

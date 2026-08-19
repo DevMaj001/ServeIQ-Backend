@@ -25,6 +25,7 @@ import { Supplier } from './modules/supplier/entities/supplier.entity';
 import { ShiftModule } from './modules/shift/shift.module';
 import { PosModule } from './modules/pos/pos.module';
 import { Shift } from './modules/shift/entities/shift.entity';
+import { ShiftTemplate } from './modules/shift/entities/shift-template.entity';
 import { PosTerminal } from './modules/pos/entities/pos-terminal.entity';
 import { Plan } from './modules/subscription/entities/plan.entity';
 import { Subscription } from './modules/subscription/entities/subscription.entity';
@@ -68,6 +69,7 @@ import { AddServiceChargePercentToBusinesses1806000000000 } from './database/mig
 import { AddInactiveToTableStatus1807000000000 } from './database/migrations/1807000000000-AddInactiveToTableStatus';
 import { CreateReviewsTable1808000000000 } from './database/migrations/1808000000000-CreateReviewsTable';
 import { AddNavigationPermissions1809000000000 } from './database/migrations/1809000000000-AddNavigationPermissions';
+import { CreateShiftTemplates1810000000000 } from './database/migrations/1810000000000-CreateShiftTemplates';
 import { PlatformPaymentProvider } from './modules/admin/entities/platform-payment-provider.entity';
 import { Feedback } from './modules/feedback/entities/feedback.entity';
 
@@ -129,6 +131,7 @@ import { GatewayModule } from './modules/gateway/gateway.module';
         StockMovement,
         Supplier,
         Shift,
+        ShiftTemplate,
         PosTerminal,
         Plan,
         Subscription,
@@ -176,6 +179,7 @@ import { GatewayModule } from './modules/gateway/gateway.module';
         AddInactiveToTableStatus1807000000000,
         CreateReviewsTable1808000000000,
         AddNavigationPermissions1809000000000,
+        CreateShiftTemplates1810000000000,
       ],
       migrationsRun: true,
       synchronize: false,
