@@ -12,7 +12,7 @@ export class CreateShiftTemplates1810000000000 implements MigrationInterface {
         "type" character varying(20) NOT NULL DEFAULT 'custom',
         "scheduled_start_time" character varying(5) NOT NULL,
         "scheduled_end_time" character varying(5) NOT NULL,
-        "days_of_week" integer[] NOT NULL DEFAULT '{}',
+        "days_of_week" jsonb NOT NULL DEFAULT '[]'::jsonb,
         "color" character varying(9) NOT NULL DEFAULT '#22c55e',
         "is_active" boolean NOT NULL DEFAULT true,
         "created_at" TIMESTAMP NOT NULL DEFAULT now(),

@@ -28,7 +28,7 @@ export class ShiftTemplate {
   @Column({ type: 'varchar', length: 5 })
   scheduled_end_time: string;
 
-  @Column({ type: 'int', array: true, default: '{}' })
+  @Column({ type: 'jsonb', default: '[]' })
   days_of_week: number[];
 
   @Column({ type: 'varchar', length: 9, default: '#22c55e' })
