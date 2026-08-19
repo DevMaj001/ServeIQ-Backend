@@ -70,6 +70,7 @@ import { AddInactiveToTableStatus1807000000000 } from './database/migrations/180
 import { CreateReviewsTable1808000000000 } from './database/migrations/1808000000000-CreateReviewsTable';
 import { AddNavigationPermissions1809000000000 } from './database/migrations/1809000000000-AddNavigationPermissions';
 import { CreateShiftTemplates1810000000000 } from './database/migrations/1810000000000-CreateShiftTemplates';
+import { AddBusinessIdToShiftTemplates1811000000000 } from './database/migrations/1811000000000-AddBusinessIdToShiftTemplates';
 import { PlatformPaymentProvider } from './modules/admin/entities/platform-payment-provider.entity';
 import { Feedback } from './modules/feedback/entities/feedback.entity';
 
@@ -180,6 +181,7 @@ import { GatewayModule } from './modules/gateway/gateway.module';
         CreateReviewsTable1808000000000,
         AddNavigationPermissions1809000000000,
         CreateShiftTemplates1810000000000,
+        AddBusinessIdToShiftTemplates1811000000000,
       ],
       migrationsRun: true,
       synchronize: false,

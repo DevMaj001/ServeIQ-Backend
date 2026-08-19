@@ -16,6 +16,10 @@ export class ShiftTemplate {
   @Column({ type: 'uuid' })
   branch_id: string;
 
+  @Index()
+  @Column({ type: 'uuid' })
+  business_id: string;
+
   @Column()
   name: string;
 

@@ -38,22 +38,23 @@ export class ShiftService {
 
   // ===== Shift Templates =====
 
-  async listTemplates(branchId: string) {
+  async listTemplates(businessId: string) {
     return this.templateRepository.find({
-      where: { branch_id: branchId },
+      where: { business_id: businessId },
       order: { created_at: 'DESC' },
     });
   }
 
-  async getTemplate(id: string, branchId: string) {
+  async getTemplate(id: string, businessId: string) {
     const template = await this.templateRepository.findOne({
-      where: { id, branch_id: branchId },
+      where: { id, business_id: businessId },
     });
     if (!template) throw new NotFoundException('Shift template not found');
     return template;
   }
 
   async createTemplate(
+    businessId: string,
     branchId: string,
     dto: {
       name: string;
@@ -66,6 +67,7 @@ export class ShiftService {
   ) {
     const template = this.templateRepository.create({
       branch_id: branchId,
+      business_id: businessId,
       name: dto.name,
       type: dto.type,
       scheduled_start_time: dto.scheduled_start_time,
@@ -79,7 +81,7 @@ export class ShiftService {
 
   async updateTemplate(
     id: string,
-    branchId: string,
+    businessId: string,
     dto: Partial<{
       name: string;
       type: string;
@@ -90,7 +92,7 @@ export class ShiftService {
       is_active?: boolean | number;
     }>,
   ) {
-    const template = await this.getTemplate(id, branchId);
+    const template = await this.getTemplate(id, businessId);
     const updates: Partial<ShiftTemplate> = {};
     if (dto.name !== undefined) updates.name = dto.name;
     if (dto.type !== undefined) updates.type = dto.type;
@@ -106,8 +108,8 @@ export class ShiftService {
     return this.templateRepository.save(template);
   }
 
-  async deleteTemplate(id: string, branchId: string) {
-    const template = await this.getTemplate(id, branchId);
+  async deleteTemplate(id: string, businessId: string) {
+    const template = await this.getTemplate(id, businessId);
     await this.templateRepository.remove(template);
     return { success: true };
   }
@@ -159,6 +161,7 @@ export class ShiftService {
 
   async openShift(
     branchId: string,
+    businessId: string,
     userId: string,
     dto: {
       starting_cash_kobo: number;
@@ -179,7 +182,10 @@ export class ShiftService {
 
     if (dto.template_id) {
       const template = await this.templateRepository.findOne({
-        where: { id: dto.template_id, branch_id: branchId },
+        where: {
+          id: dto.template_id,
+          business_id: businessId,
+        },
       });
       if (template) {
         shiftType = template.type;
@@ -354,7 +360,7 @@ export class ShiftService {
     let template: ShiftTemplate | null | undefined;
     if (shift.template_id) {
       template = await this.templateRepository.findOne({
-        where: { id: shift.template_id, branch_id: shift.branch_id },
+        where: { id: shift.template_id },
       });
     }
 

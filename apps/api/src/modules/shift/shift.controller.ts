@@ -39,7 +39,7 @@ export class ShiftController {
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
   async listTemplates(@Request() req: any) {
-    return this.shiftService.listTemplates(req.user.branchId);
+    return this.shiftService.listTemplates(req.user.businessId);
   }
 
   @Get('shifts/templates/:id')
@@ -48,7 +48,7 @@ export class ShiftController {
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 404 })
   async getTemplate(@Request() req: any, @Param('id') id: string) {
-    return this.shiftService.getTemplate(id, req.user.branchId);
+    return this.shiftService.getTemplate(id, req.user.businessId);
   }
 
   @Post('shifts/templates')
@@ -59,7 +59,11 @@ export class ShiftController {
     @Request() req: any,
     @Body() dto: CreateShiftTemplateDto,
   ) {
-    return this.shiftService.createTemplate(req.user.branchId, dto);
+    return this.shiftService.createTemplate(
+      req.user.businessId,
+      req.user.branchId,
+      dto,
+    );
   }
 
   @Patch('shifts/templates/:id')
@@ -72,7 +76,7 @@ export class ShiftController {
     @Param('id') id: string,
     @Body() dto: UpdateShiftTemplateDto,
   ) {
-    return this.shiftService.updateTemplate(id, req.user.branchId, dto);
+    return this.shiftService.updateTemplate(id, req.user.businessId, dto);
   }
 
   @Delete('shifts/templates/:id')
@@ -81,7 +85,7 @@ export class ShiftController {
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 404 })
   async deleteTemplate(@Request() req: any, @Param('id') id: string) {
-    return this.shiftService.deleteTemplate(id, req.user.branchId);
+    return this.shiftService.deleteTemplate(id, req.user.businessId);
   }
 
   @Get('shifts')
@@ -136,7 +140,12 @@ export class ShiftController {
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
   async openShift(@Request() req: any, @Body() dto: OpenShiftDto): Promise<ShiftWithRelations> {
-    return this.shiftService.openShift(req.user.branchId, req.user.userId, dto);
+    return this.shiftService.openShift(
+      req.user.branchId,
+      req.user.businessId,
+      req.user.userId,
+      dto,
+    );
   }
 
   @Post('shifts/:id/close')
