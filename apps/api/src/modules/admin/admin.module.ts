@@ -11,6 +11,7 @@ import { Plan } from '../subscription/entities/plan.entity';
 import { PlatformPaymentProvider } from './entities/platform-payment-provider.entity';
 import { SyncQueue } from '../sync/sync.entity';
 import { AuditLog } from '../../entities/audit-log.entity';
+import { ShiftTemplate } from '../shift/entities/shift-template.entity';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { AuditLog } from '../../entities/audit-log.entity';
       PlatformPaymentProvider,
       SyncQueue,
       AuditLog,
+      ShiftTemplate,
     ]),
   ],
   controllers: [AdminController],

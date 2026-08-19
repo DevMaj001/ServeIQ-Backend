@@ -23,6 +23,11 @@ import {
 } from './dto/platform-payment-provider.dto';
 import { SyncQueue } from '../sync/sync.entity';
 import { AuditLog } from '../../entities/audit-log.entity';
+import { ShiftTemplate } from '../shift/entities/shift-template.entity';
+import {
+  CreateShiftTemplateDto,
+  UpdateShiftTemplateDto,
+} from '../shift/dto/shift-template.dto';
 import { BillingInterval } from '../subscription/entities/plan.entity';
 
 @Injectable()
@@ -46,6 +51,8 @@ export class AdminService {
     private syncQueueRepo: Repository<SyncQueue>,
     @InjectRepository(AuditLog)
     private auditLogRepo: Repository<AuditLog>,
+    @InjectRepository(ShiftTemplate)
+    private shiftTemplateRepo: Repository<ShiftTemplate>,
     @InjectDataSource() private dataSource: DataSource,
   ) {}
 
@@ -622,5 +629,89 @@ export class AdminService {
     }
     await this.paymentProviderRepo.remove(provider);
     return { id };
+  }
+
+  // ===== Business Shift Templates (superadmin) =====
+
+  private async requireBusiness(id: string): Promise<Business> {
+    const business = await this.businessRepo.findOne({ where: { id } });
+    if (!business) {
+      throw new NotFoundException('Business not found');
+    }
+    return business;
+  }
+
+  async listBusinessShiftTemplates(businessId: string) {
+    await this.requireBusiness(businessId);
+    return this.shiftTemplateRepo.find({
+      where: { business_id: businessId },
+      order: { created_at: 'DESC' },
+    });
+  }
+
+  async createBusinessShiftTemplate(
+    businessId: string,
+    dto: CreateShiftTemplateDto,
+  ) {
+    await this.requireBusiness(businessId);
+    const branch = await this.branchRepo.findOne({
+      where: { business_id: businessId, is_active: true },
+      order: { created_at: 'ASC' },
+    });
+    if (!branch) {
+      throw new NotFoundException(
+        'No active branch found for this business. Create a branch first.',
+      );
+    }
+    const template = this.shiftTemplateRepo.create({
+      business_id: businessId,
+      branch_id: branch.id,
+      name: dto.name,
+      type: dto.type,
+      scheduled_start_time: dto.scheduled_start_time,
+      scheduled_end_time: dto.scheduled_end_time,
+      days_of_week: dto.days_of_week,
+      color: dto.color || '#22c55e',
+      is_active: true,
+    });
+    return this.shiftTemplateRepo.save(template);
+  }
+
+  async updateBusinessShiftTemplate(
+    businessId: string,
+    templateId: string,
+    dto: UpdateShiftTemplateDto,
+  ) {
+    await this.requireBusiness(businessId);
+    const template = await this.shiftTemplateRepo.findOne({
+      where: { id: templateId, business_id: businessId },
+    });
+    if (!template) {
+      throw new NotFoundException('Shift template not found');
+    }
+    if (dto.name !== undefined) template.name = dto.name;
+    if (dto.type !== undefined) template.type = dto.type;
+    if (dto.scheduled_start_time !== undefined)
+      template.scheduled_start_time = dto.scheduled_start_time;
+    if (dto.scheduled_end_time !== undefined)
+      template.scheduled_end_time = dto.scheduled_end_time;
+    if (dto.days_of_week !== undefined) template.days_of_week = dto.days_of_week;
+    if (dto.color !== undefined) template.color = dto.color;
+    if (dto.is_active !== undefined)
+      template.is_active =
+        dto.is_active === 1 || dto.is_active === (true as unknown as number);
+    return this.shiftTemplateRepo.save(template);
+  }
+
+  async deleteBusinessShiftTemplate(businessId: string, templateId: string) {
+    await this.requireBusiness(businessId);
+    const template = await this.shiftTemplateRepo.findOne({
+      where: { id: templateId, business_id: businessId },
+    });
+    if (!template) {
+      throw new NotFoundException('Shift template not found');
+    }
+    await this.shiftTemplateRepo.remove(template);
+    return { success: true };
   }
 }

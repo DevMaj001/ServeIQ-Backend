@@ -30,6 +30,10 @@ import {
   CreatePlatformPaymentProviderDto,
   UpdatePlatformPaymentProviderDto,
 } from './dto/platform-payment-provider.dto';
+import {
+  CreateShiftTemplateDto,
+  UpdateShiftTemplateDto,
+} from '../shift/dto/shift-template.dto';
 
 @ApiTags('Admin')
 @ApiBearerAuth('access-token')
@@ -205,5 +209,65 @@ export class AdminController {
   @ApiResponse({ status: 404, description: 'Payment provider not found.' })
   async removePaymentProvider(@Param('id') id: string) {
     return this.adminService.removePaymentProvider(id);
+  }
+
+  @Get('businesses/:id/shift-templates')
+  @ApiOperation({
+    summary:
+      'List shift templates for a business (superadmin only)',
+  })
+  @ApiParam({ name: 'id', description: 'Business UUID' })
+  @ApiResponse({ status: 200, description: 'Shift templates list.' })
+  @ApiResponse({ status: 404, description: 'Business not found.' })
+  async listBusinessShiftTemplates(@Param('id') id: string) {
+    return this.adminService.listBusinessShiftTemplates(id);
+  }
+
+  @Post('businesses/:id/shift-templates')
+  @ApiOperation({
+    summary:
+      'Create a shift template for a business (superadmin only)',
+  })
+  @ApiParam({ name: 'id', description: 'Business UUID' })
+  @ApiResponse({ status: 201, description: 'Shift template created.' })
+  @ApiResponse({ status: 404, description: 'Business or branch not found.' })
+  async createBusinessShiftTemplate(
+    @Param('id') id: string,
+    @Body() dto: CreateShiftTemplateDto,
+  ) {
+    return this.adminService.createBusinessShiftTemplate(id, dto);
+  }
+
+  @Patch('businesses/:id/shift-templates/:templateId')
+  @ApiOperation({
+    summary:
+      'Update a shift template for a business (superadmin only)',
+  })
+  @ApiParam({ name: 'id', description: 'Business UUID' })
+  @ApiParam({ name: 'templateId', description: 'Shift template UUID' })
+  @ApiResponse({ status: 200, description: 'Shift template updated.' })
+  @ApiResponse({ status: 404, description: 'Business or template not found.' })
+  async updateBusinessShiftTemplate(
+    @Param('id') id: string,
+    @Param('templateId') templateId: string,
+    @Body() dto: UpdateShiftTemplateDto,
+  ) {
+    return this.adminService.updateBusinessShiftTemplate(id, templateId, dto);
+  }
+
+  @Delete('businesses/:id/shift-templates/:templateId')
+  @ApiOperation({
+    summary:
+      'Delete a shift template for a business (superadmin only)',
+  })
+  @ApiParam({ name: 'id', description: 'Business UUID' })
+  @ApiParam({ name: 'templateId', description: 'Shift template UUID' })
+  @ApiResponse({ status: 200, description: 'Shift template deleted.' })
+  @ApiResponse({ status: 404, description: 'Business or template not found.' })
+  async deleteBusinessShiftTemplate(
+    @Param('id') id: string,
+    @Param('templateId') templateId: string,
+  ) {
+    return this.adminService.deleteBusinessShiftTemplate(id, templateId);
   }
 }
