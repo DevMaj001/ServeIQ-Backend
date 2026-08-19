@@ -312,6 +312,48 @@ export class AuthService {
     };
   }
 
+  async getMe(userId: string) {
+    const user = await this.dataSource.getRepository(User).findOne({
+      where: { id: userId },
+      relations: { roleEntity: true, business: true, branch: true },
+    });
+    if (!user || !user.is_active) {
+      throw new UnauthorizedException('User not found or inactive');
+    }
+
+    let permissions: string[] = [];
+    if (
+      user.role === 'superadmin' ||
+      user.role === UserRole.OWNER
+    ) {
+      const all = await this.dataSource
+        .getRepository(Permission)
+        .find({ select: { code: true } });
+      permissions = all.map((p) => p.code);
+    } else if (user.role_id && user.roleEntity) {
+      const role = await this.dataSource.getRepository(Role).findOne({
+        where: { id: user.role_id },
+        relations: { permissions: true },
+      });
+      if (role) permissions = role.permissions.map((p) => p.code);
+    }
+
+    return {
+      id: user.id,
+      email: user.email,
+      fullName: user.full_name,
+      role: user.role,
+      roleName: user.roleEntity?.name || null,
+      role_id: user.role_id,
+      businessId: user.business_id,
+      branchId: user.branch_id,
+      businessName: user.business?.name || null,
+      branchName: user.branch?.name || null,
+      isActive: user.is_active,
+      permissions,
+    };
+  }
+
   private async generateRefreshToken(userId: string): Promise<string | null> {
     try {
       const repo = this.dataSource.getRepository(RefreshToken);

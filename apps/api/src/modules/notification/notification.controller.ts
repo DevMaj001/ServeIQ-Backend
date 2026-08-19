@@ -11,6 +11,9 @@ import {
 } from '@nestjs/common';
 import { NotificationService } from './notification.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '../../common/shared';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -21,14 +24,24 @@ import {
 } from '@nestjs/swagger';
 import { MarkReadDto } from './dto/mark-read.dto';
 
+const ALL_STAFF = [
+  UserRole.OWNER,
+  UserRole.MANAGER,
+  UserRole.SUPERVISOR,
+  UserRole.WAITER,
+  UserRole.CHEF,
+  UserRole.CASHIER,
+];
+
 @ApiTags('Notifications')
 @ApiBearerAuth('access-token')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('notifications')
 export class NotificationController {
   constructor(private readonly notificationService: NotificationService) {}
 
   @Get()
+  @Roles(...ALL_STAFF)
   @ApiOperation({ summary: 'List notifications for the current branch' })
   @ApiQuery({
     name: 'unreadOnly',
@@ -45,6 +58,7 @@ export class NotificationController {
   }
 
   @Get('count')
+  @Roles(...ALL_STAFF)
   @ApiOperation({ summary: 'Get unread notification count' })
   @ApiResponse({ status: 200, description: 'Unread count.' })
   async getUnreadCount(@Request() req: any) {
@@ -55,6 +69,7 @@ export class NotificationController {
   }
 
   @Get(':id')
+  @Roles(...ALL_STAFF)
   @ApiOperation({ summary: 'Get a notification by ID' })
   @ApiParam({ name: 'id', description: 'Notification UUID' })
   @ApiResponse({ status: 200, description: 'Notification details.' })
@@ -64,6 +79,7 @@ export class NotificationController {
   }
 
   @Patch('read')
+  @Roles(...ALL_STAFF)
   @ApiOperation({ summary: 'Mark specific notifications as read' })
   @ApiResponse({ status: 200, description: 'Marked as read.' })
   async markAsRead(@Request() req: any, @Body() dto: MarkReadDto) {
@@ -71,6 +87,7 @@ export class NotificationController {
   }
 
   @Patch(':id/read')
+  @Roles(...ALL_STAFF)
   @ApiOperation({ summary: 'Mark a single notification as read' })
   @ApiParam({ name: 'id', description: 'Notification UUID' })
   @ApiResponse({ status: 200, description: 'Marked as read.' })
@@ -79,6 +96,7 @@ export class NotificationController {
   }
 
   @Patch('read-all')
+  @Roles(...ALL_STAFF)
   @ApiOperation({ summary: 'Mark all notifications as read' })
   @ApiResponse({ status: 200, description: 'All marked as read.' })
   async markAllAsRead(@Request() req: any) {
@@ -86,6 +104,7 @@ export class NotificationController {
   }
 
   @Delete(':id')
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiOperation({ summary: 'Delete a notification' })
   @ApiParam({ name: 'id', description: 'Notification UUID' })
   @ApiResponse({ status: 200, description: 'Notification deleted.' })

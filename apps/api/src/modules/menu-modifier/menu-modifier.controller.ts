@@ -18,6 +18,12 @@ import {
 } from '@nestjs/swagger';
 import { MenuModifierService } from './menu-modifier.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { UserRole } from '../../common/shared';
+import { PERMISSIONS } from '../role/permission-codes';
 import { CreateModifierGroupDto } from './dto/create-modifier-group.dto';
 import { UpdateModifierGroupDto } from './dto/update-modifier-group.dto';
 import { CreateModifierOptionDto } from './dto/create-modifier-option.dto';
@@ -26,12 +32,20 @@ import { MenuModifierLinkGroupsDto } from './dto/link-groups.dto';
 
 @ApiTags('Menu Modifiers')
 @ApiBearerAuth('access-token')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller()
 export class MenuModifierController {
   constructor(private readonly modifierService: MenuModifierService) {}
 
   @Get('modifier-groups')
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.WAITER,
+    UserRole.CHEF,
+    UserRole.CASHIER,
+  )
   @ApiOperation({ summary: 'List all modifier groups for this branch' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -40,6 +54,14 @@ export class MenuModifierController {
   }
 
   @Get('modifier-groups/:id')
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.WAITER,
+    UserRole.CHEF,
+    UserRole.CASHIER,
+  )
   @ApiOperation({ summary: 'Get modifier group with options' })
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
@@ -51,6 +73,9 @@ export class MenuModifierController {
   }
 
   @Post('modifier-groups')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.CREATE_MENU)
   @ApiOperation({ summary: 'Create a modifier group' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -59,6 +84,9 @@ export class MenuModifierController {
   }
 
   @Patch('modifier-groups/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.EDIT_MENU)
   @ApiOperation({ summary: 'Update a modifier group' })
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
@@ -72,6 +100,9 @@ export class MenuModifierController {
   }
 
   @Delete('modifier-groups/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.EDIT_MENU)
   @ApiOperation({ summary: 'Delete a modifier group' })
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
@@ -81,6 +112,14 @@ export class MenuModifierController {
   }
 
   @Get('modifier-groups/:groupId/options')
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.WAITER,
+    UserRole.CHEF,
+    UserRole.CASHIER,
+  )
   @ApiOperation({ summary: 'List options for a modifier group' })
   @ApiParam({ name: 'groupId' })
   @ApiResponse({ status: 200, description: 'OK' })
@@ -90,6 +129,9 @@ export class MenuModifierController {
   }
 
   @Post('modifier-groups/:groupId/options')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.CREATE_MENU)
   @ApiOperation({ summary: 'Add an option to a modifier group' })
   @ApiParam({ name: 'groupId' })
   @ApiResponse({ status: 200, description: 'OK' })
@@ -102,6 +144,9 @@ export class MenuModifierController {
   }
 
   @Patch('modifier-options/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.EDIT_MENU)
   @ApiOperation({ summary: 'Update a modifier option' })
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
@@ -114,6 +159,9 @@ export class MenuModifierController {
   }
 
   @Delete('modifier-options/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.EDIT_MENU)
   @ApiOperation({ summary: 'Delete a modifier option' })
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
@@ -123,6 +171,9 @@ export class MenuModifierController {
   }
 
   @Post('menu-items/:menuItemId/modifier-groups')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.EDIT_MENU)
   @ApiOperation({ summary: 'Link modifier groups to a menu item' })
   @ApiParam({ name: 'menuItemId' })
   @ApiResponse({ status: 200, description: 'OK' })
@@ -140,6 +191,14 @@ export class MenuModifierController {
   }
 
   @Get('menu-items/:menuItemId/modifiers')
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.WAITER,
+    UserRole.CHEF,
+    UserRole.CASHIER,
+  )
   @ApiOperation({ summary: 'Get modifier groups with options for a menu item' })
   @ApiParam({ name: 'menuItemId' })
   @ApiResponse({ status: 200, description: 'OK' })

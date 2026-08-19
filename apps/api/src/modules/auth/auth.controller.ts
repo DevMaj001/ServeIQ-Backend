@@ -1,5 +1,6 @@
 import {
   Controller,
+  Get,
   Post,
   Body,
   HttpCode,
@@ -127,6 +128,7 @@ export class AuthController {
 
   @Post('logout')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({ summary: 'Logout and invalidate refresh token' })
   @ApiResponse({ status: 200, description: 'Logged out successfully.' })
   async logout(
@@ -136,6 +138,18 @@ export class AuthController {
     res.clearCookie('access_token', { path: '/' });
     res.clearCookie('refresh_token', { path: '/api/v1/auth' });
     return this.authService.logout(logoutDto.refresh_token);
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Get the current authenticated user with role and permissions',
+  })
+  @ApiResponse({ status: 200, description: 'Current user profile.' })
+  @ApiResponse({ status: 401, description: 'Unauthorized.' })
+  async me(@Request() req: any) {
+    return this.authService.getMe(req.user.userId);
   }
 
   @Post('forgot-password')
@@ -158,6 +172,7 @@ export class AuthController {
 
   @Post('send-verification')
   @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 3, ttl: 600000 } })
   @ApiBearerAuth('access-token')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send email verification code' })
@@ -168,6 +183,7 @@ export class AuthController {
 
   @Post('verify-email')
   @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiBearerAuth('access-token')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify email with OTP code' })
@@ -227,6 +243,7 @@ export class AuthController {
 
   @Post('impersonate')
   @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiBearerAuth('access-token')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({

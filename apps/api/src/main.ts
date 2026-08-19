@@ -85,35 +85,37 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
-  // Swagger / OpenAPI
-  const config = new DocumentBuilder()
-    .setTitle('ServeIQ API')
-    .setDescription(
-      readFileSync(join(__dirname, '..', '..', '..', 'README.md'), 'utf-8'),
-    )
-    .setVersion('1.0')
-    .addBearerAuth(
-      {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-        name: 'Authorization',
-        in: 'header',
-      },
-      'access-token',
-    )
-    .addServer(`https://serveiq-backend.onrender.com`, 'Production')
-    .addServer(`http://localhost:${process.env.PORT ?? 3000}`, 'Local')
-    .build();
+  // Swagger / OpenAPI (disabled in production to reduce attack surface)
+  if ((process.env.NODE_ENV ?? 'development') !== 'production') {
+    const config = new DocumentBuilder()
+      .setTitle('ServeIQ API')
+      .setDescription(
+        readFileSync(join(__dirname, '..', '..', '..', 'README.md'), 'utf-8'),
+      )
+      .setVersion('1.0')
+      .addBearerAuth(
+        {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          name: 'Authorization',
+          in: 'header',
+        },
+        'access-token',
+      )
+      .addServer(`https://serveiq-backend.onrender.com`, 'Production')
+      .addServer(`http://localhost:${process.env.PORT ?? 3000}`, 'Local')
+      .build();
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document, {
-    swaggerOptions: {
-      persistAuthorization: true,
-      tagsSorter: 'alpha',
-      operationsSorter: 'alpha',
-    },
-  });
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api/docs', app, document, {
+      swaggerOptions: {
+        persistAuthorization: true,
+        tagsSorter: 'alpha',
+        operationsSorter: 'alpha',
+      },
+    });
+  }
 
   await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
 }

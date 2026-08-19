@@ -17,17 +17,23 @@ import {
 } from '@nestjs/swagger';
 import { AiService } from './ai.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '../../common/shared';
+import { Throttle } from '@nestjs/throttler';
 import { GenerateLogicDto } from './dto/generate-logic.dto';
 import { ReportQueryDto } from './dto/report-query.dto';
 
 @ApiTags('AI')
 @ApiBearerAuth('access-token')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('ai')
 export class AiController {
   constructor(private readonly aiService: AiService) {}
 
   @Post('generate-logic')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiOperation({
     summary: 'Generate perfect business logic using Nemotron AI',
   })
@@ -46,6 +52,7 @@ export class AiController {
   }
 
   @Get('analyze-api')
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiOperation({
     summary: 'Analyze API pros and cons for admin and waiter apps',
   })
@@ -60,6 +67,8 @@ export class AiController {
   }
 
   @Post('report')
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERVISOR)
   @ApiOperation({
     summary:
       'Natural language sales report — ask questions about your business data',
@@ -78,6 +87,7 @@ export class AiController {
   }
 
   @Get('insights/wastage')
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiOperation({
     summary:
       'Analyze inventory wastage and slippage patterns from stock adjustments',
@@ -90,6 +100,7 @@ export class AiController {
   }
 
   @Get('insights/restock')
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
   @ApiOperation({
     summary:
       'Get AI-powered restock recommendations based on current stock and usage',

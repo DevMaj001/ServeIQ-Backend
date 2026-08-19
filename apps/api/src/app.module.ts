@@ -71,6 +71,7 @@ import { CreateReviewsTable1808000000000 } from './database/migrations/180800000
 import { AddNavigationPermissions1809000000000 } from './database/migrations/1809000000000-AddNavigationPermissions';
 import { CreateShiftTemplates1810000000000 } from './database/migrations/1810000000000-CreateShiftTemplates';
 import { AddBusinessIdToShiftTemplates1811000000000 } from './database/migrations/1811000000000-AddBusinessIdToShiftTemplates';
+import { AddManageShiftsPermission1812000000000 } from './database/migrations/1812000000000-AddManageShiftsPermission';
 import { PlatformPaymentProvider } from './modules/admin/entities/platform-payment-provider.entity';
 import { Feedback } from './modules/feedback/entities/feedback.entity';
 
@@ -182,6 +183,7 @@ import { GatewayModule } from './modules/gateway/gateway.module';
         AddNavigationPermissions1809000000000,
         CreateShiftTemplates1810000000000,
         AddBusinessIdToShiftTemplates1811000000000,
+        AddManageShiftsPermission1812000000000,
       ],
       migrationsRun: true,
       synchronize: false,

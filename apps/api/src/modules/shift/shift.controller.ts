@@ -12,6 +12,12 @@ import {
 } from '@nestjs/common';
 import { ShiftService, ShiftWithRelations } from './shift.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { UserRole } from '../../common/shared';
+import { PERMISSIONS } from '../role/permission-codes';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -29,13 +35,21 @@ import {
 
 @ApiTags('Shifts')
 @ApiBearerAuth('access-token')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller()
 export class ShiftController {
   constructor(private readonly shiftService: ShiftService) {}
 
   @Get('shifts/templates')
-  @ApiOperation({ summary: 'List all shift templates for the branch' })
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.WAITER,
+    UserRole.CHEF,
+    UserRole.CASHIER,
+  )
+  @ApiOperation({ summary: 'List all shift templates for the business' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
   async listTemplates(@Request() req: any) {
@@ -43,6 +57,14 @@ export class ShiftController {
   }
 
   @Get('shifts/templates/:id')
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.WAITER,
+    UserRole.CHEF,
+    UserRole.CASHIER,
+  )
   @ApiOperation({ summary: 'Get a single shift template' })
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200 })
@@ -52,6 +74,9 @@ export class ShiftController {
   }
 
   @Post('shifts/templates')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.MANAGE_SHIFTS)
   @ApiOperation({ summary: 'Create a new shift template' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
@@ -67,6 +92,9 @@ export class ShiftController {
   }
 
   @Patch('shifts/templates/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.MANAGE_SHIFTS)
   @ApiOperation({ summary: 'Update a shift template' })
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200 })
@@ -80,6 +108,9 @@ export class ShiftController {
   }
 
   @Delete('shifts/templates/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.MANAGE_SHIFTS)
   @ApiOperation({ summary: 'Delete a shift template' })
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200 })
@@ -89,6 +120,14 @@ export class ShiftController {
   }
 
   @Get('shifts')
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.WAITER,
+    UserRole.CHEF,
+    UserRole.CASHIER,
+  )
   @ApiOperation({ summary: 'List all shifts for the branch' })
   @ApiQuery({ name: 'dateFrom', required: false })
   @ApiQuery({ name: 'dateTo', required: false })
@@ -110,6 +149,14 @@ export class ShiftController {
   }
 
   @Get('shifts/current')
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.WAITER,
+    UserRole.CHEF,
+    UserRole.CASHIER,
+  )
   @ApiOperation({ summary: 'Get the currently open shift' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
@@ -118,6 +165,14 @@ export class ShiftController {
   }
 
   @Get('shifts/:id')
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.WAITER,
+    UserRole.CHEF,
+    UserRole.CASHIER,
+  )
   @ApiOperation({ summary: 'Get a single shift' })
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200 })
@@ -127,6 +182,14 @@ export class ShiftController {
   }
 
   @Get('shifts/:id/report')
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.WAITER,
+    UserRole.CHEF,
+    UserRole.CASHIER,
+  )
   @ApiOperation({ summary: 'Get shift report with revenue breakdown' })
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200 })
@@ -136,6 +199,9 @@ export class ShiftController {
   }
 
   @Post('shifts/open')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.MANAGE_SHIFTS)
   @ApiOperation({ summary: 'Open a new shift with starting cash' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
@@ -149,6 +215,9 @@ export class ShiftController {
   }
 
   @Post('shifts/:id/close')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER)
+  @RequirePermissions(PERMISSIONS.MANAGE_SHIFTS)
   @ApiOperation({ summary: 'Close a shift with actual cash counted' })
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200 })
@@ -167,6 +236,14 @@ export class ShiftController {
   }
 
   @Get('reports/shifts')
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.WAITER,
+    UserRole.CHEF,
+    UserRole.CASHIER,
+  )
   @ApiOperation({
     summary: 'Shift report with date range and reconciliation summary',
   })
