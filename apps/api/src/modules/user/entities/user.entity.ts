@@ -9,6 +9,7 @@ import {
   JoinColumn,
   Index,
 } from 'typeorm';
+import { Exclude } from 'class-transformer';
 import { Business } from '../../business/entities/business.entity';
 import { Branch } from '../../branch/entities/branch.entity';
 import { Role } from '../../role/entities/role.entity';
@@ -47,9 +48,11 @@ export class User {
   @Column({ type: 'varchar', nullable: true })
   avatar_url: string;
 
+  @Exclude()
   @Column()
   password_hash: string;
 
+  @Exclude()
   @Column({ type: 'varchar', nullable: true })
   pin_hash: string;
 

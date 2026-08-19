@@ -163,32 +163,49 @@ export class AuthService {
       throw new BadRequestException('PIN or passcode is required');
     }
 
-    const whereClause: FindOptionsWhere<User> = {
-      role: In([
-        UserRole.WAITER,
-        UserRole.SUPERVISOR,
-        UserRole.MANAGER,
-        UserRole.CHEF,
-        UserRole.CASHIER,
-      ]),
-      is_active: true,
+    const staffRoles = In([
+      UserRole.WAITER,
+      UserRole.SUPERVISOR,
+      UserRole.MANAGER,
+      UserRole.CHEF,
+      UserRole.CASHIER,
+    ]);
+
+    const findMatchingUser = async (
+      whereClause: FindOptionsWhere<User>,
+    ): Promise<User | null> => {
+      const users = await this.dataSource.getRepository(User).find({
+        where: whereClause,
+        order: { created_at: 'DESC' },
+      });
+      for (const user of users) {
+        if (user.pin_hash && (await bcrypt.compare(dto.pin, user.pin_hash))) {
+          return user;
+        }
+      }
+      return null;
     };
 
+    // 1. Scope to the requested branch when provided.
     if (dto.branchId) {
-      whereClause.branch_id = dto.branchId;
-    } else if (dto.businessId) {
-      whereClause.business_id = dto.businessId;
+      const scoped = await findMatchingUser({
+        role: staffRoles,
+        is_active: true,
+        branch_id: dto.branchId,
+      });
+      if (scoped) return this.generateTokens(scoped);
     }
 
-    const users = await this.dataSource.getRepository(User).find({
-      where: whereClause,
-      order: { created_at: 'DESC' },
-    });
-
-    for (const user of users) {
-      if (user.pin_hash && (await bcrypt.compare(dto.pin, user.pin_hash))) {
-        return this.generateTokens(user);
-      }
+    // 2. Fall back to a business-wide search. This keeps login working even
+    // when the client sends a stale/mismatched branchId (e.g. leftover in
+    // localStorage from a previous business) or none at all.
+    if (dto.businessId) {
+      const scoped = await findMatchingUser({
+        role: staffRoles,
+        is_active: true,
+        business_id: dto.businessId,
+      });
+      if (scoped) return this.generateTokens(scoped);
     }
 
     throw new UnauthorizedException('Invalid PIN');
