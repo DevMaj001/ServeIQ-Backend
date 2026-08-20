@@ -283,6 +283,12 @@ const ALL_PERMISSIONS: PermissionDef[] = [
     category: 'Reports',
   },
   {
+    code: PERMISSIONS.MANAGE_DEVICES,
+    name: 'Manage Devices',
+    description: 'List, revoke and reactivate registered devices',
+    category: 'Reports',
+  },
+  {
     code: PERMISSIONS.VIEW_POS,
     name: 'View POS',
     description: 'View the point-of-sale interface',
@@ -470,7 +476,8 @@ const DEFAULT_ROLES: RoleDef[] = [
       PERMISSIONS.VIEW_BRANCH_ANALYTICS,
       PERMISSIONS.VIEW_REPORTS,
 PERMISSIONS.VIEW_SHIFTS,
-      PERMISSIONS.MANAGE_SHIFTS,
+PERMISSIONS.MANAGE_SHIFTS,
+      PERMISSIONS.MANAGE_DEVICES,
       PERMISSIONS.VIEW_POS,
       PERMISSIONS.VIEW_PULSE,
       PERMISSIONS.VIEW_PREMIUM_DASHBOARD,

@@ -323,6 +323,46 @@ export class ShiftService {
     };
   }
 
+  /**
+   * Hand off open tabs to another staff member. Used when a shift changes and
+   * the current shift owner leaves (waiter handoff).
+   */
+  async handoffShift(
+    branchId: string,
+    dto: { to_staff_id: string; from_staff_id?: string },
+  ) {
+    const toStaff = await this.userRepository.findOne({
+      where: { id: dto.to_staff_id, branch_id: branchId },
+    });
+    if (!toStaff) {
+      throw new NotFoundException('Target staff member not found');
+    }
+
+    const openShift = await this.findCurrent(branchId);
+    if (!openShift) {
+      throw new BadRequestException('No open shift for this branch');
+    }
+
+    const tabCriteria: any = {
+      branch_id: branchId,
+      shift_id: openShift.id,
+      status: 'open',
+    };
+    if (dto.from_staff_id) tabCriteria.waiter_id = dto.from_staff_id;
+
+    const openTabs = await this.tabRepository.find({ where: tabCriteria });
+    if (openTabs.length === 0) {
+      return { success: true, transferred: 0 };
+    }
+
+    await this.tabRepository.update(
+      { id: In(openTabs.map((t) => t.id)) },
+      { waiter_id: dto.to_staff_id },
+    );
+
+    return { success: true, transferred: openTabs.length };
+  }
+
   async getShiftSummary(branchId: string, dateFrom?: string, dateTo?: string) {
     const from = dateFrom
       ? new Date(dateFrom)

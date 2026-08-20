@@ -4,6 +4,7 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  VersionColumn,
   Index,
 } from 'typeorm';
 import { OrderStatus, FulfillmentType } from '../../../common/shared';
@@ -112,4 +113,7 @@ export class Order {
 
   @UpdateDateColumn()
   updated_at: Date;
+
+  @VersionColumn()
+  version: number;
 }

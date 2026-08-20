@@ -202,4 +202,54 @@ export class BranchController {
     branch.settings = newSettings;
     return this.branchRepository.save(branch);
   }
+
+  @Get(':id/feature-flags')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.WAITER,
+    UserRole.CHEF,
+    UserRole.CASHIER,
+  )
+  @ApiOperation({ summary: 'Get feature flags for the branch' })
+  @ApiParam({ name: 'id', description: 'Branch UUID' })
+  @ApiResponse({ status: 200, description: 'Feature flags object.' })
+  @ApiResponse({ status: 404, description: 'Branch not found.' })
+  @ApiResponse({ status: 401, description: 'Unauthorized.' })
+  async getFeatureFlags(@Param('id') id: string, @Request() req: any) {
+    const branch = await this.branchService.findOne(id, req.user.businessId);
+    if (!branch) throw new NotFoundException('Branch not found');
+    return (branch.settings?.feature_flags as Record<string, boolean>) || {};
+  }
+
+  @Patch(':id/feature-flags')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERADMIN)
+  @RequirePermissions(PERMISSIONS.RESTAURANT_SETTINGS)
+  @ApiOperation({
+    summary: 'Update per-branch feature flags (e.g. kds_enabled, tip_pooling)',
+  })
+  @ApiParam({ name: 'id', description: 'Branch UUID' })
+  @ApiResponse({ status: 200, description: 'Feature flags updated.' })
+  @ApiResponse({ status: 404, description: 'Branch not found.' })
+  @ApiResponse({ status: 401, description: 'Unauthorized.' })
+  async updateFeatureFlags(
+    @Param('id') id: string,
+    @Request() req: any,
+    @Body() dto: Record<string, boolean>,
+  ) {
+    const branch = await this.branchService.findOne(id, req.user.businessId);
+    if (!branch) throw new NotFoundException('Branch not found');
+    const currentFlags =
+      (branch.settings?.feature_flags as Record<string, boolean>) || {};
+    const merged = { ...currentFlags, ...dto };
+    branch.settings = {
+      ...(branch.settings || {}),
+      feature_flags: merged,
+    };
+    await this.branchRepository.save(branch);
+    return merged;
+  }
 }

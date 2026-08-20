@@ -18,6 +18,8 @@ import { RefreshToken } from './entities/refresh-token.entity';
 import { VerificationToken } from './entities/verification-token.entity';
 import { AuditLog } from './entities/audit-log.entity';
 import { AuditService } from './common/services/audit.service';
+import { EncryptionService } from './common/services/encryption.service';
+import { TabEncryptionSubscriber } from './common/subscribers/tab-encryption.subscriber';
 import { IngredientModule } from './modules/ingredient/ingredient.module';
 import { StockMovement } from './modules/ingredient/entities/stock-movement.entity';
 import { SupplierModule } from './modules/supplier/supplier.module';
@@ -37,6 +39,7 @@ import { Department } from './modules/department/entities/department.entity';
 import { Advertisement } from './modules/advertisement/entities/advertisement.entity';
 import { Permission } from './modules/role/entities/permission.entity';
 import { Role } from './modules/role/entities/role.entity';
+import { Device } from './modules/device/entities/device.entity';
 import { MenuCategory } from './modules/menu-category/entities/menu-category.entity';
 import { Unit } from './modules/unit/entities/unit.entity';
 import { CreateMenuCategoriesTable1799000000000 } from './database/migrations/1799000000000-CreateMenuCategoriesTable';
@@ -72,6 +75,10 @@ import { AddNavigationPermissions1809000000000 } from './database/migrations/180
 import { CreateShiftTemplates1810000000000 } from './database/migrations/1810000000000-CreateShiftTemplates';
 import { AddBusinessIdToShiftTemplates1811000000000 } from './database/migrations/1811000000000-AddBusinessIdToShiftTemplates';
 import { AddManageShiftsPermission1812000000000 } from './database/migrations/1812000000000-AddManageShiftsPermission';
+import { AddDeviceFingerprintToRefreshTokens1813000000000 } from './database/migrations/1813000000000-AddDeviceFingerprintToRefreshTokens';
+import { CreateDevicesTable1814000000000 } from './database/migrations/1814000000000-CreateDevicesTable';
+import { AddManageDevicesPermission1815000000000 } from './database/migrations/1815000000000-AddManageDevicesPermission';
+import { AddVersionColumns1816000000000 } from './database/migrations/1816000000000-AddVersionColumns';
 import { PlatformPaymentProvider } from './modules/admin/entities/platform-payment-provider.entity';
 import { Feedback } from './modules/feedback/entities/feedback.entity';
 
@@ -107,6 +114,7 @@ import { UnitModule } from './modules/unit/unit.module';
 import { FeedbackModule } from './modules/feedback/feedback.module';
 import { ReviewModule } from './modules/review/review.module';
 import { GatewayModule } from './modules/gateway/gateway.module';
+import { DeviceModule } from './modules/device/device.module';
 
 @Module({
   imports: [
@@ -145,6 +153,7 @@ import { GatewayModule } from './modules/gateway/gateway.module';
         Advertisement,
         Permission,
         Role,
+        Device,
         MenuCategory,
         Unit,
         PlatformPaymentProvider,
@@ -184,6 +193,10 @@ import { GatewayModule } from './modules/gateway/gateway.module';
         CreateShiftTemplates1810000000000,
         AddBusinessIdToShiftTemplates1811000000000,
         AddManageShiftsPermission1812000000000,
+        AddDeviceFingerprintToRefreshTokens1813000000000,
+        CreateDevicesTable1814000000000,
+        AddManageDevicesPermission1815000000000,
+        AddVersionColumns1816000000000,
       ],
       migrationsRun: true,
       synchronize: false,
@@ -195,6 +208,14 @@ import { GatewayModule } from './modules/gateway/gateway.module';
       retryAttempts: 10,
       retryDelay: 3000,
       autoLoadEntities: true,
+      subscribers: [TabEncryptionSubscriber],
+      extra: {
+        max: 10,
+        min: 0,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 5000,
+        application_name: 'serveiq-api',
+      },
     }),
     ThrottlerModule.forRoot({
       throttlers: [{ ttl: 60000, limit: 300 }],
@@ -236,11 +257,13 @@ import { GatewayModule } from './modules/gateway/gateway.module';
     FeedbackModule,
     ReviewModule,
     GatewayModule,
+    DeviceModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
     AuditService,
+    EncryptionService,
     PermissionsGuard,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],

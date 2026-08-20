@@ -53,6 +53,7 @@ export const PERMISSIONS = {
   VIEW_REPORTS: 'view_reports',
   VIEW_SHIFTS: 'view_shifts',
   MANAGE_SHIFTS: 'manage_shifts',
+  MANAGE_DEVICES: 'manage_devices',
   VIEW_POS: 'view_pos',
   VIEW_PULSE: 'view_pulse',
   VIEW_PREMIUM_DASHBOARD: 'view_premium_dashboard',

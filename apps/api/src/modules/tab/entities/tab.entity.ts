@@ -4,6 +4,7 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  VersionColumn,
   Index,
 } from 'typeorm';
 import { TabType } from '../../../common/shared';
@@ -35,7 +36,7 @@ export class Tab {
   tab_number: string;
 
   @Column({ nullable: true })
-  customer_name: string;
+  customer_name: string | null;
 
   @Column({ default: 1 })
   party_size: number;
@@ -75,4 +76,7 @@ export class Tab {
 
   @UpdateDateColumn()
   updated_at: Date;
+
+  @VersionColumn()
+  version: number;
 }

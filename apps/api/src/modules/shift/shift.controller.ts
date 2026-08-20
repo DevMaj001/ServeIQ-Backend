@@ -28,6 +28,7 @@ import {
 } from '@nestjs/swagger';
 import { OpenShiftDto } from './dto/open-shift.dto';
 import { CloseShiftDto } from './dto/close-shift.dto';
+import { HandoffShiftDto } from './dto/handoff-shift.dto';
 import {
   CreateShiftTemplateDto,
   UpdateShiftTemplateDto,
@@ -233,6 +234,25 @@ export class ShiftController {
       req.user.userId,
       dto,
     );
+  }
+
+  @Post('shifts/handoff')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERVISOR)
+  @RequirePermissions(PERMISSIONS.MANAGE_SHIFTS)
+  @ApiOperation({
+    summary: 'Hand off open tabs to another staff member',
+    description:
+      'Transfers all open tabs from the current open shift to a target staff member. Optionally restrict to tabs assigned to a specific staff member.',
+  })
+  @ApiResponse({ status: 200 })
+  @ApiResponse({ status: 400 })
+  @ApiResponse({ status: 404 })
+  async handoffShift(
+    @Request() req: any,
+    @Body() dto: HandoffShiftDto,
+  ) {
+    return this.shiftService.handoffShift(req.user.branchId, dto);
   }
 
   @Get('reports/shifts')

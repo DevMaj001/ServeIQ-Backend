@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { randomUUID } from 'crypto';
+import { OptimisticLockVersionMismatchError } from 'typeorm';
 
 interface ExceptionResponseBody {
   message?: string | string[];
@@ -141,6 +142,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
       message = normalizeMessages(body.message).length
         ? normalizeMessages(body.message)
         : [defaultMessage(status)];
+    } else if (exception instanceof OptimisticLockVersionMismatchError) {
+      status = HttpStatus.CONFLICT;
+      code = 'VERSION_CONFLICT';
+      message = ['This record was modified by another request. Please reload and try again.'];
     } else if (exception instanceof HttpException) {
       status = exception.getStatus();
       message = [defaultMessage(status)];

@@ -57,6 +57,13 @@ export class AuthController {
     }
   }
 
+  private deviceFingerprint(req: any): string | null {
+    return AuthService.computeDeviceFingerprint(
+      req.headers || {},
+      req.ip,
+    );
+  }
+
   @Post('register')
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({
@@ -73,8 +80,8 @@ export class AuthController {
     description: 'Validation error — check the request body.',
   })
   @ApiResponse({ status: 409, description: 'Email already registered.' })
-  async register(@Body() registerDto: RegisterDto) {
-    return this.authService.register(registerDto);
+  async register(@Body() registerDto: RegisterDto, @Request() req: any) {
+    return this.authService.register(registerDto, this.deviceFingerprint(req));
   }
 
   @Post('login')
@@ -96,9 +103,19 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Invalid credentials.' })
   async login(
     @Body() loginDto: LoginDto,
+    @Request() req: any,
     @Response({ passthrough: true }) res: any,
   ) {
-    const tokens = await this.authService.login(loginDto);
+    const tokens = await this.authService.login(
+      loginDto,
+      this.deviceFingerprint(req),
+      {
+        device_id: loginDto.device_id,
+        device_name: loginDto.device_name,
+        platform: loginDto.platform,
+        app_version: loginDto.app_version,
+      },
+    );
     this.setAuthCookies(res, tokens);
     return tokens;
   }
@@ -117,10 +134,12 @@ export class AuthController {
   })
   async refresh(
     @Body() refreshDto: RefreshDto,
+    @Request() req: any,
     @Response({ passthrough: true }) res: any,
   ) {
     const tokens = await this.authService.refreshToken(
       refreshDto.refresh_token,
+      this.deviceFingerprint(req),
     );
     this.setAuthCookies(res, tokens);
     return tokens;
@@ -222,8 +241,8 @@ export class AuthController {
   })
   @ApiResponse({ status: 400, description: 'Validation error.' })
   @ApiResponse({ status: 401, description: 'Invalid PIN.' })
-  async waiterLogin(@Body() dto: WaiterLoginDto) {
-    return this.authService.waiterLogin(dto);
+  async waiterLogin(@Body() dto: WaiterLoginDto, @Request() req: any) {
+    return this.authService.waiterLogin(dto, this.deviceFingerprint(req));
   }
 
   @Post('resolve-business')
@@ -270,7 +289,7 @@ export class AuthController {
   })
   @ApiResponse({ status: 400, description: 'Validation error.' })
   @ApiResponse({ status: 401, description: 'Invalid credentials.' })
-  async activate(@Body() dto: ActivateDto) {
-    return this.authService.activate(dto);
+  async activate(@Body() dto: ActivateDto, @Request() req: any) {
+    return this.authService.activate(dto, this.deviceFingerprint(req));
   }
 }

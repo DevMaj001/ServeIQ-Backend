@@ -4,6 +4,7 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  VersionColumn,
   Index,
 } from 'typeorm';
 
@@ -73,4 +74,7 @@ export class Bill {
 
   @UpdateDateColumn()
   updated_at: Date;
+
+  @VersionColumn()
+  version: number;
 }

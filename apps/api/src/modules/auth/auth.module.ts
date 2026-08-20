@@ -12,6 +12,7 @@ import { Branch } from '../branch/entities/branch.entity';
 import { AuditLog } from '../../entities/audit-log.entity';
 import { AuditService } from '../../common/services/audit.service';
 import { SubscriptionModule } from '../subscription/subscription.module';
+import { DeviceModule } from '../device/device.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { SubscriptionModule } from '../subscription/subscription.module';
     ConfigModule,
     PassportModule,
     SubscriptionModule,
+    DeviceModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

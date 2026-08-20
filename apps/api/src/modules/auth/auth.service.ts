@@ -25,6 +25,7 @@ import { LoginDto } from './dto/login.dto';
 import { WaiterLoginDto } from './dto/waiter-login.dto';
 import { UserRole } from '../../common/shared';
 import { AuditService } from '../../common/services/audit.service';
+import { DeviceService } from '../device/device.service';
 
 @Injectable()
 export class AuthService {
@@ -34,9 +35,32 @@ export class AuthService {
     private dataSource: DataSource,
     private auditService: AuditService,
     private subscriptionService: SubscriptionService,
+    private deviceService: DeviceService,
   ) {}
 
-  async register(dto: RegisterDto) {
+  /**
+   * Build a stable device fingerprint from request headers + IP. Returns null
+   * when no identifying headers are present (privacy-aware clients).
+   */
+  static computeDeviceFingerprint(
+    headers: Record<string, unknown>,
+    ip?: string,
+  ): string | null {
+    const ua = typeof headers['user-agent'] === 'string' ? headers['user-agent'] : '';
+    const acceptLang =
+      typeof headers['accept-language'] === 'string'
+        ? headers['accept-language']
+        : '';
+    const raw = [ua, acceptLang, ip || ''].join('|').trim();
+    if (!raw || raw === '||') return null;
+    return crypto
+      .createHash('sha256')
+      .update(raw)
+      .digest('hex')
+      .slice(0, 64);
+  }
+
+  async register(dto: RegisterDto, deviceFingerprint?: string | null) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -123,7 +147,7 @@ export class AuthService {
         payload: { businessName: savedBusiness.name, email: savedUser.email },
       });
 
-      return this.generateTokens(savedUser);
+      return this.generateTokens(savedUser, deviceFingerprint);
     } catch (err) {
       await queryRunner.rollbackTransaction();
       const code =
@@ -139,7 +163,11 @@ export class AuthService {
     }
   }
 
-  async login(dto: LoginDto) {
+  async login(
+    dto: LoginDto,
+    deviceFingerprint?: string | null,
+    deviceInfo?: { device_id?: string; device_name?: string; platform?: string; app_version?: string },
+  ) {
     const user = await this.dataSource.getRepository(User).findOne({
       where: { email: dto.email },
     });
@@ -153,12 +181,25 @@ export class AuthService {
         entityId: user.id,
         payload: { email: user.email, role: user.role },
       });
-      return this.generateTokens(user);
+      const tokens = await this.generateTokens(user, deviceFingerprint);
+      await this.deviceService.register({
+        userId: user.id,
+        businessId: user.business_id,
+        branchId: user.branch_id,
+        deviceId: deviceInfo?.device_id || '',
+        deviceName: deviceInfo?.device_name,
+        platform: deviceInfo?.platform,
+        appVersion: deviceInfo?.app_version,
+      });
+      return tokens;
     }
     throw new UnauthorizedException('Invalid credentials');
   }
 
-  async waiterLogin(dto: WaiterLoginDto) {
+  async waiterLogin(
+    dto: WaiterLoginDto,
+    deviceFingerprint?: string | null,
+  ) {
     if (!dto.pin) {
       throw new BadRequestException('PIN or passcode is required');
     }
@@ -193,7 +234,19 @@ export class AuthService {
         is_active: true,
         branch_id: dto.branchId,
       });
-      if (scoped) return this.generateTokens(scoped);
+      if (scoped) {
+        const tokens = await this.generateTokens(scoped, deviceFingerprint);
+        await this.deviceService.register({
+          userId: scoped.id,
+          businessId: scoped.business_id,
+          branchId: scoped.branch_id,
+          deviceId: dto.device_id || '',
+          deviceName: dto.device_name,
+          platform: dto.platform,
+          appVersion: dto.app_version,
+        });
+        return tokens;
+      }
     }
 
     // 2. Fall back to a business-wide search. This keeps login working even
@@ -205,7 +258,19 @@ export class AuthService {
         is_active: true,
         business_id: dto.businessId,
       });
-      if (scoped) return this.generateTokens(scoped);
+      if (scoped) {
+        const tokens = await this.generateTokens(scoped, deviceFingerprint);
+        await this.deviceService.register({
+          userId: scoped.id,
+          businessId: scoped.business_id,
+          branchId: scoped.branch_id,
+          deviceId: dto.device_id || '',
+          deviceName: dto.device_name,
+          platform: dto.platform,
+          appVersion: dto.app_version,
+        });
+        return tokens;
+      }
     }
 
     throw new UnauthorizedException('Invalid PIN');
@@ -224,7 +289,7 @@ export class AuthService {
     };
   }
 
-  async activate(dto: { email: string; password: string }) {
+  async activate(dto: { email: string; password: string }, deviceFingerprint?: string | null) {
     const user = await this.dataSource.getRepository(User).findOne({
       where: { email: dto.email },
     });
@@ -249,7 +314,7 @@ export class AuthService {
       await this.dataSource.getRepository(User).save(user);
     }
 
-    return this.generateTokens(user);
+    return this.generateTokens(user, deviceFingerprint);
   }
 
   async impersonate(
@@ -354,7 +419,10 @@ export class AuthService {
     };
   }
 
-  private async generateRefreshToken(userId: string): Promise<string | null> {
+  private async generateRefreshToken(
+    userId: string,
+    deviceFingerprint?: string | null,
+  ): Promise<string | null> {
     try {
       const repo = this.dataSource.getRepository(RefreshToken);
       const token = crypto.randomBytes(48).toString('hex');
@@ -364,6 +432,7 @@ export class AuthService {
         user_id: userId,
         token_hash: tokenHash,
         expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        device_fingerprint: deviceFingerprint || null,
       });
       await repo.save(refreshToken);
 
@@ -373,7 +442,7 @@ export class AuthService {
     }
   }
 
-  private async generateTokens(user: User) {
+  private async generateTokens(user: User, deviceFingerprint?: string | null) {
     const branch = await this.dataSource
       .getRepository(Branch)
       .findOne({ where: { id: user.branch_id } });
@@ -388,7 +457,10 @@ export class AuthService {
       staff_token_version: branch?.staff_token_version ?? 0,
     };
 
-    const refreshToken = await this.generateRefreshToken(user.id);
+    const refreshToken = await this.generateRefreshToken(
+      user.id,
+      deviceFingerprint,
+    );
 
     return {
       access_token: this.jwtService.sign(payload),
@@ -405,7 +477,7 @@ export class AuthService {
     };
   }
 
-  async refreshToken(refreshTokenStr: string) {
+  async refreshToken(refreshTokenStr: string, deviceFingerprint?: string | null) {
     const repo = this.dataSource.getRepository(RefreshToken);
     const tokenHash = crypto
       .createHash('sha256')
@@ -429,6 +501,19 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
+    // Device binding: if the token was issued for a specific device, reject
+    // and revoke when the caller presents a different fingerprint. This stops
+    // stolen refresh tokens from being replayed from another machine.
+    if (
+      stored.device_fingerprint &&
+      deviceFingerprint &&
+      stored.device_fingerprint !== deviceFingerprint
+    ) {
+      stored.is_revoked = true;
+      await repo.save(stored);
+      throw new UnauthorizedException('Refresh token used from a new device');
+    }
+
     const user = await this.dataSource
       .getRepository(User)
       .findOne({ where: { id: stored.user_id } });
@@ -439,7 +524,7 @@ export class AuthService {
     stored.is_revoked = true;
     await repo.save(stored);
 
-    return this.generateTokens(user);
+    return this.generateTokens(user, deviceFingerprint);
   }
 
   async logout(refreshTokenStr: string) {

@@ -8,12 +8,47 @@ import { Repository } from 'typeorm';
 import { MenuItem } from './entities/menu-item.entity';
 import { CreateMenuItemDto } from './dto/create-menu-item.dto';
 
+const MENU_CACHE_TTL_MS = 5 * 60 * 1000;
+
 @Injectable()
 export class MenuService {
+  private cache = new Map<string, { value: unknown; expiresAt: number }>();
+
   constructor(
     @InjectRepository(MenuItem)
     private menuRepository: Repository<MenuItem>,
   ) {}
+
+  private getCached<T>(key: string): T | undefined {
+    const entry = this.cache.get(key);
+    if (!entry) return undefined;
+    if (entry.expiresAt < Date.now()) {
+      this.cache.delete(key);
+      return undefined;
+    }
+    return entry.value as T;
+  }
+
+  private setCached(key: string, value: unknown): void {
+    if (this.cache.size > 500) {
+      const now = Date.now();
+      for (const [k, v] of this.cache) {
+        if (v.expiresAt < now) this.cache.delete(k);
+      }
+    }
+    this.cache.set(key, { value, expiresAt: Date.now() + MENU_CACHE_TTL_MS });
+  }
+
+  private invalidate(branchId?: string): void {
+    if (branchId) {
+      const prefix = `menu:${branchId}:`;
+      for (const key of [...this.cache.keys()]) {
+        if (key.startsWith(prefix)) this.cache.delete(key);
+      }
+    } else {
+      this.cache.clear();
+    }
+  }
 
   async create(createDto: CreateMenuItemDto) {
     const existing = await this.menuRepository.findOne({
@@ -21,13 +56,19 @@ export class MenuService {
     });
     if (existing) return existing;
     const item = this.menuRepository.create(createDto);
-    return this.menuRepository.save(item);
+    const saved = await this.menuRepository.save(item);
+    this.invalidate(createDto.branch_id);
+    return saved;
   }
 
   async findAllByBranch(
     branchId: string,
     pagination?: { page: number; per_page: number },
   ) {
+    const cacheKey = `menu:${branchId}:${pagination?.page ?? 1}:${pagination?.per_page ?? 'all'}`;
+    const cached = this.getCached<{ data: MenuItem[]; total: number }>(cacheKey);
+    if (cached) return cached;
+
     const where = { branch_id: branchId, is_available: true };
     const skip = pagination
       ? (pagination.page - 1) * pagination.per_page
@@ -40,7 +81,9 @@ export class MenuService {
       take,
       relations: { supplier: true },
     });
-    return { data, total };
+    const result = { data, total };
+    this.setCached(cacheKey, result);
+    return result;
   }
 
   async findOne(id: string, branchId: string) {
@@ -57,7 +100,9 @@ export class MenuService {
   async update(id: string, branchId: string, updateDto: any) {
     const item = await this.findOne(id, branchId);
     Object.assign(item, updateDto);
-    return this.menuRepository.save(item);
+    const saved = await this.menuRepository.save(item);
+    this.invalidate(branchId);
+    return saved;
   }
 
   async importCsv(branchId: string, userId: string, csvContent: string) {
@@ -116,17 +161,22 @@ export class MenuService {
       }
     }
 
+    this.invalidate(branchId);
     return { imported: created.length, errors, items: created };
   }
 
   async toggleAvailability(id: string, branchId: string) {
     const item = await this.findOne(id, branchId);
     item.is_available = !item.is_available;
-    return this.menuRepository.save(item);
+    const saved = await this.menuRepository.save(item);
+    this.invalidate(branchId);
+    return saved;
   }
 
   async remove(id: string, branchId: string) {
     const item = await this.findOne(id, branchId);
-    return this.menuRepository.remove(item);
+    const removed = await this.menuRepository.remove(item);
+    this.invalidate(branchId);
+    return removed;
   }
 }

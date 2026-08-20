@@ -24,6 +24,10 @@ export class RefreshToken {
   @Column({ default: false })
   is_revoked: boolean;
 
+  @Index()
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  device_fingerprint: string | null;
+
   @CreateDateColumn()
   created_at: Date;
 }
