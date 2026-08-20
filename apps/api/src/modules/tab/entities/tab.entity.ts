@@ -35,7 +35,7 @@ export class Tab {
   @Column({ unique: true })
   tab_number: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   customer_name: string | null;
 
   @Column({ default: 1 })
