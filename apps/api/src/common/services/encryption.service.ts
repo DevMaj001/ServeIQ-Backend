@@ -5,17 +5,29 @@ export const ENC_PREFIX = 'enc:v1:';
 
 /**
  * Field-level encryption at rest using AES-256-GCM. The key is derived
- * deterministically from ENCRYPTION_KEY (falling back to JWT_SECRET) so the
- * value is stable across restarts and deployments. Values that were written
- * before this service existed (plaintext) are returned as-is.
+ * deterministically from ENCRYPTION_KEY so the value is stable across
+ * restarts and deployments. Values that were written before this service
+ * existed (plaintext) are returned as-is.
+ *
+ * Production requires an explicit ENCRYPTION_KEY and refuses to boot
+ * without one — deriving from JWT_SECRET breaks silently when that
+ * secret rotates.
  */
 @Injectable()
 export class EncryptionService {
   private readonly key: Buffer;
 
   constructor() {
-    const secret =
-      process.env.ENCRYPTION_KEY || process.env.JWT_SECRET || 'serveiq-dev-key';
+    const secret = process.env.ENCRYPTION_KEY;
+    if (!secret) {
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error(
+          'ENCRYPTION_KEY is required in production. Set it to a long random value (use the current JWT_SECRET value once to keep existing ciphertext decryptable), then never rotate it casually.',
+        );
+      }
+      this.key = crypto.createHash('sha256').update('serveiq-dev-key').digest();
+      return;
+    }
     this.key = crypto.createHash('sha256').update(secret).digest();
   }
 

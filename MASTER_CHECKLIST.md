@@ -5,6 +5,30 @@
 
 ---
 
+## ⚠️ STATUS REALITY CHECK — Aug 2026 (read before trusting the checkboxes below)
+
+Most Phase 0–2 items below are **already built and deployed** even though their boxes are unchecked — this document had not been maintained. Actual state as of the Aug 2026 audit:
+
+**Done & verified in code/CI:**
+- Monorepo, all apps, CI pipeline (unit + real-DB e2e incl. cross-tenant leakage test)
+- TypeORM + Postgres, 52 migrations, `synchronize:false`, idempotent seed
+- JWT access/refresh with token-version revocation, role/permission/branch-scope guards
+- Differentiated throttles on auth/PIN routes + global ThrottlerGuard
+- Health endpoints, Sentry wiring, helmet, CORS allowlist, Swagger off in prod
+- Paystack integration with HMAC-verified webhooks; Moniepoint/OPay webhooks signature-verified (simulate bypass now hard-disabled in production)
+
+**Genuinely outstanding (real blockers / gaps):**
+- [ ] Set `ENCRYPTION_KEY` on Render (fail-fast added; use current `JWT_SECRET` value once to avoid breaking existing ciphertext)
+- [ ] Rotate exposed local credentials: Supabase DB password (`apps/api/.env`), NVIDIA key (root `.env`)
+- [ ] Upgrade Render Postgres off free tier for beta (sleeping DB = mid-service outages)
+- [ ] Production Paystack keys (test-only today)
+- [ ] Consolidate dual schema paths: 52 migrations vs ad-hoc `database/ensure-tables.ts` boot DDL
+- [ ] Redis is provisioned but unused; Socket.io lacks a Redis adapter (single-instance ceiling)
+- [ ] Email verification flow; receipt storage to object storage; differentiated public/report throttles
+- [ ] Reconcile the stale checkboxes below against reality
+
+---
+
 ## PHASE 0 — PROJECT SETUP & INFRASTRUCTURE
 
 ### 0.1 Repository & Monorepo

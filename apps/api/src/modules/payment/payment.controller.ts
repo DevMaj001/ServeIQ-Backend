@@ -256,6 +256,13 @@ export class PaymentController {
 
     if (
       !isTestSimulation &&
+      (!providerConfig || providerConfig.verification_method !== 'rsa')
+    ) {
+      throw new ForbiddenException('OPay webhook not configured');
+    }
+
+    if (
+      !isTestSimulation &&
       providerConfig &&
       providerConfig.verification_method === 'rsa'
     ) {
@@ -292,10 +299,14 @@ export class PaymentController {
     return { received: true, status: 'processed' };
   }
 
-  /** Test mode: a dev-only header that bypasses provider signature
-   *  verification so the sandbox "Simulate Payment" works before real
-   *  keys are configured. Shared by both webhook paths. */
-  private isTestSimulation(req: Request): boolean {
+/** Test mode: a dev-only header that bypasses provider signature
+ *  verification so the sandbox "Simulate Payment" works before real
+ *  keys are configured. Shared by both webhook paths.
+ *  Hard-disabled in production regardless of headers. */
+private isTestSimulation(req: Request): boolean {
+    if (process.env.NODE_ENV === 'production') {
+      return false;
+    }
     return req.headers['x-simulate'] === '1';
   }
 

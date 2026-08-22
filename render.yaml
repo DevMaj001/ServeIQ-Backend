@@ -24,6 +24,12 @@ services:
         generateValue: true
       - key: JWT_REFRESH_EXPIRES_IN
         value: 7d
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: PAYSTACK_PUBLIC_KEY
+        sync: false
       - key: REDIS_URL
         fromService:
           type: redis
