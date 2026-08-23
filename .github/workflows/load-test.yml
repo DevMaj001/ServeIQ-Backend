@@ -230,20 +230,20 @@ jobs:
             
             const metrics = data.metrics;
             const md = `
-### Load Test Results (${{ steps.env.outputs.environment }})
-
-| Metric | Value | Threshold | Status |
-|--------|-------|-----------|--------|
-| HTTP p95 | ${metrics.http_req_duration?.values?.p95?.toFixed(2) || 'N/A'}ms | < 500ms | ${(metrics.http_req_duration?.values?.p95 || 0) < 500 ? '✅' : '❌'} |
-| Failed Rate | ${(metrics.http_req_failed?.values?.rate * 100 || 0).toFixed(2)}% | < 1% | ${(metrics.http_req_failed?.values?.rate || 0) < 0.01 ? '✅' : '❌'} |
-| Login p95 | ${metrics.login_duration?.values?.p95?.toFixed(2) || 'N/A'}ms | < 1000ms | ${(metrics.login_duration?.values?.p95 || 0) < 1000 ? '✅' : '❌'} |
-| Tab Open p95 | ${metrics.tab_open_duration?.values?.p95?.toFixed(2) || 'N/A'}ms | < 300ms | ${(metrics.tab_open_duration?.values?.p95 || 0) < 300 ? '✅' : '❌'} |
-| Order Add p95 | ${metrics.order_add_duration?.values?.p95?.toFixed(2) || 'N/A'}ms | < 200ms | ${(metrics.order_add_duration?.values?.p95 || 0) < 200 ? '✅' : '❌'} |
-| Bill Gen p95 | ${metrics.bill_generate_duration?.values?.p95?.toFixed(2) || 'N/A'}ms | < 500ms | ${(metrics.bill_generate_duration?.values?.p95 || 0) < 500 ? '✅' : '❌'} |
-| Payment p95 | ${metrics.payment_duration?.values?.p95?.toFixed(2) || 'N/A'}ms | < 300ms | ${(metrics.payment_duration?.values?.p95 || 0) < 300 ? '✅' : '❌'} |
-| Errors Rate | ${(metrics.errors?.values?.rate * 100 || 0).toFixed(2)}% | < 5% | ${(metrics.errors?.values?.rate || 0) < 0.05 ? '✅' : '❌'} |
-
-**Test Config:** ${ {vus: ${{ github.event.inputs.vus || 100 }}, duration: '${{ github.event.inputs.duration || '2m' }}', baseUrl: '${{ steps.env.outputs.base_url }}'} }
+            ### Load Test Results (${{ steps.env.outputs.environment }})
+            
+            | Metric | Value | Threshold | Status |
+            |--------|-------|-----------|--------|
+            | HTTP p95 | ${metrics.http_req_duration?.values?.p95?.toFixed(2) || 'N/A'}ms | < 500ms | ${(metrics.http_req_duration?.values?.p95 || 0) < 500 ? '✅' : '❌'} |
+            | Failed Rate | ${(metrics.http_req_failed?.values?.rate * 100 || 0).toFixed(2)}% | < 1% | ${(metrics.http_req_failed?.values?.rate || 0) < 0.01 ? '✅' : '❌'} |
+            | Login p95 | ${metrics.login_duration?.values?.p95?.toFixed(2) || 'N/A'}ms | < 1000ms | ${(metrics.login_duration?.values?.p95 || 0) < 1000 ? '✅' : '❌'} |
+            | Tab Open p95 | ${metrics.tab_open_duration?.values?.p95?.toFixed(2) || 'N/A'}ms | < 300ms | ${(metrics.tab_open_duration?.values?.p95 || 0) < 300 ? '✅' : '❌'} |
+            | Order Add p95 | ${metrics.order_add_duration?.values?.p95?.toFixed(2) || 'N/A'}ms | < 200ms | ${(metrics.order_add_duration?.values?.p95 || 0) < 200 ? '✅' : '❌'} |
+            | Bill Gen p95 | ${metrics.bill_generate_duration?.values?.p95?.toFixed(2) || 'N/A'}ms | < 500ms | ${(metrics.bill_generate_duration?.values?.p95 || 0) < 500 ? '✅' : '❌'} |
+            | Payment p95 | ${metrics.payment_duration?.values?.p95?.toFixed(2) || 'N/A'}ms | < 300ms | ${(metrics.payment_duration?.values?.p95 || 0) < 300 ? '✅' : '❌'} |
+            | Errors Rate | ${(metrics.errors?.values?.rate * 100 || 0).toFixed(2)}% | < 5% | ${(metrics.errors?.values?.rate || 0) < 0.05 ? '✅' : '❌'} |
+            
+            **Test Config:** ${ {vus: ${{ github.event.inputs.vus || 100 }}, duration: '${{ github.event.inputs.duration || '2m' }}', baseUrl: '${{ steps.env.outputs.base_url }}'} }
             `;
             
             await github.rest.checks.create({
