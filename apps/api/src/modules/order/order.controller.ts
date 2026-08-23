@@ -40,6 +40,13 @@ export class OrderController {
   constructor(private readonly orderService: OrderService) {}
 
   @Post('tab/:tabId')
+  @UseGuards(RolesGuard)
+  @Roles(
+    UserRole.WAITER,
+    UserRole.SUPERVISOR,
+    UserRole.MANAGER,
+    UserRole.OWNER,
+  )
   @ApiOperation({
     summary:
       'Add order items to an open tab (creates as PENDING_SUPERVISOR_APPROVAL)',

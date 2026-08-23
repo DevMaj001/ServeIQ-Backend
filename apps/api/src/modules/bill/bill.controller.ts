@@ -36,6 +36,13 @@ export class BillController {
   constructor(private readonly billService: BillService) {}
 
   @Post('tab/:tabId/generate')
+  @UseGuards(RolesGuard)
+  @Roles(
+    UserRole.WAITER,
+    UserRole.SUPERVISOR,
+    UserRole.MANAGER,
+    UserRole.OWNER,
+  )
   @ApiOperation({ summary: 'Generate a bill for an open tab' })
   @ApiParam({
     name: 'tabId',
@@ -78,6 +85,14 @@ export class BillController {
   }
 
   @Post('tab/:tabId/pay')
+  @UseGuards(RolesGuard)
+  @Roles(
+    UserRole.WAITER,
+    UserRole.CASHIER,
+    UserRole.SUPERVISOR,
+    UserRole.MANAGER,
+    UserRole.OWNER,
+  )
   @ApiOperation({ summary: 'Process payment for a tab bill' })
   @ApiParam({
     name: 'tabId',
@@ -103,6 +118,14 @@ export class BillController {
   }
 
   @Post('tab/:tabId/split-evenly')
+  @UseGuards(RolesGuard)
+  @Roles(
+    UserRole.WAITER,
+    UserRole.CASHIER,
+    UserRole.SUPERVISOR,
+    UserRole.MANAGER,
+    UserRole.OWNER,
+  )
   @ApiOperation({ summary: 'Split the bill evenly among N ways' })
   @ApiParam({ name: 'tabId' })
   @ApiResponse({ status: 200, description: 'OK' })
@@ -122,6 +145,14 @@ export class BillController {
   }
 
   @Post('tab/:tabId/split-by-item')
+  @UseGuards(RolesGuard)
+  @Roles(
+    UserRole.WAITER,
+    UserRole.CASHIER,
+    UserRole.SUPERVISOR,
+    UserRole.MANAGER,
+    UserRole.OWNER,
+  )
   @ApiOperation({ summary: 'Split the bill by assigning items to each split' })
   @ApiParam({ name: 'tabId' })
   @ApiResponse({ status: 200, description: 'OK' })
@@ -150,6 +181,14 @@ export class BillController {
   }
 
   @Post('tab/:tabId/splits/:billId/pay')
+  @UseGuards(RolesGuard)
+  @Roles(
+    UserRole.WAITER,
+    UserRole.CASHIER,
+    UserRole.SUPERVISOR,
+    UserRole.MANAGER,
+    UserRole.OWNER,
+  )
   @ApiOperation({ summary: 'Pay an individual split bill' })
   @ApiParam({ name: 'tabId' })
   @ApiParam({ name: 'billId' })

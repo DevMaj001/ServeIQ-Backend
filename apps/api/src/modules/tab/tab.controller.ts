@@ -108,6 +108,13 @@ export class TabController {
   }
 
   @Post('open')
+  @UseGuards(RolesGuard)
+  @Roles(
+    UserRole.WAITER,
+    UserRole.SUPERVISOR,
+    UserRole.MANAGER,
+    UserRole.OWNER,
+  )
   @ApiOperation({ summary: 'Open a new tab at a table' })
   @ApiResponse({
     status: 201,
@@ -148,6 +155,14 @@ export class TabController {
   }
 
   @Post(':id/close')
+  @UseGuards(RolesGuard)
+  @Roles(
+    UserRole.WAITER,
+    UserRole.SUPERVISOR,
+    UserRole.MANAGER,
+    UserRole.OWNER,
+    UserRole.CASHIER,
+  )
   @ApiOperation({ summary: 'Close an open tab (triggers billing)' })
   @ApiParam({ name: 'id', description: 'Tab UUID', example: 'tab-uuid-here' })
   @ApiResponse({ status: 200, description: 'Tab closed and bill generated.' })
