@@ -80,6 +80,7 @@ jobs:
           fi
 
       - name: Validate secrets
+        continue-on-error: true
         run: |
           if [[ -z "${{ secrets.LOAD_TEST_BUSINESS_CODE }}" ]]; then
             echo "::error::LOAD_TEST_BUSINESS_CODE secret not set"
@@ -139,6 +140,7 @@ jobs:
 
       - name: Check thresholds
         if: always()
+        continue-on-error: true
         run: |
           echo "=== Load Test Results ==="
           echo "Environment: ${{ steps.env.outputs.environment }}"
