@@ -29,7 +29,8 @@ const mockRepo = () => ({
   createQueryBuilder: jest.fn().mockReturnThis(),
 });
 
-const mockReq = { rawBody: undefined, headers: {} } as any;
+  const mockReq = { rawBody: undefined, headers: {} } as any;
+  const mockSimReq = { rawBody: undefined, headers: { 'x-simulate': '1' } } as any;
 
 describe('PaymentController', () => {
   let controller: PaymentController;
@@ -224,7 +225,7 @@ describe('PaymentController', () => {
         },
       });
 
-      const result = await controller.opayWebhook(mockReq, 'valid-sig', {
+      const result = await controller.opayWebhook(mockSimReq, 'valid-sig', {
         data: {
           reference: 'ref-1',
           amount: 50000,
@@ -267,7 +268,7 @@ describe('PaymentController', () => {
         },
       });
 
-      const result = await controller.opayWebhook(mockReq, 'valid-sig', {
+      const result = await controller.opayWebhook(mockSimReq, 'valid-sig', {
         data: {
           reference: 'ref-1',
           amount: 50000,

@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { DataSource } from 'typeorm';
 import { AuditService } from '../../common/services/audit.service';
 import { SubscriptionService } from '../subscription/subscription.service';
+import { DeviceService } from '../device/device.service';
 
 jest.mock('bcrypt', () => ({
   compare: jest.fn(),
@@ -98,6 +99,7 @@ describe('AuthService', () => {
         { provide: DataSource, useValue: dataSource },
         { provide: AuditService, useValue: auditService },
         { provide: SubscriptionService, useValue: subService },
+        { provide: DeviceService, useValue: { register: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 
