@@ -13,9 +13,12 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { AppDataSource } from './database/data-source';
 import { ensureTables } from './database/ensure-tables';
+import { validateProductionEnv } from './common/bootstrap/validate-env';
 import * as Sentry from '@sentry/node';
 import cookieParser from 'cookie-parser';
 async function bootstrap() {
+  validateProductionEnv();
+
   let ds;
   try {
     ds = await AppDataSource.initialize();
