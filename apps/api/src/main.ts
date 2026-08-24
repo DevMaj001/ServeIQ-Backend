@@ -120,6 +120,7 @@ async function bootstrap() {
   await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
 }
 bootstrap().catch((err) => {
-  console.error('[Bootstrap]', err);
+  const e = err as Error & { stack?: string };
+  console.error('[Bootstrap] FATAL:', e?.message ?? err, '\n', e?.stack ?? '');
   process.exit(1);
 });

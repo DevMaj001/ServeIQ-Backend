@@ -13,11 +13,24 @@ export class StructuredLogger implements LoggerService {
     message: unknown,
     ...optionalParams: unknown[]
   ) {
+    let msg: unknown = message;
+    const errorMeta: Record<string, unknown> = {};
+    if (message instanceof Error) {
+      msg = message.message || message.name;
+      if (message.stack) errorMeta.stack = message.stack;
+    } else if (typeof message !== 'string') {
+      try {
+        msg = JSON.stringify(message);
+      } catch {
+        msg = String(message);
+      }
+    }
     const entry = {
       level,
-      message: typeof message === 'string' ? message : JSON.stringify(message),
+      message: msg,
       timestamp: new Date().toISOString(),
       context: this.context,
+      ...errorMeta,
       ...(optionalParams.length > 0 && { params: optionalParams }),
     };
     if (process.env.NODE_ENV === 'production') {
