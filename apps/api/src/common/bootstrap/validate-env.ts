@@ -12,7 +12,6 @@
 const REQUIRED_PROD_ENV: readonly string[] = [
   'DATABASE_URL',
   'JWT_SECRET',
-  'JWT_REFRESH_SECRET',
   'ENCRYPTION_KEY',
 ];
 
