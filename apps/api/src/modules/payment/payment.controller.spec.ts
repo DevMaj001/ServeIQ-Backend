@@ -11,6 +11,7 @@ import { Business } from '../business/entities/business.entity';
 import { Repository } from 'typeorm';
 import { PaymentMethod } from '../../common/shared';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import * as crypto from 'crypto';
 
 const mockRepo = () => ({
   findOne: jest.fn(),
@@ -320,6 +321,82 @@ describe('PaymentController', () => {
             transactionType: 'TRANSFER',
           },
         }),
+      ).rejects.toThrow('Invalid OPay signature');
+    });
+  });
+
+  describe('opayWebhook real RSA signature verification', () => {
+    let keys: crypto.KeyPairSyncResult<string, string>;
+    const payload = {
+      data: { reference: 'ref-1', amount: 50000, status: 'SUCCESS', transactionType: 'TRANSFER' },
+    };
+    const rawBody = JSON.stringify(payload);
+
+    beforeAll(() => {
+      keys = crypto.generateKeyPairSync('rsa', {
+        modulusLength: 2048,
+        publicKeyEncoding: { type: 'spki', format: 'pem' },
+        privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+      });
+    });
+
+    beforeEach(() => {
+      billRepo.findOne.mockResolvedValue({
+        tab_id: 'tab-1',
+        paid_at: null,
+        payment_reference: 'ref-1',
+      });
+      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
+      branchRepo.findOne.mockResolvedValue({
+        settings: {
+          payment_providers: [
+            {
+              name: 'opay',
+              type: 'webhook',
+              label: 'OPay',
+              verification_method: 'rsa',
+              config: { public_key: keys.publicKey },
+            },
+          ],
+        },
+      });
+    });
+
+    const sign = (body: string) =>
+      crypto.sign('RSA-SHA256', Buffer.from(body), keys.privateKey).toString('base64');
+
+    it('should process a webhook carrying a valid RSA signature', async () => {
+      const req = { rawBody, headers: {} } as any;
+      const result = await controller.opayWebhook(req, sign(rawBody), payload);
+      expect(result.status).toBe('processed');
+      expect(billService.processPayment).toHaveBeenCalledWith(
+        'tab-1',
+        'branch-1',
+        'system-webhook',
+        'owner',
+        expect.objectContaining({ idempotency_key: 'opay-ref-1' }),
+      );
+    });
+
+    it('should reject a webhook with a malformed signature', async () => {
+      const req = { rawBody, headers: {} } as any;
+      await expect(
+        controller.opayWebhook(req, 'aW52YWxpZA==', payload),
+      ).rejects.toThrow('Invalid OPay signature');
+    });
+
+    it('should reject a signature produced by a different key', async () => {
+      const other = crypto.generateKeyPairSync('rsa', {
+        modulusLength: 2048,
+        publicKeyEncoding: { type: 'spki', format: 'pem' },
+        privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+      });
+      const wrongSig = crypto
+        .sign('RSA-SHA256', Buffer.from(rawBody), other.privateKey)
+        .toString('base64');
+      const req = { rawBody, headers: {} } as any;
+      await expect(
+        controller.opayWebhook(req, wrongSig, payload),
       ).rejects.toThrow('Invalid OPay signature');
     });
   });
