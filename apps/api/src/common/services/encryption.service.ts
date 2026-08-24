@@ -18,15 +18,27 @@ export class EncryptionService {
   private readonly key: Buffer;
 
   constructor() {
-    const secret = process.env.ENCRYPTION_KEY;
+    const dedicated = process.env.ENCRYPTION_KEY;
+    const fallback = process.env.JWT_SECRET;
+    const secret = dedicated || fallback;
     if (!secret) {
       if (process.env.NODE_ENV === 'production') {
         throw new Error(
-          'ENCRYPTION_KEY is required in production. Set it to a long random value (use the current JWT_SECRET value once to keep existing ciphertext decryptable), then never rotate it casually.',
+          'Either ENCRYPTION_KEY or JWT_SECRET must be set in production for field-level encryption.',
         );
       }
       this.key = crypto.createHash('sha256').update('serveiq-dev-key').digest();
       return;
+    }
+    if (!dedicated && fallback) {
+      // Historical behaviour: the encryption key was derived from JWT_SECRET.
+      // Keep it so existing ciphertext stays decryptable, but prefer a dedicated
+      // ENCRYPTION_KEY and avoid rotating JWT_SECRET casually.
+      console.warn(
+        '[EncryptionService] ENCRYPTION_KEY is not set; falling back to JWT_SECRET ' +
+          'for the field-encryption key. Set ENCRYPTION_KEY (use the current JWT_SECRET ' +
+          'value) and avoid rotating JWT_SECRET casually to prevent undecryptable data.',
+      );
     }
     this.key = crypto.createHash('sha256').update(secret).digest();
   }

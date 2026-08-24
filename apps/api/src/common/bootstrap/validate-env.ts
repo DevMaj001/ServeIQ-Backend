@@ -8,11 +8,14 @@
  * single readable line — instead of one crash-loop per variable.
  *
  * Only enforced in production; local/dev keeps its graceful fallbacks.
+ *
+ * ENCRYPTION_KEY is intentionally NOT required here: EncryptionService falls
+ * back to JWT_SECRET in production (with a warning), so a missing dedicated
+ * ENCRYPTION_KEY must not block boot on its own.
  */
 const REQUIRED_PROD_ENV: readonly string[] = [
   'DATABASE_URL',
   'JWT_SECRET',
-  'ENCRYPTION_KEY',
 ];
 
 export function validateProductionEnv(): void {
