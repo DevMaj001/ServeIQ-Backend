@@ -79,6 +79,7 @@ import { AddDeviceFingerprintToRefreshTokens1813000000000 } from './database/mig
 import { CreateDevicesTable1814000000000 } from './database/migrations/1814000000000-CreateDevicesTable';
 import { AddManageDevicesPermission1815000000000 } from './database/migrations/1815000000000-AddManageDevicesPermission';
 import { AddVersionColumns1816000000000 } from './database/migrations/1816000000000-AddVersionColumns';
+import { AddUserIdToNotifications1817000000000 } from './database/migrations/1817000000000-AddUserIdToNotifications';
 import { PlatformPaymentProvider } from './modules/admin/entities/platform-payment-provider.entity';
 import { Feedback } from './modules/feedback/entities/feedback.entity';
 
@@ -197,6 +198,7 @@ import { DeviceModule } from './modules/device/device.module';
         CreateDevicesTable1814000000000,
         AddManageDevicesPermission1815000000000,
         AddVersionColumns1816000000000,
+        AddUserIdToNotifications1817000000000,
       ],
       migrationsRun: true,
       synchronize: false,

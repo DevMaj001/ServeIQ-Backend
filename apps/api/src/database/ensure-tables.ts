@@ -31,6 +31,22 @@ export async function ensureTables(ds: DataSource) {
     `ALTER TABLE "businesses" ADD COLUMN IF NOT EXISTS "brand_accent_color" character varying`,
   );
 
+  // Notifications: per-user recipient (NULL = branch broadcast)
+  const hasNotifications = await ds
+    .query(
+      `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'notifications')`,
+    )
+    .then((r) => r[0]?.exists);
+
+  if (hasNotifications) {
+    await ds.query(
+      `ALTER TABLE "notifications" ADD COLUMN IF NOT EXISTS "user_id" uuid`,
+    );
+    await ds.query(
+      `CREATE INDEX IF NOT EXISTS "IDX_notifications_user_id" ON "notifications" ("user_id")`,
+    );
+  }
+
   // Guard: plans table must exist before fixing seed prices (fresh DBs run this before migrations)
   const hasPlans = await ds
     .query(
