@@ -45,6 +45,17 @@ export async function ensureTables(ds: DataSource) {
     await ds.query(
       `CREATE INDEX IF NOT EXISTS "IDX_notifications_user_id" ON "notifications" ("user_id")`,
     );
+    // Heal legacy waiter-targeted types missed by the migration (idempotent —
+    // new rows are always written with user_id already set).
+    await ds.query(`
+      UPDATE "notifications" n
+      SET "user_id" = t."waiter_id"
+      FROM "tabs" t
+      WHERE n."user_id" IS NULL
+        AND n."type" IN ('order_ready', 'order_approved')
+        AND t."waiter_id" IS NOT NULL
+        AND n."data"->>'tab_id' = t."id"::text
+    `);
   }
 
   // Guard: plans table must exist before fixing seed prices (fresh DBs run this before migrations)
