@@ -78,10 +78,14 @@ export class TabController {
     @Query('per_page') per_page?: string,
   ) {
     const pagination = getPaginationParams({ page, per_page });
+    // Waiters may only ever see their own tabs — ignore any client-supplied
+    // waiter_id filter. Managers/supervisors/owners keep full branch visibility.
+    const effectiveWaiterId =
+      req.user.role === UserRole.WAITER ? req.user.userId : waiterId;
     const { data, total } = await this.tabService.findAllByBranch(
       req.user.branchId,
       status,
-      waiterId,
+      effectiveWaiterId,
       pagination,
     );
     return paginate(data, total, pagination);
