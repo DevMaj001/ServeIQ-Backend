@@ -383,6 +383,7 @@ export class OrderService {
         });
         await this.notificationService.create({
           branch_id: tab.branch_id,
+          user_id: orderTab?.waiter_id ?? null,
           type: NotificationType.ORDER_APPROVED,
           title: 'Order Approved',
           message: `Order ${savedOrder.id.slice(0, 8)}… approved. Tracking: ${orderTab?.tracking_code || 'N/A'}`,

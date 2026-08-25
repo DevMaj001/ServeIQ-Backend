@@ -42,7 +42,10 @@ export class NotificationController {
 
   @Get()
   @Roles(...ALL_STAFF)
-  @ApiOperation({ summary: 'List notifications for the current branch' })
+  @ApiOperation({
+    summary:
+      'List notifications visible to the caller (own + branch broadcasts)',
+  })
   @ApiQuery({
     name: 'unreadOnly',
     required: false,
@@ -53,17 +56,19 @@ export class NotificationController {
   async findAll(@Request() req: any, @Query('unreadOnly') unreadOnly?: string) {
     return this.notificationService.findAll(
       req.user.branchId,
+      req.user.userId,
       unreadOnly === 'true',
     );
   }
 
   @Get('count')
   @Roles(...ALL_STAFF)
-  @ApiOperation({ summary: 'Get unread notification count' })
+  @ApiOperation({ summary: 'Get unread notification count for the caller' })
   @ApiResponse({ status: 200, description: 'Unread count.' })
   async getUnreadCount(@Request() req: any) {
     const count = await this.notificationService.getUnreadCount(
       req.user.branchId,
+      req.user.userId,
     );
     return { count };
   }
@@ -83,7 +88,11 @@ export class NotificationController {
   @ApiOperation({ summary: 'Mark specific notifications as read' })
   @ApiResponse({ status: 200, description: 'Marked as read.' })
   async markAsRead(@Request() req: any, @Body() dto: MarkReadDto) {
-    return this.notificationService.markAsRead(dto.ids, req.user.branchId);
+    return this.notificationService.markAsRead(
+      dto.ids,
+      req.user.branchId,
+      req.user.userId,
+    );
   }
 
   @Patch(':id/read')
@@ -92,15 +101,22 @@ export class NotificationController {
   @ApiParam({ name: 'id', description: 'Notification UUID' })
   @ApiResponse({ status: 200, description: 'Marked as read.' })
   async markOneAsRead(@Param('id') id: string, @Request() req: any) {
-    return this.notificationService.markAsRead([id], req.user.branchId);
+    return this.notificationService.markAsRead(
+      [id],
+      req.user.branchId,
+      req.user.userId,
+    );
   }
 
   @Patch('read-all')
   @Roles(...ALL_STAFF)
-  @ApiOperation({ summary: 'Mark all notifications as read' })
+  @ApiOperation({ summary: 'Mark all notifications as read for the caller' })
   @ApiResponse({ status: 200, description: 'All marked as read.' })
   async markAllAsRead(@Request() req: any) {
-    return this.notificationService.markAllAsRead(req.user.branchId);
+    return this.notificationService.markAllAsRead(
+      req.user.branchId,
+      req.user.userId,
+    );
   }
 
   @Delete(':id')

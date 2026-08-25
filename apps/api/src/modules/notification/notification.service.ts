@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, FindOptionsWhere } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Notification } from './entities/notification.entity';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 
@@ -11,15 +11,22 @@ export class NotificationService {
     private notificationRepository: Repository<Notification>,
   ) {}
 
-  async findAll(branchId: string, unreadOnly = false) {
-    const where: FindOptionsWhere<Notification> = {
-      branch_id: branchId,
-    };
-    if (unreadOnly) where.is_read = false;
-    return this.notificationRepository.find({
-      where,
-      order: { created_at: 'DESC' },
-    });
+  /**
+   * Notifications visible to a caller: branch broadcasts (user_id IS NULL)
+   * plus anything targeted at them personally. Waiters therefore only ever
+   * see their own notifications, never other staff's.
+   */
+  private visibleWhere(branchId: string, userId: string) {
+    return `notification.branch_id = :branchId AND (notification.user_id = :userId OR notification.user_id IS NULL)`;
+  }
+
+  async findAll(branchId: string, userId: string, unreadOnly = false) {
+    const qb = this.notificationRepository
+      .createQueryBuilder('notification')
+      .where(this.visibleWhere(branchId, userId), { branchId, userId })
+      .orderBy('notification.created_at', 'DESC');
+    if (unreadOnly) qb.andWhere('notification.is_read = false');
+    return qb.getMany();
   }
 
   async findOne(id: string, branchId: string) {
@@ -35,19 +42,29 @@ export class NotificationService {
     return this.notificationRepository.save(notification);
   }
 
-  async markAsRead(ids: string[], branchId: string) {
-    await this.notificationRepository.update(
-      { id: In(ids), branch_id: branchId },
-      { is_read: true },
-    );
+  async markAsRead(ids: string[], branchId: string, userId: string) {
+    await this.notificationRepository
+      .createQueryBuilder()
+      .update(Notification)
+      .set({ is_read: true })
+      .where(
+        `branch_id = :branchId AND (user_id = :userId OR user_id IS NULL) AND id IN (:...ids)`,
+        { branchId, userId, ids },
+      )
+      .execute();
     return { success: true };
   }
 
-  async markAllAsRead(branchId: string) {
-    await this.notificationRepository.update(
-      { branch_id: branchId, is_read: false },
-      { is_read: true },
-    );
+  async markAllAsRead(branchId: string, userId: string) {
+    await this.notificationRepository
+      .createQueryBuilder()
+      .update(Notification)
+      .set({ is_read: true })
+      .where(
+        `branch_id = :branchId AND (user_id = :userId OR user_id IS NULL)`,
+        { branchId, userId },
+      )
+      .execute();
     return { success: true };
   }
 
@@ -57,9 +74,11 @@ export class NotificationService {
     return { success: true };
   }
 
-  async getUnreadCount(branchId: string) {
-    return this.notificationRepository.count({
-      where: { branch_id: branchId, is_read: false },
-    });
+  async getUnreadCount(branchId: string, userId: string) {
+    return this.notificationRepository
+      .createQueryBuilder('notification')
+      .where(this.visibleWhere(branchId, userId), { branchId, userId })
+      .andWhere('notification.is_read = false')
+      .getCount();
   }
 }

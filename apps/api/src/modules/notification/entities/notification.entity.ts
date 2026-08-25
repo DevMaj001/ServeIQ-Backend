@@ -25,6 +25,14 @@ export class Notification {
   @Column({ type: 'uuid' })
   branch_id: string;
 
+  /**
+   * Recipient user. NULL = branch-wide broadcast visible to all staff;
+   * set = targeted at a specific user (e.g. the serving waiter).
+   */
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  user_id: string | null;
+
   @Column({ type: 'varchar', length: 30 })
   type: string;
 

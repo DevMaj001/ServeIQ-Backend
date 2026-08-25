@@ -42,14 +42,15 @@ export class OrderScheduler {
 
     const tabIds = [...new Set(expired.map((o) => o.tab_id))];
     const tabs = await this.tabRepo.find({ where: { id: In(tabIds) } });
-    const branchByTab = new Map(tabs.map((t) => [t.id, t.branch_id]));
+    const tabById = new Map(tabs.map((t) => [t.id, t]));
 
     for (const order of expired) {
-      const branchId = branchByTab.get(order.tab_id);
-      if (!branchId) continue;
+      const tab = tabById.get(order.tab_id);
+      if (!tab) continue;
 
       await this.notificationService.create({
-        branch_id: branchId,
+        branch_id: tab.branch_id,
+        user_id: tab.waiter_id ?? null,
         type: NotificationType.ORDER_READY,
         title: 'Order Ready for Pickup',
         message: `Order ${order.id.slice(0, 8)}… is ready`,
