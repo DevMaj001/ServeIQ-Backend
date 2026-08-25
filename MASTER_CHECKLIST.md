@@ -16,16 +16,19 @@ Most Phase 0–2 items below are **already built and deployed** even though thei
 - Differentiated throttles on auth/PIN routes + global ThrottlerGuard
 - Health endpoints, Sentry wiring, helmet, CORS allowlist, Swagger off in prod
 - Paystack integration with HMAC-verified webhooks; Moniepoint/OPay webhooks signature-verified (simulate bypass now hard-disabled in production)
+- Email verification flow (`POST /auth/send-verification` + `POST /auth/verify-email`)
+- Receipt PDFs generated and stored in Cloudinary (`bills.receipt_url`)
+- Single schema path: boot-time `ensureTables` DDL removed; migrations are the only source of truth (`migrationsRun: true`, ConsolidateEnsureTables + follow-up migrations cover everything)
+- Socket.io Redis adapter wired via `REDIS_URL` (graceful single-instance fallback)
 
 **Genuinely outstanding (real blockers / gaps):**
-- [ ] Set `ENCRYPTION_KEY` on Render (fail-fast added; use current `JWT_SECRET` value once to avoid breaking existing ciphertext)
-- [ ] Rotate exposed local credentials: Supabase DB password (`apps/api/.env`), NVIDIA key (root `.env`)
-- [ ] Upgrade Render Postgres off free tier for beta (sleeping DB = mid-service outages)
+- [ ] Set `ENCRYPTION_KEY` on Render (fail-fast added; use current `JWT_SECRET` value once to avoid breaking existing ciphertext) — see GO_LIVE_CHECKLIST.md
+- [ ] Rotate exposed local credentials: Supabase DB password (`apps/api/.env`), NVIDIA key (root `.env`) — both are in git history, rotation is mandatory
+- [ ] Upgrade Render Postgres + web service off free tier for beta (render.yaml updated to starter/basic-256mb; apply from dashboard)
 - [ ] Production Paystack keys (test-only today)
-- [ ] Consolidate dual schema paths: 52 migrations vs ad-hoc `database/ensure-tables.ts` boot DDL
-- [ ] Redis is provisioned but unused; Socket.io lacks a Redis adapter (single-instance ceiling)
-- [ ] Email verification flow; receipt storage to object storage; differentiated public/report throttles
-- [ ] Reconcile the stale checkboxes below against reality
+- [ ] Redis is provisioned but only used by the Socket.io adapter now; Bull queues still unused
+- [ ] Differentiated public/report throttles
+- [ ] Beta process items: demo-history seed script exists (`npm run seed:demo-history -w apps/api`) — run it on staging; ONBOARDING_GUIDE.md + WAITER_QUICK_START.md written; demo videos and in-app feedback button remain
 
 ---
 
