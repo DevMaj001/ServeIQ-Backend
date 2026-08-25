@@ -11,25 +11,15 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { HttpAdapterHost } from '@nestjs/core';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { AppDataSource } from './database/data-source';
-import { ensureTables } from './database/ensure-tables';
 import { validateProductionEnv } from './common/bootstrap/validate-env';
 import * as Sentry from '@sentry/node';
 import cookieParser from 'cookie-parser';
 async function bootstrap() {
   validateProductionEnv();
 
-  let ds;
-  try {
-    ds = await AppDataSource.initialize();
-    await ensureTables(ds).catch((e) =>
-      console.error('[bootstrap] ensureTables error:', e),
-    );
-    await ds.destroy().catch(() => {});
-  } catch (e) {
-    console.error('[bootstrap] DataSource init error (non-fatal):', e);
-  }
-
+  // Schema is owned exclusively by versioned migrations. The AppModule's
+  // TypeORM connection runs pending migrations on init (migrationsRun: true),
+  // and the Render startCommand runs `migration:run:prod` before boot.
   const app = await NestFactory.create(AppModule, {
     logger: new StructuredLogger('ServeIQ'),
     rawBody: true,
