@@ -2,7 +2,9 @@ services:
   - type: web
     name: serveiq-api
     env: node
-    plan: free
+    # Starter keeps the API always-on. The free tier sleeps after 15 min idle,
+    # causing ~60s cold starts — unacceptable mid-service at a bar.
+    plan: starter
     buildCommand: cd apps/api && npm install && npm run build
     startCommand: cd apps/api && npm run migration:run:prod; node dist/main.js
     envVars:
@@ -16,16 +18,16 @@ services:
         value: "true"
       - key: DATABASE_URL
         sync: false
+      # Required before boot: fail-fast validation will refuse to start without it.
+      # Use the current JWT_SECRET value once to avoid breaking existing ciphertext.
+      - key: ENCRYPTION_KEY
+        sync: false
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_EXPIRES_IN
         value: 15m
-      - key: JWT_REFRESH_SECRET
-        generateValue: true
       - key: JWT_REFRESH_EXPIRES_IN
         value: 7d
-      - key: ENCRYPTION_KEY
-        sync: false
       - key: PAYSTACK_SECRET_KEY
         sync: false
       - key: PAYSTACK_PUBLIC_KEY
@@ -50,5 +52,7 @@ databases:
   - name: serveiq-db
     databaseName: serveiq
     user: serveiq
-    plan: free
+    # Paid tier: the free Postgres plan suspends after inactivity, which would
+    # take the API down mid-service. Smallest paid plan is sufficient for beta.
+    plan: basic-256mb
     ipAllowList: []
