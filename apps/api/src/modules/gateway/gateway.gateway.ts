@@ -9,6 +9,8 @@ import {
   MessageBody,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
+import Redis from 'ioredis';
 import { JwtService } from '@nestjs/jwt';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { GATEWAY_SERVER } from './gateway.constants';
@@ -54,6 +56,32 @@ export class GatewayGateway
           Server | undefined
         >
       )[GATEWAY_SERVER] = server;
+    }
+
+    // Horizontal scale-out: fan out events across instances via Redis.
+    // Without REDIS_URL the gateway still works single-instance.
+    const redisUrl = process.env.REDIS_URL;
+    if (!server || !redisUrl) {
+      this.logger.warn(
+        'REDIS_URL not set — Socket.io running single-instance (no Redis adapter)',
+      );
+      return;
+    }
+    try {
+      const pub = new Redis(redisUrl, { maxRetriesPerRequest: null });
+      const sub = pub.duplicate();
+      server.adapter(createAdapter(pub, sub));
+      pub.on('error', (e) =>
+        this.logger.warn(`Redis adapter pub error: ${e.message}`),
+      );
+      sub.on('error', (e) =>
+        this.logger.warn(`Redis adapter sub error: ${e.message}`),
+      );
+      this.logger.log('Socket.io Redis adapter attached');
+    } catch (err) {
+      this.logger.warn(
+        `Failed to attach Redis adapter (continuing single-instance): ${err?.message ?? err}`,
+      );
     }
   }
 
