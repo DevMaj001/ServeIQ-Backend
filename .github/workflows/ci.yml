@@ -11,9 +11,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Newer ubuntu-latest images no longer pre-create ~/.npm, which breaks
+      # setup-node's cache restore ("Some specified paths were not resolved").
+      - name: Ensure npm cache dir exists
+        run: mkdir -p "$(npm config get cache)"
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
       - run: npm ci
       # Legacy lint debt (1583 errors) is tracked separately; do not block merges.
@@ -46,9 +50,11 @@ jobs:
       DB_SSL: 'false'
     steps:
       - uses: actions/checkout@v4
+      - name: Ensure npm cache dir exists
+        run: mkdir -p "$(npm config get cache)"
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
       - run: npm ci
       - name: Wait for Postgres
