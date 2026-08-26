@@ -17,11 +17,6 @@ interface ExceptionResponseBody {
   code?: string;
 }
 
-interface DbDriverError extends Error {
-  code?: string;
-  constraint?: string;
-}
-
 interface ErrorMetadata {
   status: number;
   code: string;
