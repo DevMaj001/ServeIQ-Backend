@@ -71,6 +71,7 @@ describe('Real-DB smoke (V1 acceptance)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    app.enableShutdownHooks();
     app.setGlobalPrefix('api');
     app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
     app.useGlobalPipes(

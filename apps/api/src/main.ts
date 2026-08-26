@@ -25,6 +25,10 @@ async function bootstrap() {
     rawBody: true,
   });
 
+  // Allow Nest to run onModuleDestroy / beforeApplicationShutdown hooks
+  // (e.g. closing the Socket.io Redis adapter) on SIGINT/SIGTERM / app.close().
+  app.enableShutdownHooks();
+
   if (process.env.SENTRY_DSN) {
     Sentry.init({
       dsn: process.env.SENTRY_DSN,

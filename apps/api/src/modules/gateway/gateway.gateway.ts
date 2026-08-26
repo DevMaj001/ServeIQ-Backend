@@ -12,7 +12,7 @@ import { Server, Socket } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
 import { JwtService } from '@nestjs/jwt';
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { GATEWAY_SERVER } from './gateway.constants';
 
 interface AuthenticatedSocket extends Socket {
@@ -39,12 +39,19 @@ export class GatewayGateway
     OnGatewayConnection,
     OnGatewayDisconnect,
     OnModuleInit,
-    OnGatewayInit
+    OnGatewayInit,
+    OnModuleDestroy
 {
   @WebSocketServer()
   server: Server;
 
   private readonly logger = new Logger(GatewayGateway.name);
+
+  // Redis adapter clients (only created when REDIS_URL is set). They are raw
+  // ioredis connections not tied to the HTTP server, so they must be closed
+  // explicitly on shutdown or they leak and keep the process alive.
+  private pubClient?: Redis;
+  private subClient?: Redis;
 
   constructor(private readonly jwtService: JwtService) {}
 
@@ -71,6 +78,8 @@ export class GatewayGateway
       const pub = new Redis(redisUrl, { maxRetriesPerRequest: null });
       const sub = pub.duplicate();
       server.adapter(createAdapter(pub, sub));
+      this.pubClient = pub;
+      this.subClient = sub;
       pub.on('error', (e) =>
         this.logger.warn(`Redis adapter pub error: ${e.message}`),
       );
@@ -148,6 +157,16 @@ export class GatewayGateway
       }
     }
     this.logger.log(`Client ${client.id} disconnected`);
+  }
+
+  async onModuleDestroy() {
+    await Promise.allSettled([
+      this.pubClient?.disconnect(),
+      this.subClient?.disconnect(),
+    ]);
+    delete (globalThis as unknown as Record<typeof GATEWAY_SERVER, Server | undefined>)[
+      GATEWAY_SERVER
+    ];
   }
 
   @SubscribeMessage('subscribe:tables')
