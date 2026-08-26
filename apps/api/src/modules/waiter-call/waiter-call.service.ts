@@ -262,6 +262,34 @@ export class WaiterCallService {
     return saved;
   }
 
+  /** Public cancel: cancel the active (non-resolved) waiter call for a table. */
+  async cancelWaiterCallByTable(tableId: string): Promise<WaiterCall | null> {
+    const call = await this.waiterCallRepository.findOne({
+      where: {
+        table_id: tableId,
+        status: In([
+          WaiterCallStatus.PENDING,
+          WaiterCallStatus.QUEUED,
+          WaiterCallStatus.ACCEPTED,
+          WaiterCallStatus.ARRIVED,
+        ]),
+        deleted_at: null,
+      } as any,
+      order: { created_at: 'DESC' },
+    });
+    if (!call) return null;
+    call.status = WaiterCallStatus.CANCELLED;
+    call.cancelled_at = new Date();
+    const saved = await this.waiterCallRepository.save(call);
+    this.realtimeService.emitWaiterCall(call.branch_id, 'waiter.request.cancelled', {
+      id: saved.id,
+      tableId: saved.table_id,
+      status: saved.status,
+      assignedWaiterId: saved.assigned_waiter_id,
+    });
+    return saved;
+  }
+
   async getWaiterWorkload(
     waiterId: string,
     branchId?: string,

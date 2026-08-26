@@ -108,6 +108,19 @@ export class WaiterCallController {
     };
   }
 
+  /** PUBLIC: Cancel the active waiter call for a table (customer action). */
+  @Post('table/:tableId/cancel')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Customer: cancel the active waiter call for a table (public)' })
+  async cancelByTable(@Param('tableId') tableId: string) {
+    const call = await this.waiterCallService.cancelWaiterCallByTable(tableId);
+    if (!call) return { success: true, data: null, message: 'No active call to cancel' };
+    return {
+      success: true,
+      data: { id: call.id, status: call.status, cancelledAt: call.cancelled_at },
+    };
+  }
+
   /** WAITER: view their assigned waiter calls. */
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
