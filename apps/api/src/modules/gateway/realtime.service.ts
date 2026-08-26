@@ -121,4 +121,16 @@ export class RealtimeService {
       { tabId, ...data },
     );
   }
+
+  emitWaiterCall(branchId: string, event: string, payload: any) {
+    this.emitTo(
+      [
+        `branch:${branchId}`,
+        `managers:${branchId}`,
+        `tables:${branchId}`,
+      ],
+      event,
+      payload,
+    );
+  }
 }

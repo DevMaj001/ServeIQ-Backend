@@ -80,8 +80,11 @@ import { CreateDevicesTable1814000000000 } from './database/migrations/181400000
 import { AddManageDevicesPermission1815000000000 } from './database/migrations/1815000000000-AddManageDevicesPermission';
 import { AddVersionColumns1816000000000 } from './database/migrations/1816000000000-AddVersionColumns';
 import { AddUserIdToNotifications1817000000000 } from './database/migrations/1817000000000-AddUserIdToNotifications';
+import { CreateWaiterCallsTable1818000000000 } from './database/migrations/1818000000000-CreateWaiterCallsTable';
+import { AddMaxTablesPerWaiterToBranches1819000000000 } from './database/migrations/1819000000000-AddMaxTablesPerWaiterToBranches';
 import { PlatformPaymentProvider } from './modules/admin/entities/platform-payment-provider.entity';
 import { Feedback } from './modules/feedback/entities/feedback.entity';
+import { WaiterCall } from './modules/waiter-call/entities/waiter-call.entity';
 
 import { AuthModule } from './modules/auth/auth.module';
 import { BusinessModule } from './modules/business/business.module';
@@ -116,6 +119,7 @@ import { FeedbackModule } from './modules/feedback/feedback.module';
 import { ReviewModule } from './modules/review/review.module';
 import { GatewayModule } from './modules/gateway/gateway.module';
 import { DeviceModule } from './modules/device/device.module';
+import { WaiterCallModule } from './modules/waiter-call/waiter-call.module';
 
 @Module({
   imports: [
@@ -159,6 +163,7 @@ import { DeviceModule } from './modules/device/device.module';
         Unit,
         PlatformPaymentProvider,
         Feedback,
+        WaiterCall,
       ],
       migrations: [
         BackfillUserRoleId1752892800000,
@@ -199,6 +204,8 @@ import { DeviceModule } from './modules/device/device.module';
         AddManageDevicesPermission1815000000000,
         AddVersionColumns1816000000000,
         AddUserIdToNotifications1817000000000,
+        CreateWaiterCallsTable1818000000000,
+        AddMaxTablesPerWaiterToBranches1819000000000,
       ],
       migrationsRun: true,
       synchronize: false,
@@ -260,6 +267,7 @@ import { DeviceModule } from './modules/device/device.module';
     ReviewModule,
     GatewayModule,
     DeviceModule,
+    WaiterCallModule,
   ],
   controllers: [AppController],
   providers: [
