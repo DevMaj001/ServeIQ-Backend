@@ -7,29 +7,40 @@ import {
   Query,
   HttpCode,
   Req,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
 import { Request } from 'express';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '../../common/shared';
 import { WaiterCallService } from './waiter-call.service';
 import { CreateWaiterCallDto } from './dto/waiter-call.dto';
 import { WaiterCallStatus } from './entities/waiter-call.entity';
 import { WaiterCall } from './entities/waiter-call.entity';
 
+interface AuthedUser {
+  userId: string;
+  branchId: string;
+  role: UserRole;
+}
+
 @ApiTags('Waiter Call')
 @Controller('api/v1/waiter-calls')
-@Throttle({ default: { limit: 10, ttl: 60000 } })
 export class WaiterCallController {
   constructor(private readonly waiterCallService: WaiterCallService) {}
 
+  /** PUBLIC: Customer calls a waiter (no auth). */
   @Post()
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @HttpCode(201)
   @ApiOperation({ summary: 'Customer calls a waiter (public, no auth)' })
   @ApiResponse({ status: 201, description: 'Waiter call created' })
   async createWaiterCall(@Body() body: CreateWaiterCallDto, @Req() req: Request) {
     const branchId =
-      (req.query['branchId'] as string) ||
-      (req.headers['x-branch-id'] as string);
+      (req.query['branchId'] as string) || (req.headers['x-branch-id'] as string);
     if (!branchId) {
       throw new Error('branchId is required');
     }
@@ -55,6 +66,7 @@ export class WaiterCallController {
     };
   }
 
+  /** PUBLIC: Check waiter call status. */
   @Get(':id/status')
   @ApiOperation({ summary: 'Check waiter call status (public)' })
   @ApiResponse({ status: 200, description: 'Waiter call status' })
@@ -79,63 +91,7 @@ export class WaiterCallController {
     };
   }
 
-  @Get()
-  @ApiOperation({ summary: 'Waiter: view their assigned waiter calls' })
-  async getMyCalls(
-    @Req() req: Request,
-    @Query('status') status?: WaiterCallStatus,
-    @Query('branchId') branchId?: string,
-  ) {
-    const waiterId = req.headers['x-waiter-id'] as string;
-    if (!waiterId) throw new Error('waiter id required');
-
-    const calls = await this.waiterCallService.getMyCalls(waiterId, status, branchId);
-    return {
-      success: true,
-      data: calls.map((c) => ({
-        id: c.id,
-        tableId: c.table_id,
-        status: c.status,
-        assignedWaiter: c.assigned_waiter_id ? { id: c.assigned_waiter_id } : null,
-        createdAt: c.created_at,
-        acceptedAt: c.accepted_at,
-        arrivedAt: c.arrived_at,
-        resolvedAt: c.resolved_at,
-      })),
-    };
-  }
-
-  @Get('active')
-  @ApiOperation({ summary: 'Management: view active waiter calls' })
-  async getActiveCalls(@Query('branchId') branchId?: string) {
-    const calls = await this.waiterCallService.getActiveWaiterCalls(branchId);
-    return {
-      success: true,
-      data: calls.map((c) => ({
-        id: c.id,
-        tableId: c.table_id,
-        status: c.status,
-        assignedWaiter: c.assigned_waiter_id ? { id: c.assigned_waiter_id } : null,
-        createdAt: c.created_at,
-      })),
-    };
-  }
-
-  @Get('queue')
-  @ApiOperation({ summary: 'Management: view queued waiter calls (FIFO)' })
-  async getQueuedCalls(@Query('branchId') branchId?: string) {
-    const calls = await this.waiterCallService.getQueuedCalls(branchId);
-    return {
-      success: true,
-      data: calls.map((c) => ({
-        id: c.id,
-        tableId: c.table_id,
-        status: c.status,
-        createdAt: c.created_at,
-      })),
-    };
-  }
-
+  /** PUBLIC: Find waiter call by table ID. */
   @Get('table/:tableId')
   @ApiOperation({ summary: 'Find waiter call by table ID' })
   async getByTable(@Param('tableId') tableId: string) {
@@ -152,38 +108,81 @@ export class WaiterCallController {
     };
   }
 
+  /** WAITER: view their assigned waiter calls. */
+  @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.WAITER)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Waiter: view their assigned waiter calls' })
+  async getMyCalls(@Req() req: Request, @Query('status') status?: WaiterCallStatus) {
+    const user = req.user as AuthedUser;
+    const calls = await this.waiterCallService.getMyCalls(user.userId, status, user.branchId);
+    return {
+      success: true,
+      data: calls.map((c) => ({
+        id: c.id,
+        tableId: c.table_id,
+        status: c.status,
+        assignedWaiter: c.assigned_waiter_id ? { id: c.assigned_waiter_id } : null,
+        createdAt: c.created_at,
+        acceptedAt: c.accepted_at,
+        arrivedAt: c.arrived_at,
+        resolvedAt: c.resolved_at,
+      })),
+    };
+  }
+
+  /** WAITER: view their active table workload. */
+  @Get('workload/me')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.WAITER)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Waiter: view their active table workload' })
+  async getWorkload(@Req() req: Request) {
+    const user = req.user as AuthedUser;
+    const workload = await this.waiterCallService.getWaiterWorkload(user.userId, user.branchId);
+    return { success: true, data: workload };
+  }
+
+  /** WAITER: accept a waiter call. */
   @Post(':id/accept')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.WAITER)
+  @ApiBearerAuth('access-token')
   @HttpCode(200)
   @ApiOperation({ summary: 'Waiter: accept a waiter call' })
   async acceptCall(@Param('id') id: string, @Req() req: Request) {
-    const waiterId = req.headers['x-waiter-id'] as string;
-    if (!waiterId) throw new Error('waiter id required');
-    const call = await this.waiterCallService.acceptWaiterCall(id, waiterId);
+    const user = req.user as AuthedUser;
+    const call = await this.waiterCallService.acceptWaiterCall(id, user.userId);
     return {
       success: true,
       data: { id: call.id, status: call.status, acceptedAt: call.accepted_at },
     };
   }
 
+  /** WAITER: mark request as arrived. */
   @Post(':id/arrived')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.WAITER)
+  @ApiBearerAuth('access-token')
   @HttpCode(200)
   @ApiOperation({ summary: 'Waiter: mark request as arrived' })
   async markArrived(@Param('id') id: string, @Req() req: Request) {
-    const waiterId = req.headers['x-waiter-id'] as string;
-    if (!waiterId) throw new Error('waiter id required');
-    const call = await this.waiterCallService.markArrived(id);
+    const arrived = await this.waiterCallService.markArrived(id);
     return {
       success: true,
-      data: { id: call.id, status: call.status, arrivedAt: call.arrived_at },
+      data: { id: arrived.id, status: arrived.status, arrivedAt: arrived.arrived_at },
     };
   }
 
+  /** WAITER/MANAGER: resolve the waiter call. */
   @Post(':id/resolve')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.WAITER, UserRole.MANAGER, UserRole.OWNER, UserRole.SUPERVISOR)
+  @ApiBearerAuth('access-token')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Waiter: resolve the waiter call' })
+  @ApiOperation({ summary: 'Waiter/Manager: resolve the waiter call' })
   async resolveCall(@Param('id') id: string, @Req() req: Request) {
-    const waiterId = req.headers['x-waiter-id'] as string;
-    if (!waiterId) throw new Error('waiter id required');
     const call = await this.waiterCallService.resolveWaiterCall(id);
     return {
       success: true,
@@ -191,7 +190,11 @@ export class WaiterCallController {
     };
   }
 
+  /** WAITER/MANAGER: cancel a waiter call. */
   @Post(':id/cancel')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.WAITER, UserRole.MANAGER, UserRole.OWNER, UserRole.SUPERVISOR)
+  @ApiBearerAuth('access-token')
   @HttpCode(200)
   @ApiOperation({ summary: 'Cancel a waiter call' })
   async cancelCall(@Param('id') id: string, @Req() req: Request) {
@@ -202,12 +205,44 @@ export class WaiterCallController {
     };
   }
 
-  @Get('workload/me')
-  @ApiOperation({ summary: 'Waiter: view their active table workload' })
-  async getWorkload(@Req() req: Request, @Query('branchId') branchId?: string) {
-    const waiterId = req.headers['x-waiter-id'] as string;
-    if (!waiterId) throw new Error('waiter id required');
-    const workload = await this.waiterCallService.getWaiterWorkload(waiterId, branchId);
-    return { success: true, data: workload };
+  /** MANAGEMENT: view active waiter calls. */
+  @Get('active')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.MANAGER, UserRole.OWNER, UserRole.SUPERVISOR)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Management: view active waiter calls' })
+  async getActiveCalls(@Req() req: Request) {
+    const user = req.user as AuthedUser;
+    const calls = await this.waiterCallService.getActiveWaiterCalls(user.branchId);
+    return {
+      success: true,
+      data: calls.map((c) => ({
+        id: c.id,
+        tableId: c.table_id,
+        status: c.status,
+        assignedWaiter: c.assigned_waiter_id ? { id: c.assigned_waiter_id } : null,
+        createdAt: c.created_at,
+      })),
+    };
+  }
+
+  /** MANAGEMENT: view queued waiter calls (FIFO). */
+  @Get('queue')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.MANAGER, UserRole.OWNER, UserRole.SUPERVISOR)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Management: view queued waiter calls (FIFO)' })
+  async getQueuedCalls(@Req() req: Request) {
+    const user = req.user as AuthedUser;
+    const calls = await this.waiterCallService.getQueuedCalls(user.branchId);
+    return {
+      success: true,
+      data: calls.map((c) => ({
+        id: c.id,
+        tableId: c.table_id,
+        status: c.status,
+        createdAt: c.created_at,
+      })),
+    };
   }
 }
