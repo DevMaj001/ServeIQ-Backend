@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://serveiq-backend.onrender.com/api/$1"
+      "destination": "https://serveiq-backend-1.onrender.com/api/$1"
     }
   ]
 }
