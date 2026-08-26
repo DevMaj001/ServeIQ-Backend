@@ -1,7 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, ValidationPipe, VersioningType } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { TransformInterceptor } from '../src/common/interceptors/transform.interceptor';
+import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
 import { DataSource } from 'typeorm';
 import { Business } from '../src/modules/business/entities/business.entity';
 import { Branch } from '../src/modules/branch/entities/branch.entity';
@@ -58,6 +61,14 @@ describe('Billing E2E (V1 acceptance)', () => {
       .compile();
 
     app = moduleFixture.createNestApplication();
+    app.setGlobalPrefix('api');
+    app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, transform: true }),
+    );
+    const reflector = app.get(Reflector);
+    app.useGlobalInterceptors(new TransformInterceptor(reflector));
+    app.useGlobalFilters(new HttpExceptionFilter());
     await app.init();
   });
 
