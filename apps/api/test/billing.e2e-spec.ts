@@ -178,6 +178,31 @@ describe('Billing E2E (V1 acceptance)', () => {
 
     orderId = res.body.data[0].id;
     expect(orderId).toBeTruthy();
+
+    // Move the order to a fulfilled state so it no longer blocks payment
+    // (processPayment rejects tabs with undelivered billable orders).
+    const deptRes = await http()
+      .post('/api/v1/departments')
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ name: `Billing Kitchen ${suffix}` })
+      .expect(201);
+    const departmentId = deptRes.body.data.id;
+
+    await http()
+      .post(`/api/v1/orders/${orderId}/approve`)
+      .set('Authorization', `Bearer ${tokenA}`)
+      .send({ department: departmentId, estimated_preparation_time_seconds: 1 })
+      .expect(201);
+
+    await dataSource.query(
+      `UPDATE orders SET order_status = 'ready_for_pickup', actual_ready_time = now() WHERE id = $1`,
+      [orderId],
+    );
+
+    await http()
+      .post(`/api/v1/orders/${orderId}/deliver`)
+      .set('Authorization', `Bearer ${tokenA}`)
+      .expect(201);
   });
 
   it('generates a bill for the tab', async () => {
