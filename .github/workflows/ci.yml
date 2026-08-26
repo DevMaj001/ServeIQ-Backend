@@ -11,14 +11,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # Newer ubuntu-latest images no longer pre-create ~/.npm, which breaks
-      # setup-node's cache restore ("Some specified paths were not resolved").
+      # setup-node's built-in cache hard-fails on newer runner images
+      # ("Some specified paths were not resolved"), so we cache ~/.npm via
+      # actions/cache instead — it degrades to a warning on any path issue.
       - name: Ensure npm cache dir exists
-        run: mkdir -p "$(npm config get cache)"
+        run: mkdir -p ~/.npm
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
+          restore-keys: ${{ runner.os }}-npm-
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
       - run: npm ci
       # Legacy lint debt (1583 errors) is tracked separately; do not block merges.
       - name: Lint (non-blocking)
@@ -51,11 +57,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Ensure npm cache dir exists
-        run: mkdir -p "$(npm config get cache)"
+        run: mkdir -p ~/.npm
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
+          restore-keys: ${{ runner.os }}-npm-
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
       - run: npm ci
       - name: Wait for Postgres
         run: |
