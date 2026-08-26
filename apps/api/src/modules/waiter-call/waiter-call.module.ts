@@ -4,6 +4,7 @@ import { WaiterCall } from './entities/waiter-call.entity';
 import { WaiterCallService } from './waiter-call.service';
 import { WaiterCallController } from './waiter-call.controller';
 import { BranchModule } from '../branch/branch.module';
+import { Branch } from '../branch/entities/branch.entity';
 import { Tab } from '../tab/entities/tab.entity';
 import { Table } from '../table/entities/table.entity';
 import { User } from '../user/entities/user.entity';
@@ -11,7 +12,7 @@ import { GatewayModule } from '../gateway/gateway.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([WaiterCall, Tab, Table, User]),
+    TypeOrmModule.forFeature([WaiterCall, Tab, Table, User, Branch]),
     BranchModule,
     GatewayModule,
   ],
