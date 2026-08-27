@@ -14,6 +14,7 @@ import { DataSource, MoreThan, In, FindOptionsWhere } from 'typeorm';
 import { User } from '../user/entities/user.entity';
 import { Business } from '../business/entities/business.entity';
 import { Branch } from '../branch/entities/branch.entity';
+import { ShiftTemplate } from '../shift/entities/shift-template.entity';
 import { Subscription } from '../subscription/entities/subscription.entity';
 import { SubscriptionService } from '../subscription/subscription.service';
 import { RefreshToken } from '../../entities/refresh-token.entity';
@@ -96,6 +97,51 @@ export class AuthService {
         savedBranch.id,
         queryRunner.manager,
       );
+
+      // 2c. Seed default shift templates so the new business has working
+      // shift templates immediately (the Shift Templates admin view is empty
+      // otherwise).
+      const defaultShiftTemplates = [
+        {
+          name: 'Morning Shift',
+          type: 'morning',
+          scheduled_start_time: '07:00',
+          scheduled_end_time: '15:00',
+          days_of_week: [1, 2, 3, 4, 5],
+          color: '#22c55e',
+        },
+        {
+          name: 'Evening Shift',
+          type: 'evening',
+          scheduled_start_time: '15:00',
+          scheduled_end_time: '23:00',
+          days_of_week: [1, 2, 3, 4, 5],
+          color: '#f59e0b',
+        },
+        {
+          name: 'Night Shift',
+          type: 'night',
+          scheduled_start_time: '23:00',
+          scheduled_end_time: '07:00',
+          days_of_week: [0, 6],
+          color: '#6366f1',
+        },
+      ];
+      for (const t of defaultShiftTemplates) {
+        await queryRunner.manager.save(
+          queryRunner.manager.create(ShiftTemplate, {
+            business_id: savedBusiness.id,
+            branch_id: savedBranch.id,
+            name: t.name,
+            type: t.type,
+            scheduled_start_time: t.scheduled_start_time,
+            scheduled_end_time: t.scheduled_end_time,
+            days_of_week: t.days_of_week,
+            color: t.color,
+            is_active: true,
+          }),
+        );
+      }
 
       // 3. Resolve the global Owner role first so the owner's role_id is
       // set on insert (users.role_id is NOT NULL). A fresh business has no
