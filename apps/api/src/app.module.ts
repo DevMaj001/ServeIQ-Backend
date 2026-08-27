@@ -74,6 +74,7 @@ import { CreateReviewsTable1808000000000 } from './database/migrations/180800000
 import { AddNavigationPermissions1809000000000 } from './database/migrations/1809000000000-AddNavigationPermissions';
 import { CreateShiftTemplates1810000000000 } from './database/migrations/1810000000000-CreateShiftTemplates';
 import { AddBusinessIdToShiftTemplates1811000000000 } from './database/migrations/1811000000000-AddBusinessIdToShiftTemplates';
+import { SeedDefaultShiftTemplates1820000000000 } from './database/migrations/1820000000000-SeedDefaultShiftTemplates';
 import { AddManageShiftsPermission1812000000000 } from './database/migrations/1812000000000-AddManageShiftsPermission';
 import { AddDeviceFingerprintToRefreshTokens1813000000000 } from './database/migrations/1813000000000-AddDeviceFingerprintToRefreshTokens';
 import { CreateDevicesTable1814000000000 } from './database/migrations/1814000000000-CreateDevicesTable';
@@ -198,6 +199,7 @@ import { WaiterCallModule } from './modules/waiter-call/waiter-call.module';
         AddNavigationPermissions1809000000000,
         CreateShiftTemplates1810000000000,
         AddBusinessIdToShiftTemplates1811000000000,
+        SeedDefaultShiftTemplates1820000000000,
         AddManageShiftsPermission1812000000000,
         AddDeviceFingerprintToRefreshTokens1813000000000,
         CreateDevicesTable1814000000000,
