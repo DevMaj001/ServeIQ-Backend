@@ -1,10 +1,11 @@
-import { Controller, Get, Param, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Param, Query, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { Branch } from '../branch/entities/branch.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Advertisement } from '../advertisement/entities/advertisement.entity';
+import { Table } from '../table/entities/table.entity';
 
 @ApiTags('Public')
 @Controller('public')
@@ -16,6 +17,8 @@ export class PublicMenuController {
     private menuItemRepo: Repository<MenuItem>,
     @InjectRepository(Advertisement)
     private adRepo: Repository<Advertisement>,
+    @InjectRepository(Table)
+    private tableRepo: Repository<Table>,
   ) {}
 
   @Get('menu/:branchId')
@@ -91,5 +94,40 @@ export class PublicMenuController {
       title: ad.title,
       sortOrder: ad.sort_order,
     }));
+  }
+
+  @Get('tables/:branchId/resolve')
+  @ApiOperation({
+    summary: 'Resolve a table number/label to its UUID within a branch (public)',
+  })
+  @ApiParam({ name: 'branchId', description: 'Branch UUID' })
+  @ApiQuery({ name: 'number', required: true, description: 'Table number or label (e.g. "5", "A1", "Table 5")' })
+  @ApiResponse({ status: 200, description: 'Table found.' })
+  @ApiResponse({ status: 404, description: 'Table not found.' })
+  async resolveTable(
+    @Param('branchId') branchId: string,
+    @Query('number') number: string,
+  ) {
+    const branch = await this.branchRepo.findOne({ where: { id: branchId } });
+    if (!branch) {
+      throw new NotFoundException('Branch not found');
+    }
+
+    const table = await this.tableRepo.findOne({
+      where: [
+        { branch_id: branchId, table_number: number },
+        { branch_id: branchId, label: number },
+      ],
+    });
+
+    if (!table) {
+      throw new NotFoundException(`Table "${number}" not found at this branch`);
+    }
+
+    return {
+      tableId: table.id,
+      tableNumber: table.table_number,
+      label: table.label,
+    };
   }
 }
