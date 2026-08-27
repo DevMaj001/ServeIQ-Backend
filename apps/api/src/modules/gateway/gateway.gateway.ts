@@ -160,17 +160,26 @@ export class GatewayGateway
   }
 
   async onModuleDestroy() {
-    // Close the Socket.IO server first so it stops holding the event loop
-    // (and releases its adapter) before tearing down the Redis clients.
-    if (this.server) {
-      await new Promise<void>((resolve) => {
-        this.server.close(() => resolve());
-      });
-    }
+    // Quit the Redis adapter clients first so a non-closable server never
+    // blocks their cleanup.
     await Promise.allSettled([
       this.pubClient?.disconnect(),
       this.subClient?.disconnect(),
     ]);
+
+    // Close the Socket.IO server if it exposes a close method. The injected
+    // server instance's shape can vary by Nest/socket.io version, so guard the
+    // call instead of assuming `.close` exists.
+    const server = this.server as unknown as {
+      close?: (cb?: (err?: Error) => void) => void;
+    };
+    if (server && typeof server.close === 'function') {
+      const closeFn = server.close;
+      await new Promise<void>((resolve) => {
+        closeFn(() => resolve());
+      });
+    }
+
     delete (globalThis as unknown as Record<typeof GATEWAY_SERVER, Server | undefined>)[
       GATEWAY_SERVER
     ];
