@@ -211,6 +211,7 @@ import { WaiterCallModule } from './modules/waiter-call/waiter-call.module';
       ],
       migrationsRun: true,
       synchronize: false,
+      invalidWhereValuesBehavior: { undefined: 'ignore', null: 'sql-null' },
       logging: false,
       ssl:
         process.env.DB_SSL === 'true' || process.env.NODE_ENV === 'production'
