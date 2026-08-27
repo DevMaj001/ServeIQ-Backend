@@ -7,6 +7,7 @@ import { User } from '../user/entities/user.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { Tab } from '../tab/entities/tab.entity';
 import { RealtimeService } from '../gateway/realtime.service';
+import { TableStatus } from '../../common/shared';
 
 @Injectable()
 export class WaiterCallService {
@@ -101,11 +102,15 @@ export class WaiterCallService {
 
     try {
       const table = await this.tableRepository.findOne({
-        where: { id: tableId, branch_id: branchId, status: 'available' } as any,
+        where: {
+          id: tableId,
+          branch_id: branchId,
+          status: In([TableStatus.AVAILABLE, TableStatus.OCCUPIED]),
+        } as any,
       });
       if (!table) {
         await queryRunner.rollbackTransaction();
-        throw new Error('Table not found or not available in this branch');
+        throw new Error('Table not found in this branch');
       }
 
       const existingActive = await this.waiterCallRepository.findOne({
