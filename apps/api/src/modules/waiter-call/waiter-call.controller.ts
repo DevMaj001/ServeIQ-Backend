@@ -28,7 +28,7 @@ interface AuthedUser {
 }
 
 @ApiTags('Waiter Call')
-@Controller('api/v1/waiter-calls')
+@Controller('waiter-calls')
 export class WaiterCallController {
   constructor(private readonly waiterCallService: WaiterCallService) {}
 
