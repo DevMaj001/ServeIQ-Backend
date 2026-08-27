@@ -32,6 +32,13 @@ export class UpdateWaiterCallStatusDto {
   status: 'accepted' | 'arrived' | 'resolved' | 'cancelled';
 }
 
+export class ReassignWaiterCallDto {
+  @ApiProperty({ example: 'waiter-uuid-here' })
+  @IsNotEmpty()
+  @IsUUID()
+  waiterId: string;
+}
+
 export class BranchWaiterSettingsDto {
   @ApiPropertyOptional({ default: 5 })
   @IsOptional()

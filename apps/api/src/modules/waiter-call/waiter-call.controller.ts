@@ -17,7 +17,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../../common/shared';
 import { WaiterCallService } from './waiter-call.service';
-import { CreateWaiterCallDto } from './dto/waiter-call.dto';
+import { CreateWaiterCallDto, ReassignWaiterCallDto } from './dto/waiter-call.dto';
 import { WaiterCallStatus } from './entities/waiter-call.entity';
 import { WaiterCall } from './entities/waiter-call.entity';
 
@@ -215,6 +215,35 @@ export class WaiterCallController {
     return {
       success: true,
       data: { id: call.id, status: call.status, cancelledAt: call.cancelled_at },
+    };
+  }
+
+  /** MANAGEMENT: reassign a waiter call to another waiter. */
+  @Post(':id/reassign')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.MANAGER, UserRole.OWNER, UserRole.SUPERVISOR)
+  @ApiBearerAuth('access-token')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Manager: reassign a waiter call to another waiter' })
+  async reassignCall(
+    @Param('id') id: string,
+    @Body() body: ReassignWaiterCallDto,
+    @Req() req: Request,
+  ) {
+    const user = req.user as AuthedUser;
+    const call = await this.waiterCallService.reassignWaiterCall(
+      id,
+      body.waiterId,
+      user.branchId,
+    );
+    return {
+      success: true,
+      data: {
+        id: call.id,
+        tableId: call.table_id,
+        status: call.status,
+        assignedWaiter: call.assigned_waiter_id ? { id: call.assigned_waiter_id } : null,
+      },
     };
   }
 

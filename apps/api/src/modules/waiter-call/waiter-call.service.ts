@@ -7,7 +7,7 @@ import { User } from '../user/entities/user.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { Tab } from '../tab/entities/tab.entity';
 import { RealtimeService } from '../gateway/realtime.service';
-import { TableStatus } from '../../common/shared';
+import { TableStatus, UserRole } from '../../common/shared';
 
 @Injectable()
 export class WaiterCallService {
@@ -242,6 +242,46 @@ export class WaiterCallService {
     call.resolved_at = new Date();
     const saved = await this.waiterCallRepository.save(call);
     this.realtimeService.emitWaiterCall(call.branch_id, 'waiter.request.resolved', {
+      id: saved.id,
+      tableId: saved.table_id,
+      status: saved.status,
+      assignedWaiterId: saved.assigned_waiter_id,
+    });
+    return saved;
+  }
+
+  async reassignWaiterCall(
+    waiterCallId: string,
+    waiterId: string,
+    branchId?: string,
+  ): Promise<WaiterCall> {
+    const call = await this.waiterCallRepository.findOne({
+      where: { id: waiterCallId, deleted_at: null } as any,
+    });
+    if (!call) throw new Error('Waiter call not found');
+    if (
+      call.status === WaiterCallStatus.RESOLVED ||
+      call.status === WaiterCallStatus.CANCELLED
+    ) {
+      throw new Error('This request can no longer be reassigned');
+    }
+    if (branchId && call.branch_id !== branchId) {
+      throw new Error('This request does not belong to your branch');
+    }
+
+    const waiter = await this.userRepository.findOne({
+      where: { id: waiterId, branch_id: call.branch_id, deleted_at: null } as any,
+    });
+    if (!waiter) throw new Error('Target waiter not found in this branch');
+    if (waiter.role !== UserRole.WAITER && waiter.role !== UserRole.SUPERVISOR) {
+      throw new Error('Target user is not a waiter');
+    }
+
+    call.assigned_waiter_id = waiterId;
+    call.status = WaiterCallStatus.PENDING;
+    call.accepted_at = null;
+    const saved = await this.waiterCallRepository.save(call);
+    this.realtimeService.emitWaiterCall(call.branch_id, 'waiter.request.assigned', {
       id: saved.id,
       tableId: saved.table_id,
       status: saved.status,
