@@ -160,6 +160,13 @@ export class GatewayGateway
   }
 
   async onModuleDestroy() {
+    // Close the Socket.IO server first so it stops holding the event loop
+    // (and releases its adapter) before tearing down the Redis clients.
+    if (this.server) {
+      await new Promise<void>((resolve) => {
+        this.server.close(() => resolve());
+      });
+    }
     await Promise.allSettled([
       this.pubClient?.disconnect(),
       this.subClient?.disconnect(),
