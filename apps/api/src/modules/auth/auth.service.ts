@@ -17,6 +17,7 @@ import { Branch } from '../branch/entities/branch.entity';
 import { ShiftTemplate } from '../shift/entities/shift-template.entity';
 import { Subscription } from '../subscription/entities/subscription.entity';
 import { SubscriptionService } from '../subscription/subscription.service';
+import { VIRTUAL_COUNTER_INSERT_SQL } from '../table/table-system.service';
 import { RefreshToken } from '../../entities/refresh-token.entity';
 import { VerificationToken } from '../../entities/verification-token.entity';
 import { Role } from '../role/entities/role.entity';
@@ -91,6 +92,14 @@ export class AuthService {
         is_active: true,
       });
       const savedBranch = await queryRunner.manager.save(branch);
+
+      // 2a. Create the branch's virtual "Takeaway Counter" table (used by the
+      // takeaway flow). BranchService.create does this for admin-created branches,
+      // but the signup path saves the default branch directly and would otherwise
+      // skip it, breaking takeaway orders ("No counter/takeaway table found").
+      await queryRunner.manager.query(VIRTUAL_COUNTER_INSERT_SQL, [
+        savedBranch.id,
+      ]);
 
       // 2b. Create Trial Subscription
       await this.subscriptionService.createTrialSubscription(
