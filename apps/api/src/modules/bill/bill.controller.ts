@@ -117,6 +117,28 @@ export class BillController {
     );
   }
 
+  @Post('tab/:tabId/confirm-cash')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.OWNER)
+  @ApiOperation({
+    summary:
+      'Supervisor confirms a cash payment taken at the counter and releases the takeaway order(s) to the kitchen',
+  })
+  @ApiParam({ name: 'tabId', description: 'Tab UUID' })
+  @ApiResponse({ status: 200, description: 'Cash confirmed, order released.' })
+  @ApiResponse({ status: 401, description: 'Unauthorized.' })
+  async confirmCash(
+    @Param('tabId') tabId: string,
+    @Request() req: any,
+  ) {
+    return this.billService.confirmCashPayment(
+      tabId,
+      req.user.branchId,
+      req.user.userId,
+      req.user.role,
+    );
+  }
+
   @Post('tab/:tabId/split-evenly')
   @UseGuards(RolesGuard)
   @Roles(

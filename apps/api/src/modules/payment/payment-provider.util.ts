@@ -18,6 +18,8 @@ export interface CustomerPaymentMethod {
   has_transfer?: boolean;
   auto_confirm?: boolean;
   provider?: string;
+  /** Cash is confirmed by a supervisor at the counter, not by a gateway. */
+  requires_counter_confirmation?: boolean;
 }
 
 export function getConfiguredProviders(settings: any): PaymentProviderConfig[] {
@@ -100,7 +102,7 @@ export function buildPaymentMethods(
     });
   }
 
-  methods.push({ type: 'cash' });
+  methods.push({ type: 'cash', requires_counter_confirmation: true });
   return methods;
 }
 

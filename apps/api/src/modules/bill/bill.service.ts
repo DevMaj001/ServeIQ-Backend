@@ -16,7 +16,7 @@ import { MenuItem } from '../menu/entities/menu-item.entity';
 import { User } from '../user/entities/user.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { Business } from '../business/entities/business.entity';
-import { OrderStatus, isBillable, statusBlocksPayment } from '../../common/shared';
+import { OrderStatus, PaymentMethod, isBillable, statusBlocksPayment } from '../../common/shared';
 import { GenerateBillDto } from './dto/generate-bill.dto';
 import { ProcessPaymentDto } from './dto/process-payment.dto';
 import { ApplyDiscountDto } from './dto/apply-discount.dto';
@@ -24,6 +24,8 @@ import { IngredientService } from '../ingredient/ingredient.service';
 import { ReceiptService } from './receipt.service';
 import { CloudinaryService } from '../../cloudinary/cloudinary.service';
 import { RealtimeService } from '../gateway/realtime.service';
+import { Department } from '../department/entities/department.entity';
+import { OrderService } from '../order/order.service';
 
 @Injectable()
 export class BillService {
@@ -44,12 +46,15 @@ export class BillService {
     private branchRepository: Repository<Branch>,
     @InjectRepository(Business)
     private businessRepository: Repository<Business>,
+    @InjectRepository(Department)
+    private departmentRepository: Repository<Department>,
     @Inject(DataSource)
     private dataSource: DataSource,
     private ingredientService: IngredientService,
     private receiptService: ReceiptService,
     private cloudinaryService: CloudinaryService,
     private realtimeService: RealtimeService,
+    private orderService: OrderService,
   ) {}
 
   async generateBill(
@@ -359,6 +364,100 @@ export class BillService {
     }
 
     return bill;
+  }
+
+  /**
+   * Supervisor confirms a cash payment taken at the counter and releases the
+   * takeaway order(s) to the kitchen in a single action. The bill is marked paid
+   * (cash), the tab is closed with the supervisor recorded as cashier, and any
+   * orders held in PENDING_PAYMENT_APPROVAL are released and auto-approved so the
+   * kitchen begins preparation immediately.
+   */
+  async confirmCashPayment(
+    tabId: string,
+    branchId: string,
+    userId: string,
+    userRole: string,
+  ) {
+    const tab = await this.tabRepository.findOne({ where: { id: tabId } });
+    if (!tab) throw new NotFoundException('Tab not found');
+    if (tab.branch_id !== branchId)
+      throw new ForbiddenException('Tab does not belong to your branch');
+
+    const bill = await this.billRepository.findOne({
+      where: { tab_id: tabId },
+      order: { created_at: 'DESC' },
+    });
+    if (!bill) throw new NotFoundException('Bill not found');
+
+    // Idempotent: only process payment if not already paid.
+    if (!bill.paid_at) {
+      await this.processPayment(tabId, branchId, userId, userRole, {
+        method: PaymentMethod.CASH,
+        amount: bill.total_kobo || 0,
+        idempotency_key: `cash-confirm-${tabId}`,
+      });
+    }
+
+    // After processPayment, held takeaway orders are now PENDING_SUPERVISOR_APPROVAL.
+    // Auto-approve them so the supervisor's single action releases the order to the kitchen.
+    const heldOrders = await this.orderRepository.find({
+      where: { tab_id: tabId, order_status: OrderStatus.PENDING_SUPERVISOR_APPROVAL },
+    });
+
+    let approvedCount = 0;
+    if (heldOrders.length > 0) {
+      const branch = await this.branchRepository.findOne({
+        where: { id: branchId },
+      });
+      const dept = await this.departmentRepository.findOne({
+        where: { branch_id: branchId },
+      });
+      const settings = (branch?.settings as any) || {};
+      const prep =
+        Number(settings?.takeaway_estimated_prep_seconds) > 0
+          ? Number(settings.takeaway_estimated_prep_seconds)
+          : 600;
+
+      if (dept) {
+        for (const order of heldOrders) {
+          try {
+            await this.orderService.approve(
+              order.id,
+              userId,
+              {
+                department: dept.id,
+                estimated_preparation_time_seconds: prep,
+              },
+              branchId,
+            );
+            approvedCount++;
+          } catch (err) {
+            console.error(
+              `confirmCashPayment: failed to approve order ${order.id}:`,
+              err instanceof Error ? err.message : String(err),
+            );
+          }
+        }
+      }
+    }
+
+    const refreshed = await this.billRepository.findOne({
+      where: { tab_id: tabId },
+      order: { created_at: 'DESC' },
+    });
+
+    return {
+      tab_id: tabId,
+      payment_status: refreshed?.payment_status,
+      payment_method: refreshed?.payment_method,
+      approved_orders: approvedCount,
+      requires_manual_approval: Math.max(0, heldOrders.length - approvedCount),
+      message:
+        approvedCount === heldOrders.length
+          ? 'Cash confirmed and order released to kitchen'
+          : 'Cash confirmed; some orders need manual supervisor approval (no department configured)',
+    };
   }
 
   private async buildReceiptData(tabId: string) {

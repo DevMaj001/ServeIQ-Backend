@@ -32,7 +32,7 @@ import { Branch } from '../branch/entities/branch.entity';
 import { Business } from '../business/entities/business.entity';
 import { BillService } from '../bill/bill.service';
 import { ProcessPaymentDto } from '../bill/dto/process-payment.dto';
-import { PaymentMethod } from '../../common/shared';
+import { PaymentMethod, OrderStatus } from '../../common/shared';
 import { PaymentVerificationDto } from './dto/payment-verification.dto';
 import { buildPaymentMethods } from './payment-provider.util';
 import * as crypto from 'crypto';
@@ -143,6 +143,101 @@ export class PaymentController {
       amount_formatted: `₦${(bill.total_kobo / 100).toFixed(2)}`,
       payment_reference: bill.payment_reference,
       payment_methods: paymentMethods,
+    };
+  }
+
+  @Post('cash-intent')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({
+    summary:
+      'Customer submits intent to pay with cash at the counter. Holds the takeaway order pending supervisor confirmation (no auth, tracking code required).',
+  })
+  @ApiBody({ type: PaymentVerificationDto })
+  @ApiResponse({ status: 200, description: 'Cash intent registered.' })
+  async submitCashIntent(@Body() dto: PaymentVerificationDto) {
+    if (!dto.tab_id || !dto.tracking_code) {
+      throw new BadRequestException('tab_id and tracking_code are required');
+    }
+
+    const tab = await this.tabRepo.findOne({ where: { id: dto.tab_id } });
+    if (!tab) throw new NotFoundException('Tab not found');
+    if (tab.tracking_code !== dto.tracking_code)
+      throw new ForbiddenException('Invalid tracking code');
+    if (tab.status !== 'open' && tab.status !== 'billed')
+      throw new BadRequestException('Tab is not payable');
+
+    const orders = await this.orderRepo.find({ where: { tab_id: tab.id } });
+    if (orders.length === 0) throw new BadRequestException('Tab has no orders');
+
+    const subtotalKobo = orders.reduce((s, o) => s + o.subtotal_kobo, 0);
+    const tabBranch = await this.branchRepo.findOne({
+      where: { id: tab.branch_id },
+    });
+    const business = tabBranch
+      ? await this.businessRepo.findOne({
+          where: { id: tabBranch.business_id },
+        })
+      : null;
+    const serviceChargePercent = Number(business?.service_charge_percent ?? 10);
+    const serviceChargeKobo = Math.round(
+      subtotalKobo * (serviceChargePercent / 100),
+    );
+
+    const existingBill = await this.billRepo.findOne({
+      where: { tab_id: tab.id },
+      order: { created_at: 'DESC' },
+    });
+    if (existingBill?.paid_at) {
+      return {
+        tab_id: tab.id,
+        payment_status: existingBill.payment_status,
+        payment_method: existingBill.payment_method,
+        amount_kobo: existingBill.total_kobo,
+        amount_formatted: `₦${(existingBill.total_kobo / 100).toFixed(2)}`,
+        message: 'Payment already confirmed',
+      };
+    }
+
+    let bill = existingBill;
+    if (!bill) {
+      const paymentReference = `PAY-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      bill = this.billRepo.create({
+        tab_id: tab.id,
+        subtotal_kobo: subtotalKobo,
+        service_charge_kobo: serviceChargeKobo,
+        tax_kobo: 0,
+        discount_kobo: 0,
+        total_kobo: subtotalKobo + serviceChargeKobo,
+        payment_status: 'pending_cash',
+        payment_method: PaymentMethod.CASH,
+        issued_by: 'self-service',
+        payment_reference: paymentReference,
+      });
+    } else {
+      bill.payment_method = PaymentMethod.CASH;
+      bill.payment_status = 'pending_cash';
+    }
+    bill = await this.billRepo.save(bill);
+
+    // Hold takeaway orders pending cash confirmation at the counter. Orders already
+    // being prepared (APPROVED+) are left untouched; only pre-kitchen orders are held.
+    await this.orderRepo
+      .createQueryBuilder()
+      .update(Order)
+      .set({ order_status: OrderStatus.PENDING_PAYMENT_APPROVAL })
+      .where('tab_id = :tabId', { tabId: tab.id })
+      .andWhere('order_status = :s', {
+        s: OrderStatus.PENDING_SUPERVISOR_APPROVAL,
+      })
+      .execute();
+
+    return {
+      tab_id: tab.id,
+      payment_status: bill.payment_status,
+      payment_method: bill.payment_method,
+      amount_kobo: bill.total_kobo,
+      amount_formatted: `₦${(bill.total_kobo / 100).toFixed(2)}`,
+      message: 'Waiting for cash confirmation at the counter',
     };
   }
 
@@ -378,6 +473,7 @@ private isTestSimulation(req: Request): boolean {
       tab_id: tab.id,
       tab_status: tab.status,
       payment_status: bill?.payment_status || 'no_bill',
+      payment_method: bill?.payment_method || null,
       paid_at: bill?.paid_at || null,
     };
   }

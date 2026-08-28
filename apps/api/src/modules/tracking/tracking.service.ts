@@ -82,8 +82,9 @@ export class TrackingService {
     }
 
     let paymentAccountNumber = '';
+    let bill: Bill | null = null;
     try {
-      const bill = await this.billRepo.findOne({ where: { tab_id: tab.id } });
+      bill = await this.billRepo.findOne({ where: { tab_id: tab.id } });
       if (bill?.terminal_id) {
         const terminal = await this.posTerminalRepo.findOne({
           where: { id: bill.terminal_id },
@@ -106,6 +107,8 @@ export class TrackingService {
         logoUrl,
         branchId,
         paymentAccountNumber,
+        paymentStatus: bill?.payment_status || null,
+        paymentMethod: bill?.payment_method || null,
         tabStatus: tab.status,
         tabId: tab.id,
         tabType: tab.tab_type,
@@ -152,6 +155,8 @@ export class TrackingService {
       logoUrl,
       branchId,
       paymentAccountNumber,
+      paymentStatus: bill?.payment_status || null,
+      paymentMethod: bill?.payment_method || null,
       tabStatus: tab.status,
       tabId: tab.id,
       tabType: tab.tab_type,
