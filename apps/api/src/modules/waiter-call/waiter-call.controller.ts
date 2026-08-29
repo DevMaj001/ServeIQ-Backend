@@ -8,6 +8,8 @@ import {
   HttpCode,
   Req,
   UseGuards,
+  BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
@@ -42,7 +44,7 @@ export class WaiterCallController {
     const branchId =
       (req.query['branchId'] as string) || (req.headers['x-branch-id'] as string);
     if (!branchId) {
-      throw new Error('branchId is required');
+      throw new BadRequestException('branchId is required');
     }
 
     const result = await this.waiterCallService.createWaiterCall(
@@ -72,7 +74,7 @@ export class WaiterCallController {
   @ApiResponse({ status: 200, description: 'Waiter call status' })
   async getStatus(@Param('id') id: string) {
     const call = await this.waiterCallService.getCallById(id);
-    if (!call) throw new Error('Waiter call not found');
+    if (!call) throw new NotFoundException('Waiter call not found');
 
     return {
       success: true,

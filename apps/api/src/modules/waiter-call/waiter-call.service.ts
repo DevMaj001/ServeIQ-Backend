@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, In } from 'typeorm';
 import { WaiterCall, WaiterCallStatus } from './entities/waiter-call.entity';
@@ -110,7 +110,7 @@ export class WaiterCallService {
       });
       if (!table) {
         await queryRunner.rollbackTransaction();
-        throw new Error('Table not found in this branch');
+        throw new NotFoundException('Table not found in this branch');
       }
 
       const existingActive = await this.waiterCallRepository.findOne({
@@ -123,7 +123,7 @@ export class WaiterCallService {
       });
       if (existingActive) {
         await queryRunner.rollbackTransaction();
-        throw new Error('This table already has an active waiter request');
+        throw new BadRequestException('This table already has an active waiter request');
       }
 
       const eligible = await this.getEligibleWaiters(branchId);
