@@ -24,6 +24,7 @@ import { IngredientService } from '../ingredient/ingredient.service';
 import { ReceiptService } from './receipt.service';
 import { CloudinaryService } from '../../cloudinary/cloudinary.service';
 import { RealtimeService } from '../gateway/realtime.service';
+import { getPublicServer } from '../gateway/gateway.constants';
 import { Department } from '../department/entities/department.entity';
 import { OrderService } from '../order/order.service';
 
@@ -340,6 +341,13 @@ export class BillService {
       type: 'payment_received',
       tabId,
       bill,
+    });
+
+    // Push payment confirmation to the public customer tracking page so it does
+    // not need to poll (poll-free). Covers cash, card and transfer payments.
+    getPublicServer()?.to(`tab:${tabId}`).emit('paymentConfirmed', {
+      tabId,
+      status: 'paid',
     });
 
     // Generate PDF receipt and upload to Cloudinary
