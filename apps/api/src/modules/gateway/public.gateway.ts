@@ -23,11 +23,11 @@ import { PUBLIC_GATEWAY_SERVER } from './gateway.constants';
  */
 @WebSocketGateway({
   namespace: '/public',
+  // Public, unauthenticated channel for customers tracking their order. We accept
+  // any origin (reflecting the request Origin) so the customer socket works from
+  // whatever frontend host serves the menu, without depending on CORS_ORIGIN.
   cors: {
-    origin: process.env.CORS_ORIGIN?.split(',') || [
-      'http://localhost:3000',
-      'http://localhost:4200',
-    ],
+    origin: true,
     credentials: true,
   },
 })
