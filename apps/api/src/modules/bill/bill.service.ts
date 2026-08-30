@@ -17,6 +17,8 @@ import { User } from '../user/entities/user.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { Business } from '../business/entities/business.entity';
 import { OrderStatus, PaymentMethod, isBillable, statusBlocksPayment } from '../../common/shared';
+import { AllocationType } from './entities/bill.entity';
+import { IsNull, Not } from 'typeorm';
 import { GenerateBillDto } from './dto/generate-bill.dto';
 import { ProcessPaymentDto } from './dto/process-payment.dto';
 import { ApplyDiscountDto } from './dto/apply-discount.dto';
@@ -648,6 +650,165 @@ export class BillService {
     return bills;
   }
 
+  async createPaymentPlan(
+    tabId: string,
+    branchId: string,
+    userId: string,
+    userRole: string,
+    dto: any,
+  ) {
+    const tab = await this.tabRepository.findOne({ where: { id: tabId } });
+    if (!tab) throw new NotFoundException('Tab not found');
+    if (tab.branch_id !== branchId)
+      throw new ForbiddenException('Tab does not belong to your branch');
+
+    const allOrders = await this.orderRepository.find({
+      where: { tab_id: tabId },
+    });
+    const orderMap = new Map(allOrders.map((o) => [o.id, o]));
+    const billableOrders = allOrders.filter((o) => isBillable(o.order_status));
+
+    const totalKobo = billableOrders.reduce((sum, o) => sum + o.subtotal_kobo, 0);
+    let remainingKobo = totalKobo;
+
+    const splitGroup = `plan_${Date.now()}_${tabId.slice(0, 8)}`;
+    const bills = [];
+
+    for (let i = 0; i < dto.allocations.length; i++) {
+      const alloc = dto.allocations[i];
+      let amountKobo = 0;
+
+      switch (alloc.type) {
+        case AllocationType.ITEM: {
+          for (const oid of alloc.order_ids || []) {
+            const order = orderMap.get(oid);
+            if (order && isBillable(order.order_status)) {
+              amountKobo += order.subtotal_kobo;
+            }
+          }
+          break;
+        }
+        case AllocationType.AMOUNT: {
+          amountKobo = alloc.amount_kobo || 0;
+          break;
+        }
+        case AllocationType.PERCENTAGE: {
+          amountKobo = Math.round((totalKobo * (alloc.percentage || 0)) / 100);
+          break;
+        }
+        case AllocationType.REMAINING: {
+          amountKobo = remainingKobo;
+          break;
+        }
+      }
+
+      amountKobo = Math.min(amountKobo, remainingKobo);
+      if (amountKobo <= 0) continue;
+      remainingKobo -= amountKobo;
+
+      const bill = await this.billRepository.save(
+        this.billRepository.create({
+          tab_id: tabId,
+          split_group: splitGroup,
+          sequence: i,
+          allocation_type: alloc.type,
+          allocation_config: alloc,
+          subtotal_kobo: amountKobo,
+          service_charge_kobo: 0,
+          tax_kobo: 0,
+          discount_kobo: 0,
+          total_kobo: amountKobo,
+          payment_status: 'pending',
+          issued_by: userId,
+        }),
+      );
+      bills.push(bill);
+    }
+
+    await this.tabRepository.update(tabId, { status: 'billed' });
+
+    this.realtimeService.emitBillUpdate(tab.branch_id, tabId, {
+      status: 'billed',
+      splitBills: bills,
+    });
+    this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+      type: 'payment_plan_created',
+      tabId,
+      splitBills: bills,
+    });
+
+    return bills;
+  }
+
+  async recalculatePlan(tabId: string, branchId: string, paidBillId: string) {
+    const tab = await this.tabRepository.findOne({ where: { id: tabId } });
+    if (!tab) throw new NotFoundException('Tab not found');
+    if (tab.branch_id !== branchId)
+      throw new ForbiddenException('Tab does not belong to your branch');
+
+    const allBills = await this.billRepository.find({
+      where: { tab_id: tabId, split_group: Not(IsNull()) },
+      order: { sequence: 'ASC' },
+    });
+
+    const paidBill = allBills.find((b) => b.id === paidBillId);
+    if (!paidBill || !paidBill.split_group) return [];
+
+    const groupBills = allBills.filter(
+      (b) => b.split_group === paidBill.split_group && !b.paid_at,
+    );
+
+    const paidBills = allBills.filter(
+      (b) => b.split_group === paidBill.split_group && b.paid_at,
+    );
+    const paidTotal = paidBills.reduce((sum, b) => sum + (b.payment_amount_kobo || b.total_kobo), 0);
+
+    const allOrders = await this.orderRepository.find({ where: { tab_id: tabId } });
+    const orderMap = new Map(allOrders.map((o) => [o.id, o]));
+    const billableOrders = allOrders.filter((o) => isBillable(o.order_status));
+    const totalKobo = billableOrders.reduce((sum, o) => sum + o.subtotal_kobo, 0);
+
+    let remaining = totalKobo - paidTotal;
+
+    const updated = [];
+    for (const bill of groupBills) {
+      if (remaining <= 0) {
+        bill.total_kobo = 0;
+        bill.subtotal_kobo = 0;
+        await this.billRepository.save(bill);
+        updated.push(bill);
+        continue;
+      }
+
+      let amount = 0;
+      const config = bill.allocation_config as any;
+
+      if (config?.type === AllocationType.REMAINING || !config) {
+        amount = remaining;
+      } else if (config.type === AllocationType.PERCENTAGE) {
+        amount = Math.round((totalKobo * (config.percentage || 0)) / 100);
+      } else if (config.type === AllocationType.AMOUNT) {
+        amount = config.amount_kobo || 0;
+      } else if (config.type === AllocationType.ITEM) {
+        for (const oid of config.order_ids || []) {
+          const order = orderMap.get(oid);
+          if (order && isBillable(order.order_status)) {
+            amount += order.subtotal_kobo;
+          }
+        }
+      }
+
+      amount = Math.min(amount, remaining);
+      bill.total_kobo = amount;
+      bill.subtotal_kobo = amount;
+      await this.billRepository.save(bill);
+      remaining -= amount;
+      updated.push(bill);
+    }
+
+    return updated;
+  }
+
   async getSplitBills(tabId: string, branchId: string) {
     const tab = await this.tabRepository.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
@@ -714,6 +875,10 @@ export class BillService {
     bill.paid_at = new Date();
     bill.payment_status = 'paid';
     const saved = await this.billRepository.save(bill);
+
+    if (bill.split_group) {
+      await this.recalculatePlan(tabId, branchId, bill.id);
+    }
 
     const allBills = await this.billRepository.find({
       where: { tab_id: tabId },

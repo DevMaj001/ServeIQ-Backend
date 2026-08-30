@@ -8,6 +8,13 @@ import {
   Index,
 } from 'typeorm';
 
+export enum AllocationType {
+  ITEM = 'item',
+  REMAINING = 'remaining',
+  PERCENTAGE = 'percentage',
+  AMOUNT = 'amount',
+}
+
 @Entity('bills')
 export class Bill {
   @PrimaryGeneratedColumn('uuid')
@@ -22,6 +29,19 @@ export class Bill {
 
   @Column({ type: 'varchar', length: 50, nullable: true })
   split_group: string;
+
+  @Column({ type: 'integer', nullable: true })
+  sequence: number;
+
+  @Column({
+    type: 'enum',
+    enum: AllocationType,
+    nullable: true,
+  })
+  allocation_type: AllocationType;
+
+  @Column({ type: 'jsonb', nullable: true })
+  allocation_config: Record<string, any>;
 
   @Column({ type: 'integer' })
   subtotal_kobo: number;

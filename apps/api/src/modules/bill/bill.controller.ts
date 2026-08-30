@@ -26,7 +26,11 @@ import {
 import { ProcessPaymentDto } from './dto/process-payment.dto';
 import { GenerateBillDto } from './dto/generate-bill.dto';
 import { ApplyDiscountDto } from './dto/apply-discount.dto';
-import { BillSplitEvenlyDto, BillSplitByItemDto } from './dto/split-bill.dto';
+import {
+  BillSplitEvenlyDto,
+  BillSplitByItemDto,
+  CreatePaymentPlanDto,
+} from './dto/split-bill.dto';
 
 @ApiTags('Bills')
 @ApiBearerAuth('access-token')
@@ -190,6 +194,35 @@ export class BillController {
       req.user.userId,
       req.user.role,
       dto.allocations,
+    );
+  }
+
+  @Post('tab/:tabId/payment-plan')
+  @UseGuards(RolesGuard)
+  @Roles(
+    UserRole.WAITER,
+    UserRole.CASHIER,
+    UserRole.SUPERVISOR,
+    UserRole.MANAGER,
+    UserRole.OWNER,
+  )
+  @ApiOperation({
+    summary: 'Create a payment plan with ordered allocations (auto-recalculates on each payment)',
+  })
+  @ApiParam({ name: 'tabId' })
+  @ApiResponse({ status: 201, description: 'Payment plan created.' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async createPaymentPlan(
+    @Param('tabId') tabId: string,
+    @Request() req: any,
+    @Body() dto: CreatePaymentPlanDto,
+  ) {
+    return this.billService.createPaymentPlan(
+      tabId,
+      req.user.branchId,
+      req.user.userId,
+      req.user.role,
+      dto,
     );
   }
 
