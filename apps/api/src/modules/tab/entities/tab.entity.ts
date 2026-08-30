@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   VersionColumn,
+  DeleteDateColumn,
   Index,
 } from 'typeorm';
 import { TabType } from '../../../common/shared';
@@ -73,6 +74,9 @@ export class Tab {
 
   @Column({ nullable: true })
   closed_at: Date;
+
+  @DeleteDateColumn()
+  deleted_at: Date;
 
   @UpdateDateColumn()
   updated_at: Date;
