@@ -77,6 +77,9 @@ export class Tab {
   @UpdateDateColumn()
   updated_at: Date;
 
+  @Column({ type: 'timestamp', nullable: true })
+  deleted_at: Date | null;
+
   @VersionColumn()
   version: number;
 }
