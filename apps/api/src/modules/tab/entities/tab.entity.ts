@@ -1,13 +1,4 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  UpdateDateColumn,
-  VersionColumn,
-  DeleteDateColumn,
-  Index,
-} from 'typeorm';
+import { DeleteDateColumn } from 'typeorm';
 import { TabType } from '../../../common/shared';
 
 @Entity('tabs')
