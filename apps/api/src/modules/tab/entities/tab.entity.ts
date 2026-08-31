@@ -7,6 +7,7 @@ import {
   VersionColumn,
   Index,
 } from 'typeorm';
+import { TabType } from '../../../common/shared';
 
 @Entity('tabs')
 export class Tab {
