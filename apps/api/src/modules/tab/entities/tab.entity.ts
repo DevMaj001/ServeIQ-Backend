@@ -1,5 +1,12 @@
-import { DeleteDateColumn } from 'typeorm';
-import { TabType } from '../../../common/shared';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  VersionColumn,
+  Index,
+} from 'typeorm';
 
 @Entity('tabs')
 export class Tab {
@@ -65,9 +72,6 @@ export class Tab {
 
   @Column({ nullable: true })
   closed_at: Date;
-
-  @DeleteDateColumn()
-  deleted_at: Date;
 
   @UpdateDateColumn()
   updated_at: Date;
