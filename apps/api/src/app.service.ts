@@ -43,6 +43,22 @@ export class AppService implements OnApplicationBootstrap {
       await this.dataSource.query(
         `ALTER TABLE "tabs" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP`,
       );
+      await this.dataSource.query(
+        `ALTER TABLE "bills" ADD COLUMN IF NOT EXISTS "sequence" integer`,
+      );
+      await this.dataSource.query(
+        `DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'bills_allocation_type_enum') THEN
+            CREATE TYPE "public"."bills_allocation_type_enum" AS ENUM ('item', 'remaining', 'percentage', 'amount');
+          END IF;
+        END $$`,
+      );
+      await this.dataSource.query(
+        `ALTER TABLE "bills" ADD COLUMN IF NOT EXISTS "allocation_type" "public"."bills_allocation_type_enum"`,
+      );
+      await this.dataSource.query(
+        `ALTER TABLE "bills" ADD COLUMN IF NOT EXISTS "allocation_config" jsonb`,
+      );
       console.log(
         '[SchemaSync] Missing columns and tables created successfully',
       );
