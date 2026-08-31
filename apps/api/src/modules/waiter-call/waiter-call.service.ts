@@ -247,6 +247,7 @@ export class WaiterCallService {
       status: saved.status,
       assignedWaiterId: saved.assigned_waiter_id,
     });
+    await this.processQueueWhenAvailable(call.branch_id);
     return saved;
   }
 
@@ -304,6 +305,7 @@ export class WaiterCallService {
       status: saved.status,
       assignedWaiterId: saved.assigned_waiter_id,
     });
+    await this.processQueueWhenAvailable(call.branch_id);
     return saved;
   }
 
@@ -332,6 +334,7 @@ export class WaiterCallService {
       status: saved.status,
       assignedWaiterId: saved.assigned_waiter_id,
     });
+    await this.processQueueWhenAvailable(saved.branch_id);
     return saved;
   }
 
@@ -417,7 +420,6 @@ export class WaiterCallService {
     const leastLoaded = eligible[0];
     oldestCall.assigned_waiter_id = leastLoaded.user.id;
     oldestCall.status = WaiterCallStatus.PENDING;
-    oldestCall.accepted_at = new Date();
     const saved = await this.waiterCallRepository.save(oldestCall);
     this.realtimeService.emitWaiterCall(branchId, 'waiter.request.assigned', {
       id: saved.id,
