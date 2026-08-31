@@ -96,24 +96,23 @@ export class WaiterCallService {
     status: WaiterCallStatus;
     message: string;
   }> {
+    const table = await this.tableRepository.findOne({
+      where: {
+        id: tableId,
+        branch_id: branchId,
+        status: In([TableStatus.AVAILABLE, TableStatus.OCCUPIED]),
+      } as any,
+    });
+    if (!table) {
+      throw new NotFoundException('Table not found in this branch');
+    }
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      const table = await this.tableRepository.findOne({
-        where: {
-          id: tableId,
-          branch_id: branchId,
-          status: In([TableStatus.AVAILABLE, TableStatus.OCCUPIED]),
-        } as any,
-      });
-      if (!table) {
-        await queryRunner.rollbackTransaction();
-        throw new NotFoundException('Table not found in this branch');
-      }
-
-      const existingActive = await this.waiterCallRepository.findOne({
+      const existingActive = await queryRunner.manager.findOne(WaiterCall, {
         where: {
           table_id: tableId,
           status: In([WaiterCallStatus.PENDING, WaiterCallStatus.QUEUED]),
@@ -122,20 +121,20 @@ export class WaiterCallService {
         order: { created_at: 'ASC' },
       });
       if (existingActive) {
-        await queryRunner.rollbackTransaction();
+        await queryRunner.rollbackTransaction().catch(() => undefined);
         throw new BadRequestException('This table already has an active waiter request');
       }
 
       const eligible = await this.getEligibleWaiters(branchId);
       if (eligible.length === 0) {
-        const waiterCall = this.waiterCallRepository.create({
+        const waiterCall = queryRunner.manager.create(WaiterCall, {
           branch_id: branchId,
           table_id: tableId,
           customer_session_id: customerSessionId,
           status: WaiterCallStatus.QUEUED,
           reason: 'All waiters are currently at maximum capacity',
         });
-        const saved = await this.waiterCallRepository.save(waiterCall);
+        const saved = await queryRunner.manager.save(waiterCall);
         await queryRunner.commitTransaction();
         this.realtimeService.emitWaiterCall(branchId, 'waiter.request.queued', {
           id: saved.id,
@@ -152,14 +151,14 @@ export class WaiterCallService {
       }
 
       const selectedWaiter = eligible[0].user;
-      const waiterCall = this.waiterCallRepository.create({
+      const waiterCall = queryRunner.manager.create(WaiterCall, {
         branch_id: branchId,
         table_id: tableId,
         assigned_waiter_id: selectedWaiter.id,
         customer_session_id: customerSessionId,
         status: WaiterCallStatus.PENDING,
       });
-      const savedWaiterCall = await this.waiterCallRepository.save(waiterCall);
+      const savedWaiterCall = await queryRunner.manager.save(waiterCall);
 
       await queryRunner.commitTransaction();
       this.realtimeService.emitWaiterCall(branchId, 'waiter.request.created', {
@@ -185,8 +184,10 @@ export class WaiterCallService {
         message: 'A waiter has been notified.',
       };
     } catch (err) {
-      await queryRunner.rollbackTransaction();
+      await queryRunner.rollbackTransaction().catch(() => undefined);
       throw err;
+    } finally {
+      await queryRunner.release().catch(() => undefined);
     }
   }
 
