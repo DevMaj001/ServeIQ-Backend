@@ -40,6 +40,9 @@ export class AppService implements OnApplicationBootstrap {
       await this.dataSource.query(
         `ALTER TABLE "pos_terminals" ADD COLUMN IF NOT EXISTS "account_number" character varying`,
       );
+      await this.dataSource.query(
+        `ALTER TABLE "tabs" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP`,
+      );
       console.log(
         '[SchemaSync] Missing columns and tables created successfully',
       );
