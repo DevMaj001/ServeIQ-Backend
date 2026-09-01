@@ -126,11 +126,19 @@ export class DashboardService {
       query.andWhere('bill.paid_at >= :from', { from });
     }
     if (dateTo) {
+      // `new Date('YYYY-MM-DD')` is the START of that day (UTC midnight), so a
+      // `<= :to` only includes sales up to the start of the end day and drops
+      // everything paid during the end day. Advance `to` to the next day and use
+      // a strict `<` to make the end date inclusive through its full day.
       const to = new Date(dateTo);
-      query.andWhere('bill.paid_at <= :to', { to });
+      to.setDate(to.getDate() + 1);
+      query.andWhere('bill.paid_at < :to', { to });
     }
 
-    const bills = await query.orderBy('bill.paid_at', 'DESC').getMany();
+    const bills = await query
+      .andWhere('bill.voided_at IS NULL')
+      .orderBy('bill.paid_at', 'DESC')
+      .getMany();
 
     const totalRevenue = bills.reduce((sum, b) => sum + b.total_kobo, 0);
     const byMethod: Record<string, number> = {};
