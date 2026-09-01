@@ -35,13 +35,18 @@ export class DashboardService {
     const totalTables = await this.tableRepository.count({
       where: { branch_id: branchId, is_virtual: false },
     });
-    const occupiedTables = await this.tableRepository.count({
-      where: {
-        branch_id: branchId,
-        status: TableStatus.OCCUPIED,
-        is_virtual: false,
-      },
-    });
+
+    // Active tables = distinct tables that have open tabs (includes virtual tables for counter orders)
+    // This ensures activeTables matches openTabs for counter/delivery orders
+    const occupiedTablesResult = await this.tabRepository
+      .createQueryBuilder('tab')
+      .select('COUNT(DISTINCT tab.table_id)', 'count')
+      .where('tab.branch_id = :branchId', { branchId })
+      .andWhere('tab.status = :status', { status: 'open' })
+      .andWhere('tab.table_id IS NOT NULL')
+      .getRawOne();
+    const occupiedTables = Number(occupiedTablesResult?.count || 0);
+
     const openTabs = await this.tabRepository.count({
       where: { branch_id: branchId, status: 'open' },
     });
