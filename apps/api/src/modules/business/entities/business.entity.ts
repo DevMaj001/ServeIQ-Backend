@@ -53,6 +53,9 @@ export class Business {
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 10 })
   service_charge_percent: number;
 
+  @Column({ type: 'integer', default: 0 })
+  discount_min_order_amount: number;
+
   @Column({ default: 'Africa/Lagos' })
   timezone: string;
 

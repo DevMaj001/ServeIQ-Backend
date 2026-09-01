@@ -185,6 +185,24 @@ export class BillService {
     if (bill.paid_at)
       throw new BadRequestException('Cannot modify a paid bill');
 
+    const tabBranch = await this.branchRepository.findOne({
+      where: { id: tab.branch_id },
+    });
+    const business = tabBranch
+      ? await this.businessRepository.findOne({
+          where: { id: tabBranch.business_id },
+        })
+      : null;
+    const minOrder = Number(business?.discount_min_order_amount ?? 0);
+    if (minOrder > 0 && (bill.subtotal_kobo ?? 0) < minOrder) {
+      throw new BadRequestException(
+        `A minimum purchase of ${this.formatCurrency(
+          minOrder,
+          business?.currency ?? 'NGN',
+        )} is required to apply a discount`,
+      );
+    }
+
     if (dto.discount_kobo !== undefined) {
       bill.discount_kobo = dto.discount_kobo;
     } else if (dto.discount_percent !== undefined) {
@@ -201,6 +219,23 @@ export class BillService {
     if (bill.total_kobo < 0) bill.total_kobo = 0;
 
     return this.billRepository.save(bill);
+  }
+
+  private formatCurrency(kobo: number, currency: string): string {
+    const symbolMap: Record<string, string> = {
+      NGN: '\u20A6',
+      USD: '$',
+      GBP: '\u00A3',
+      EUR: '\u20AC',
+      GHS: 'GH\u00A2',
+      KES: 'KSh',
+      ZAR: 'R',
+      XOF: 'CFA',
+    };
+    return `${symbolMap[currency] ?? currency}${((kobo ?? 0) / 100).toLocaleString(
+      'en-US',
+      { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+    )}`;
   }
 
   async processPayment(

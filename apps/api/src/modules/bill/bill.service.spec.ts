@@ -292,6 +292,63 @@ describe('BillService', () => {
         service.applyDiscount('tab-1', 'branch-1', { discount_kobo: 500 }),
       ).rejects.toThrow('Cannot modify a paid bill');
     });
+
+    it('rejects discount when subtotal is below business threshold', async () => {
+      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
+      branchRepo.findOne.mockResolvedValue({
+        id: 'branch-1',
+        business_id: 'business-1',
+      });
+      businessRepo.findOne.mockResolvedValue({
+        id: 'business-1',
+        currency: 'NGN',
+        discount_min_order_amount: 20000,
+      });
+      billRepo.findOne.mockResolvedValue({
+        id: 'bill-1',
+        tab_id: 'tab-1',
+        subtotal_kobo: 10000,
+        service_charge_kobo: 1000,
+        tax_kobo: 750,
+        discount_kobo: 0,
+        total_kobo: 11750,
+        paid_at: null,
+      });
+
+      await expect(
+        service.applyDiscount('tab-1', 'branch-1', { discount_kobo: 2000 }),
+      ).rejects.toThrow('A minimum purchase of ₦200.00 is required');
+    });
+
+    it('applies discount when subtotal meets business threshold', async () => {
+      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
+      branchRepo.findOne.mockResolvedValue({
+        id: 'branch-1',
+        business_id: 'business-1',
+      });
+      businessRepo.findOne.mockResolvedValue({
+        id: 'business-1',
+        currency: 'NGN',
+        discount_min_order_amount: 5000,
+      });
+      billRepo.findOne.mockResolvedValue({
+        id: 'bill-1',
+        tab_id: 'tab-1',
+        subtotal_kobo: 10000,
+        service_charge_kobo: 1000,
+        tax_kobo: 750,
+        discount_kobo: 0,
+        total_kobo: 11750,
+        paid_at: null,
+      });
+
+      const result = await service.applyDiscount('tab-1', 'branch-1', {
+        discount_kobo: 2000,
+      });
+
+      expect(result.discount_kobo).toBe(2000);
+      expect(result.total_kobo).toBe(9750);
+    });
   });
 
   describe('processPayment', () => {

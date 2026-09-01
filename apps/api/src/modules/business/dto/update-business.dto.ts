@@ -1,4 +1,11 @@
-import { IsOptional, IsString, IsNumber, Min, Max } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsNumber,
+  IsInt,
+  Min,
+  Max,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class UpdateBusinessDto {
@@ -42,6 +49,11 @@ export class UpdateBusinessDto {
   @Min(0)
   @Max(100)
   service_charge_percent?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  discount_min_order_amount?: number;
 
   @IsOptional()
   @IsString()
