@@ -226,10 +226,21 @@ export class BillService {
       throw new ForbiddenException('This tab belongs to another waiter');
     }
 
-    const bill = await this.billRepository.findOne({
-      where: { tab_id: tabId },
-      order: { created_at: 'DESC' },
-    });
+    // Prefer the tab's main bill — the one not created as a split/plan allocation.
+    // When a payment plan exists, the individual split rows are meant to be settled
+    // through the per-split endpoint; a wholesale confirmation ("Confirm Payment")
+    // settles the main bill and voids pending split rows below. Settling the last
+    // created split row instead would close the tab while only a fraction of the
+    // real total has actually been paid (and would undercount dashboard revenue).
+    const bill =
+      (await this.billRepository.findOne({
+        where: { tab_id: tabId, split_group: IsNull() },
+        order: { created_at: 'DESC' },
+      })) ||
+      (await this.billRepository.findOne({
+        where: { tab_id: tabId },
+        order: { created_at: 'DESC' },
+      }));
     if (!bill) throw new NotFoundException('Bill not found');
 
     // Payment gateway: a tab must not be settled while it still has undelivered
@@ -303,6 +314,19 @@ export class BillService {
       bill.payment_status = 'paid';
 
       await manager.getRepository(Bill).save(bill);
+
+      // Wholesale settlement supersedes any pending split/plan rows for the tab:
+      // void them so they cannot be settled later, double-counted in revenue, or
+      // show as outstanding splits after the tab is already closed as paid.
+      await manager.getRepository(Bill).update(
+        {
+          tab_id: tabId,
+          id: Not(bill.id),
+          paid_at: IsNull(),
+          voided_at: IsNull(),
+        },
+        { voided_at: new Date() },
+      );
 
       await manager.getRepository(Tab).update(tabId, {
         status: 'paid',
@@ -474,9 +498,19 @@ export class BillService {
     const tab = await this.tabRepository.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
 
-    const bill = await this.billRepository.findOne({
-      where: { tab_id: tabId },
+    // Prefer the paid bill (latest first) so a receipt after settling a tab with
+    // split/plan rows shows the bill that was actually paid — including its
+    // payment method and the settled amount — rather than an arbitrary older row.
+    let bill = await this.billRepository.findOne({
+      where: { tab_id: tabId, paid_at: Not(IsNull()) },
+      order: { created_at: 'DESC' },
     });
+    if (!bill) {
+      bill = await this.billRepository.findOne({
+        where: { tab_id: tabId },
+        order: { created_at: 'DESC' },
+      });
+    }
     if (!bill) return null;
 
     const orders = await this.orderRepository.find({
