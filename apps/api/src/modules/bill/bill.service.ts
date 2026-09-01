@@ -952,10 +952,24 @@ export class BillService {
     const allBills = await this.billRepository.find({
       where: { tab_id: tabId },
     });
-    const allPaid = allBills.every((b) => b.paid_at);
+    const splitBills = allBills.filter((b) => b.split_group);
     const anyPaid = allBills.some((b) => b.paid_at);
+    const allSplitPaid =
+      splitBills.length > 0 && splitBills.every((b) => b.paid_at);
 
-    if (allPaid) {
+    if (allSplitPaid) {
+      // Every guest share has been collected — close the tab. Any standalone
+      // main bill still pending is a stale artifact of an earlier generate;
+      // void it so it can never be settled later or double-counted in revenue.
+      await this.billRepository.update(
+        {
+          tab_id: tabId,
+          split_group: IsNull(),
+          paid_at: IsNull(),
+          voided_at: IsNull(),
+        },
+        { voided_at: new Date() },
+      );
       const tab = await this.tabRepository.findOne({ where: { id: tabId } });
       if (tab) {
         await this.tabRepository.update(tabId, {
@@ -973,9 +987,37 @@ export class BillService {
             });
           }
         }
+        this.realtimeService.emitBillUpdate(tab.branch_id, tabId, {
+          status: 'paid',
+          bill: saved,
+        });
+        this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+          type: 'payment_received',
+          tabId,
+          bill: saved,
+        });
+        getPublicServer()?.to(`tab:${tabId}`).emit('paymentConfirmed', {
+          tabId,
+          status: 'paid',
+        });
       }
-    } else if (!anyPaid) {
-      await this.tabRepository.update(tabId, { status: 'billed' });
+    } else {
+      // A partial split settlement keeps the tab open; surface the refreshed
+      // splits and the remaining balance to live dashboard/waiter views.
+      this.realtimeService.emitBillUpdate(tab.branch_id, tabId, {
+        status: 'billed',
+        splitBills: allBills,
+        bill: saved,
+      });
+      this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+        type: 'split_payment_received',
+        tabId,
+        bill: saved,
+        splitBills: allBills,
+      });
+      if (!anyPaid) {
+        await this.tabRepository.update(tabId, { status: 'billed' });
+      }
     }
 
     return saved;
