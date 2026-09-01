@@ -20,10 +20,17 @@ describe('WaiterCallService', () => {
   let dataSource: any;
 
   const queryRunner = {
-    connect: jest.fn(),
-    startTransaction: jest.fn(),
-    commitTransaction: jest.fn(),
-    rollbackTransaction: jest.fn(),
+    connect: jest.fn().mockResolvedValue(undefined),
+    startTransaction: jest.fn().mockResolvedValue(undefined),
+    commitTransaction: jest.fn().mockResolvedValue(undefined),
+    rollbackTransaction: jest.fn().mockResolvedValue(undefined),
+    release: jest.fn().mockResolvedValue(undefined),
+    manager: {
+      findOne: jest.fn(),
+      find: jest.fn().mockResolvedValue([]),
+      create: jest.fn((x) => x),
+      save: jest.fn((x) => Promise.resolve(x)),
+    },
   };
 
   const makeCall = (over: Partial<WaiterCall> = {}): WaiterCall =>
@@ -50,7 +57,7 @@ describe('WaiterCallService', () => {
       create: jest.fn((x) => x),
       save: jest.fn((x) => Promise.resolve(x)),
       findOne: jest.fn(),
-      find: jest.fn(),
+      find: jest.fn().mockResolvedValue([]),
     };
     tableRepo = {
       findOne: jest.fn(),
@@ -89,7 +96,7 @@ describe('WaiterCallService', () => {
 
   it('assigns a waiter call to the least-loaded eligible waiter', async () => {
     tableRepo.findOne.mockResolvedValue({ id: 'table-1', status: 'available' });
-    waiterCallRepo.findOne.mockResolvedValue(null);
+    queryRunner.manager.findOne.mockResolvedValue(null);
     userRepo.find.mockResolvedValue([
       { id: 'w1', full_name: 'W1', role: 'waiter', is_active: true, branch_id: 'branch-1' },
       { id: 'w2', full_name: 'W2', role: 'waiter', is_active: true, branch_id: 'branch-1' },
@@ -111,7 +118,7 @@ describe('WaiterCallService', () => {
 
   it('queues the request when no eligible waiter is under capacity', async () => {
     tableRepo.findOne.mockResolvedValue({ id: 'table-1', status: 'available' });
-    waiterCallRepo.findOne.mockResolvedValue(null);
+    queryRunner.manager.findOne.mockResolvedValue(null);
     userRepo.find.mockResolvedValue([
       { id: 'w1', full_name: 'W1', role: 'waiter', is_active: true, branch_id: 'branch-1' },
     ]);
@@ -130,7 +137,7 @@ describe('WaiterCallService', () => {
 
   it('rejects a duplicate active request for the same table', async () => {
     tableRepo.findOne.mockResolvedValue({ id: 'table-1', status: 'available' });
-    waiterCallRepo.findOne.mockResolvedValue(
+    queryRunner.manager.findOne.mockResolvedValue(
       makeCall({ status: WaiterCallStatus.PENDING }),
     );
 

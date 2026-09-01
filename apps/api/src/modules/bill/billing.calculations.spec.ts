@@ -10,10 +10,12 @@ import { MenuItem } from '../menu/entities/menu-item.entity';
 import { User } from '../user/entities/user.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { Business } from '../business/entities/business.entity';
+import { Department } from '../department/entities/department.entity';
 import { IngredientService } from '../ingredient/ingredient.service';
 import { ReceiptService } from './receipt.service';
 import { CloudinaryService } from '../../cloudinary/cloudinary.service';
 import { RealtimeService } from '../gateway/realtime.service';
+import { OrderService } from '../order/order.service';
 import { NotFoundException } from '@nestjs/common';
 
 const mockRealtimeService = () => ({
@@ -133,11 +135,13 @@ describe('BillService — V1 billing calculations', () => {
         { provide: getRepositoryToken(User), useValue: mockRepo() },
         { provide: getRepositoryToken(Branch), useValue: branchRepo },
         { provide: getRepositoryToken(Business), useValue: businessRepo },
+        { provide: getRepositoryToken(Department), useValue: mockRepo() },
         { provide: DataSource, useValue: dataSource },
         { provide: IngredientService, useValue: { deductByTab: jest.fn() } },
         { provide: ReceiptService, useValue: { generatePdf: jest.fn() } },
         { provide: CloudinaryService, useValue: { uploadFile: jest.fn() } },
         { provide: RealtimeService, useValue: mockRealtimeService() },
+        { provide: OrderService, useValue: { approve: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
     return module;

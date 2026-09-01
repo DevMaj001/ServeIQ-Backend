@@ -8,11 +8,13 @@ import { MenuItem } from '../menu/entities/menu-item.entity';
 import { User } from '../user/entities/user.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { Business } from '../business/entities/business.entity';
+import { Department } from '../department/entities/department.entity';
 import { DataSource } from 'typeorm';
 import { IngredientService } from '../ingredient/ingredient.service';
 import { ReceiptService } from './receipt.service';
 import { CloudinaryService } from '../../cloudinary/cloudinary.service';
 import { RealtimeService } from '../gateway/realtime.service';
+import { OrderService } from '../order/order.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { GenerateBillDto } from './dto/generate-bill.dto';
 
@@ -128,11 +130,13 @@ describe('BillService â€” Billing Calculation Accuracy (50 scenarios)', () 
         { provide: getRepositoryToken(User), useValue: userRepo },
         { provide: getRepositoryToken(Branch), useValue: branchRepo },
         { provide: getRepositoryToken(Business), useValue: businessRepo },
+        { provide: getRepositoryToken(Department), useValue: mockRepo() },
         { provide: DataSource, useValue: mockDataSource },
         { provide: IngredientService, useValue: mockIngredientService },
         { provide: ReceiptService, useValue: mockReceiptService },
         { provide: CloudinaryService, useValue: mockCloudinaryService },
         { provide: RealtimeService, useValue: mockRealtimeService },
+        { provide: OrderService, useValue: { approve: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 
@@ -805,6 +809,7 @@ describe('BillService â€” Tab State Machine Transitions', () => {
         { provide: getRepositoryToken(User), useValue: userRepo },
         { provide: getRepositoryToken(Branch), useValue: branchRepo },
         { provide: getRepositoryToken(Business), useValue: businessRepo },
+        { provide: getRepositoryToken(Department), useValue: mockRepo() },
         { provide: DataSource, useValue: mockDataSource },
         {
           provide: IngredientService,
@@ -823,6 +828,7 @@ describe('BillService â€” Tab State Machine Transitions', () => {
           },
         },
         { provide: RealtimeService, useValue: mockRealtimeService() },
+        { provide: OrderService, useValue: { approve: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 
