@@ -551,10 +551,10 @@ export class BillService {
     const tab = await this.tabRepository.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
 
-    const allBills = await this.billRepository.find({
+    const allBills = (await this.billRepository.find({
       where: { tab_id: tabId },
       order: { created_at: 'ASC' },
-    });
+    })) ?? [];
 
     // A payment-plan tab splits ONE tab total across guest-share bills that are
     // settled piecemeal. The receipt/most of the payment screen must reflect the
@@ -587,7 +587,6 @@ export class BillService {
     }
 
     const bill = sourceBill;
-    if (!bill) return null;
 
     const orders = await this.orderRepository.find({
       where: { tab_id: tabId },
