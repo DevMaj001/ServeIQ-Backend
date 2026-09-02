@@ -59,6 +59,9 @@ export class AppService implements OnApplicationBootstrap {
       await this.dataSource.query(
         `ALTER TABLE "bills" ADD COLUMN IF NOT EXISTS "allocation_config" jsonb`,
       );
+      await this.dataSource.query(
+        `ALTER TABLE "businesses" ADD COLUMN IF NOT EXISTS "discount_min_order_amount" integer NOT NULL DEFAULT 0`,
+      );
       console.log(
         '[SchemaSync] Missing columns and tables created successfully',
       );
