@@ -36,6 +36,12 @@ export class SeedDefaultShiftTemplates1820000000000
   ];
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // Ensure discount_min_order_amount exists before Business entity is queried
+    // (added in 181950/183400 but may not have run yet due to migration ordering)
+    await queryRunner.query(
+      `ALTER TABLE "businesses" ADD COLUMN IF NOT EXISTS "discount_min_order_amount" integer NOT NULL DEFAULT 0`,
+    );
+
     const businessRepo = queryRunner.manager.getRepository(Business);
     const branchRepo = queryRunner.manager.getRepository(Branch);
     const templateRepo = queryRunner.manager.getRepository(ShiftTemplate);
