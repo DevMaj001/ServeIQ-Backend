@@ -143,6 +143,8 @@ export class ReceiptService {
 
     doc.moveDown(0.5);
     doc.fontSize(7).text('Thank you for your patronage!', { align: 'center' });
+    doc.moveDown(0.1);
+    doc.fontSize(6).text('Powered by ServeIQ — serveiq.io', { align: 'center' });
 
     doc.end();
 

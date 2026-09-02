@@ -1,10 +1,24 @@
 # ServeIQ
 
+> **ServeIQ is a cloud restaurant management and point-of-sale (POS) platform with per-guest split payments, offline-first ordering, table-QR menus, and real-time kitchen and guest tracking.**
+
 ## What is this?
 
 ServeIQ is a platform that helps restaurants, bars, and hotels manage their business — from taking customer orders at a table to processing payments and tracking inventory. Think of it as a complete digital toolkit for running a hospitality business.
 
 This project contains the **backend** (the "brain" — an API that powers everything) and documentation for the whole system.
+
+> Current hosted product: [`DennisMajestie/ServeIQ-Backend`](https://github.com/DennisMajestie/ServeIQ-Backend) — served on Render at `https://serveiq-backend.onrender.com`.
+
+---
+
+## What makes ServeIQ different
+
+- **Per-guest split payments with item-level allocation** — split one bill across guests by picked items, fixed amount, percentage, or remaining balance; settle guest-by-guest at the table; the tab closes only when the last share is paid.
+- **Offline-first ordering** — orders, bills and payments queue on the device and replay through `/api/v1/sync` with stable idempotency keys when connectivity returns.
+- **Emerging-market ready** — multi-currency (including NGN), cash / card / transfer / USSD settlement, multi-branch.
+- **Live guest experience** — table-QR digital menu, online ordering, real-time order tracking by code (`/api/v1/tracking`), table-call for the waiter.
+- **Operational guardrails** — discounts with minimum-order thresholds, ingredient stock deduction, department-routed kitchen orders, role-based access, audit logs.
 
 ---
 
