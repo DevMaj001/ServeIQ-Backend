@@ -83,12 +83,30 @@ export class BillService {
       throw new ForbiddenException('This tab belongs to another waiter');
     }
 
-    const existing = await this.billRepository.findOne({
-      where: { tab_id: tabId },
+    // Never regenerate a bill for an already-settled tab.
+    if (tab.status === 'paid' || tab.closed_at) {
+      return this.billRepository.findOne({
+        where: { tab_id: tabId, paid_at: Not(IsNull()) },
+        order: { created_at: 'DESC' },
+      });
+    }
+
+    // The "running" bill to recompute is the newest live, non-split row. Voided
+    // rows and guest-share (split_group) rows must never be treated as the main
+    // bill — recomputing a split would corrupt the payment plan, and unvoiding
+    // is never desired.
+    let existing = await this.billRepository.findOne({
+      where: { tab_id: tabId, voided_at: IsNull() },
       order: { created_at: 'DESC' },
     });
     if (existing?.paid_at) {
       return existing;
+    }
+    if (existing && existing.split_group) {
+      existing = await this.billRepository.findOne({
+        where: { tab_id: tabId, split_group: IsNull(), voided_at: IsNull() },
+        order: { created_at: 'DESC' },
+      });
     }
 
     const orders = await this.orderRepository.find({
@@ -533,19 +551,42 @@ export class BillService {
     const tab = await this.tabRepository.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
 
-    // Prefer the paid bill (latest first) so a receipt after settling a tab with
-    // split/plan rows shows the bill that was actually paid — including its
-    // payment method and the settled amount — rather than an arbitrary older row.
-    let bill = await this.billRepository.findOne({
-      where: { tab_id: tabId, paid_at: Not(IsNull()) },
-      order: { created_at: 'DESC' },
+    const allBills = await this.billRepository.find({
+      where: { tab_id: tabId },
+      order: { created_at: 'ASC' },
     });
-    if (!bill) {
-      bill = await this.billRepository.findOne({
-        where: { tab_id: tabId },
-        order: { created_at: 'DESC' },
-      });
+
+    // A payment-plan tab splits ONE tab total across guest-share bills that are
+    // settled piecemeal. The receipt/most of the payment screen must reflect the
+    // FULL tab total — never a single guest's share — otherwise it reads wrong
+    // (zero or one guest's portion) mid-collection.
+    const planBills = allBills.filter((b) => b.split_group && !b.voided_at);
+    const mainBills = allBills.filter((b) => !b.split_group && !b.voided_at);
+    const paidBills = allBills.filter((b) => b.paid_at && !b.voided_at);
+
+    let sourceBill: Bill | null = null;
+    if (planBills.length > 0) {
+      sourceBill =
+        mainBills[mainBills.length - 1] ??
+        paidBills[paidBills.length - 1] ??
+        planBills[planBills.length - 1];
+      const sum = (pick: (b: Bill) => number) =>
+        planBills.reduce((acc, b) => acc + pick(b), 0);
+      sourceBill = this.billRepository.merge(sourceBill, {
+        subtotal_kobo: sum((b) => b.subtotal_kobo ?? 0),
+        service_charge_kobo: sum((b) => b.service_charge_kobo ?? 0),
+        tax_kobo: sum((b) => b.tax_kobo ?? 0),
+        discount_kobo: sum((b) => b.discount_kobo ?? 0),
+        total_kobo: sum((b) => b.total_kobo ?? 0),
+      } as Partial<Bill>);
+    } else {
+      // Prefer the paid bill (latest first) so a receipt after settling a tab
+      // shows the bill that was actually paid — including its payment method and
+      // the settled amount — rather than an arbitrary older row.
+      sourceBill = paidBills[paidBills.length - 1] ?? allBills[allBills.length - 1] ?? null;
     }
+
+    const bill = sourceBill;
     if (!bill) return null;
 
     const orders = await this.orderRepository.find({
@@ -737,11 +778,30 @@ export class BillService {
     const orderMap = new Map(allOrders.map((o) => [o.id, o]));
     const billableOrders = allOrders.filter((o) => isBillable(o.order_status));
 
-    const totalKobo = billableOrders.reduce((sum, o) => sum + o.subtotal_kobo, 0);
-    let remainingKobo = totalKobo;
+    const subtotalKobo = billableOrders.reduce(
+      (sum, o) => sum + o.subtotal_kobo,
+      0,
+    );
+
+    // Guests collectively cover the FULL tab amount. If a live main bill exists
+    // its total (service charge/VAT/discount included) is the budget; otherwise
+    // fall back to the raw order subtotal. Shares are computed on the subtotal
+    // basis and then scaled up to the budget so the surcharges are shared
+    // proportionally and the plan always balances with the amount shown to the
+    // cashier — otherwise an item-based split would leave charges uncollected.
+    const mainBill = await this.billRepository.findOne({
+      where: { tab_id: tabId, split_group: IsNull(), voided_at: IsNull() },
+      order: { created_at: 'DESC' },
+    });
+    const budgetKobo =
+      typeof mainBill?.total_kobo === 'number' && mainBill.total_kobo >= 0
+        ? mainBill.total_kobo
+        : subtotalKobo;
 
     const splitGroup = `plan_${Date.now()}_${tabId.slice(0, 8)}`;
     const bills = [];
+    const allocationTotals: { alloc: any; baseKobo: number }[] = [];
+    let remainingSubtotal = subtotalKobo;
 
     for (let i = 0; i < dto.allocations.length; i++) {
       const alloc = dto.allocations[i];
@@ -762,18 +822,41 @@ export class BillService {
           break;
         }
         case AllocationType.PERCENTAGE: {
-          amountKobo = Math.round((totalKobo * (alloc.percentage || 0)) / 100);
+          amountKobo = Math.round(
+            (subtotalKobo * (alloc.percentage || 0)) / 100,
+          );
           break;
         }
         case AllocationType.REMAINING: {
-          amountKobo = remainingKobo;
+          amountKobo = remainingSubtotal;
           break;
         }
       }
 
-      amountKobo = Math.min(amountKobo, remainingKobo);
+      amountKobo = Math.min(amountKobo, remainingSubtotal);
       if (amountKobo <= 0) continue;
-      remainingKobo -= amountKobo;
+      remainingSubtotal -= amountKobo;
+      allocationTotals.push({ alloc, baseKobo: amountKobo });
+    }
+
+    // Largest-remainder scaling to the budget keeps the kobo sum exact.
+    const scaleK =
+      subtotalKobo > 0 && allocationTotals.length > 0
+        ? budgetKobo / subtotalKobo
+        : 0;
+    const scaled = allocationTotals.map((a) =>
+      Math.floor(a.baseKobo * scaleK + 0.000001),
+    );
+    const scaleRemainder =
+      budgetKobo - scaled.reduce((s, v) => s + v, 0);
+    for (let i = 0; i < scaleRemainder; i++) {
+      scaled[(i * 7) % scaled.length] += 1;
+    }
+
+    for (let i = 0; i < allocationTotals.length; i++) {
+      const { alloc, baseKobo } = allocationTotals[i];
+      const amountKobo = scaled[i];
+      if (amountKobo <= 0) continue;
 
       const bill = await this.billRepository.save(
         this.billRepository.create({
@@ -782,7 +865,7 @@ export class BillService {
           sequence: i,
           allocation_type: alloc.type,
           allocation_config: alloc,
-          subtotal_kobo: amountKobo,
+          subtotal_kobo: baseKobo,
           service_charge_kobo: 0,
           tax_kobo: 0,
           discount_kobo: 0,
@@ -834,8 +917,15 @@ export class BillService {
 
     const allOrders = await this.orderRepository.find({ where: { tab_id: tabId } });
     const orderMap = new Map(allOrders.map((o) => [o.id, o]));
-    const billableOrders = allOrders.filter((o) => isBillable(o.order_status));
-    const totalKobo = billableOrders.reduce((sum, o) => sum + o.subtotal_kobo, 0);
+
+    // The group's recoverable headroom is the sum of every share ever planned
+    // (paid + still-pending) — NOT the live order subtotal. Plans are built over
+    // the full tab total (service charge/VAT included), so recomputing from the
+    // order subtotal after a partial settlement would re-introduce a stale
+    // balance for the remaining guests.
+    const totalKobo = allBills
+      .filter((b) => b.split_group === paidBill.split_group)
+      .reduce((sum, b) => sum + (b.total_kobo ?? 0), 0);
 
     let remaining = totalKobo - paidTotal;
 
