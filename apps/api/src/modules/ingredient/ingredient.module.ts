@@ -6,9 +6,13 @@ import { StockMovement } from './entities/stock-movement.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Order } from '../order/entities/order.entity';
 import { Tab } from '../tab/entities/tab.entity';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([StockMovement, MenuItem, Order, Tab])],
+  imports: [
+    TypeOrmModule.forFeature([StockMovement, MenuItem, Order, Tab]),
+    NotificationModule,
+  ],
   controllers: [IngredientController],
   providers: [IngredientService],
   exports: [IngredientService],

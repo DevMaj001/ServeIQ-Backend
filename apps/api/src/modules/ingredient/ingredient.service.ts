@@ -17,6 +17,8 @@ import { MenuItem } from '../menu/entities/menu-item.entity';
 import { StockMovement } from './entities/stock-movement.entity';
 import { Tab } from '../tab/entities/tab.entity';
 import { Order } from '../order/entities/order.entity';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationType } from '../notification/entities/notification.entity';
 import { StockMovementType } from '../../common/shared';
 
 @Injectable()
@@ -32,6 +34,7 @@ export class IngredientService {
     private tabRepo: Repository<Tab>,
     @Inject(DataSource)
     private dataSource: DataSource,
+    private notificationService: NotificationService,
   ) {}
 
   async findAll(branchId: string) {
@@ -367,6 +370,34 @@ export class IngredientService {
             continue;
           }
           throw err;
+        }
+
+        // Emit a LOW_STOCK notification only when this deduction pushes the item
+        // across its reorder threshold (from in-stock into low-stock). This avoids
+        // re-notifying on every subsequent order while the item stays low.
+        const newQty = Number(item.quantity_in_stock);
+        const reorderLevel = Number(item.reorder_level ?? 0);
+        if (
+          applied > 0 &&
+          oldQty > reorderLevel &&
+          newQty <= reorderLevel
+        ) {
+          try {
+            await this.notificationService.create({
+              branch_id: tab.branch_id,
+              user_id: null,
+              type: NotificationType.LOW_STOCK,
+              title: 'Low Stock Alert',
+              message: `${item.name} is running low (${newQty} ${item.unit || 'units'} remaining, reorder level ${reorderLevel})`,
+              data: {
+                menu_item_id: item.id,
+                quantity_in_stock: newQty,
+                reorder_level: reorderLevel,
+              },
+            });
+          } catch {
+            // Notification failure must not fail the order transaction.
+          }
         }
       }
     };
