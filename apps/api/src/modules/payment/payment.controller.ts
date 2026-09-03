@@ -23,7 +23,7 @@ import {
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Not, IsNull } from 'typeorm';
 import { Tab } from '../tab/entities/tab.entity';
 import { Bill } from '../bill/entities/bill.entity';
 import { Order } from '../order/entities/order.entity';
@@ -32,7 +32,7 @@ import { Branch } from '../branch/entities/branch.entity';
 import { Business } from '../business/entities/business.entity';
 import { BillService } from '../bill/bill.service';
 import { ProcessPaymentDto } from '../bill/dto/process-payment.dto';
-import { PaymentMethod, OrderStatus } from '../../common/shared';
+import { PaymentMethod, OrderStatus, TabType } from '../../common/shared';
 import { PaymentVerificationDto } from './dto/payment-verification.dto';
 import { buildPaymentMethods } from './payment-provider.util';
 import * as crypto from 'crypto';
@@ -83,6 +83,25 @@ export class PaymentController {
       throw new ForbiddenException('Invalid tracking code');
     if (tab.status !== 'open' && tab.status !== 'billed')
       throw new BadRequestException('Tab is not payable');
+
+    // Dine-in is waiter-served only. When the waiter has created a split /
+    // payment plan, the guests settle each share with the waiter — the public
+    // tracking page must not let a customer self-pay a wholesale amount that
+    // bears no relation to the plan (and would create a spurious pending bill).
+    if (tab.tab_type === TabType.DINE_IN) {
+      const activeSplit = await this.billRepo.findOne({
+        where: {
+          tab_id: tab.id,
+          split_group: Not(IsNull()),
+          voided_at: IsNull(),
+        },
+      });
+      if (activeSplit) {
+        throw new BadRequestException(
+          'This dine-in bill is collected by your waiter — please pay them directly.',
+        );
+      }
+    }
 
     const orders = await this.orderRepo.find({ where: { tab_id: tab.id } });
     if (orders.length === 0) throw new BadRequestException('Tab has no orders');

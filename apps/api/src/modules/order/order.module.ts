@@ -4,6 +4,7 @@ import { OrderService } from './order.service';
 import { OrderScheduler } from './order.scheduler';
 import { OrderController } from './order.controller';
 import { Order } from './entities/order.entity';
+import { Bill } from '../bill/entities/bill.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Tab } from '../tab/entities/tab.entity';
 import { Table } from '../table/entities/table.entity';
@@ -19,7 +20,7 @@ import { GatewayModule } from '../gateway/gateway.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Order, MenuItem, Tab, Table, Branch, Business, Department, AuditLog]),
+    TypeOrmModule.forFeature([Order, MenuItem, Tab, Table, Branch, Business, Department, AuditLog, Bill]),
     IngredientModule,
     NotificationModule,
     TrackingModule,

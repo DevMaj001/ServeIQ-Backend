@@ -1,4 +1,5 @@
 import { OrderService } from './order.service';
+import { Bill } from '../bill/entities/bill.entity';
 import { OrderStatus } from '../../common/shared';
 
 const mockRealtimeService = () => ({
@@ -48,6 +49,19 @@ describe('OrderService', () => {
     query: jest.fn(),
   });
 
+  const mockBillRepository = () => {
+    const qb = {
+      update: jest.fn().mockReturnThis(),
+      set: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue(undefined),
+    };
+    return {
+      createQueryBuilder: jest.fn(() => qb),
+    };
+  };
+
   const mockIngredientService = () => ({
     deductByTab: jest.fn().mockResolvedValue(undefined),
   });
@@ -68,6 +82,13 @@ describe('OrderService', () => {
         create: jest.fn((dto) => dto),
         save: jest.fn(async (order) => ({ ...order, id: 'order-1' })),
         findOne: jest.fn(),
+        createQueryBuilder: jest.fn(() => ({
+          update: jest.fn().mockReturnThis(),
+          set: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          andWhere: jest.fn().mockReturnThis(),
+          execute: jest.fn().mockResolvedValue(undefined),
+        })),
       }),
     };
   });
@@ -88,6 +109,8 @@ describe('OrderService', () => {
     const notificationService =
       overrides.notificationService ?? mockNotificationService();
     const realtimeService = overrides.realtimeService ?? mockRealtimeService();
+    const billRepository =
+      overrides.billRepository ?? mockBillRepository();
 
     return new OrderService(
       orderRepo,
@@ -97,6 +120,7 @@ describe('OrderService', () => {
       branchRepo,
       businessRepo,
       deptRepo,
+      billRepository,
       dataSource,
       ingredientService,
       auditService,
@@ -228,6 +252,13 @@ describe('OrderService', () => {
               create: jest.fn((dto) => dto),
               save: jest.fn(async (order) => ({ ...order, id: 'order-1' })),
               findOne: jest.fn(),
+              createQueryBuilder: jest.fn(() => ({
+                update: jest.fn().mockReturnThis(),
+                set: jest.fn().mockReturnThis(),
+                where: jest.fn().mockReturnThis(),
+                andWhere: jest.fn().mockReturnThis(),
+                execute: jest.fn().mockResolvedValue(undefined),
+              })),
             },
           };
           if (entity?.name === 'Table') return repos.table;
@@ -288,6 +319,13 @@ describe('OrderService', () => {
               create: jest.fn((dto) => dto),
               save: jest.fn(async (order) => ({ ...order, id: 'order-1' })),
               findOne: jest.fn(),
+              createQueryBuilder: jest.fn(() => ({
+                update: jest.fn().mockReturnThis(),
+                set: jest.fn().mockReturnThis(),
+                where: jest.fn().mockReturnThis(),
+                andWhere: jest.fn().mockReturnThis(),
+                execute: jest.fn().mockResolvedValue(undefined),
+              })),
             },
           };
           if (entity?.name === 'Table') return repos.table;
@@ -380,6 +418,13 @@ describe('OrderService', () => {
         create: jest.fn((dto) => dto),
         save: jest.fn(async (order) => ({ ...order, id: 'order-1' })),
         findOne: jest.fn(),
+        createQueryBuilder: jest.fn(() => ({
+          update: jest.fn().mockReturnThis(),
+          set: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          andWhere: jest.fn().mockReturnThis(),
+          execute: jest.fn().mockResolvedValue(undefined),
+        })),
       });
 
       const service = buildService({
@@ -423,6 +468,13 @@ describe('OrderService', () => {
         create: jest.fn((dto) => dto),
         save: jest.fn(async (order) => ({ ...order, id: 'order-1' })),
         findOne: jest.fn(),
+        createQueryBuilder: jest.fn(() => ({
+          update: jest.fn().mockReturnThis(),
+          set: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          andWhere: jest.fn().mockReturnThis(),
+          execute: jest.fn().mockResolvedValue(undefined),
+        })),
       });
 
       const service = buildService({
@@ -467,6 +519,13 @@ describe('OrderService', () => {
         create: jest.fn((dto) => dto),
         save: jest.fn(async (order) => ({ ...order, id: 'order-1' })),
         findOne: jest.fn(),
+        createQueryBuilder: jest.fn(() => ({
+          update: jest.fn().mockReturnThis(),
+          set: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          andWhere: jest.fn().mockReturnThis(),
+          execute: jest.fn().mockResolvedValue(undefined),
+        })),
       });
 
       const service = buildService({
@@ -553,6 +612,32 @@ describe('OrderService', () => {
 
       expect(result.subtotal_kobo).toBe(15000);
     });
+
+    it('voids an active unpaid split plan after the order changes', async () => {
+      const orderRepo = mockOrderRepository();
+      orderRepo.findOne.mockResolvedValue({
+        id: 'o1',
+        tab_id: 'tab-1',
+        quantity: 2,
+        unit_price_kobo: 5000,
+        subtotal_kobo: 10000,
+        modifiers: [],
+      });
+      orderRepo.save.mockImplementation(async (o) => o);
+      const billRepository = mockBillRepository();
+
+      const service = buildService({
+        orderRepository: orderRepo,
+        billRepository,
+      });
+      await service.updateOrder('o1', { quantity: 3 });
+
+      const qb = billRepository.createQueryBuilder();
+      expect(qb.update).toHaveBeenCalledWith(Bill);
+      expect(qb.set).toHaveBeenCalledWith({ voided_at: expect.any(Date) });
+      expect(qb.andWhere).toHaveBeenCalledWith('split_group IS NOT NULL');
+      expect(qb.andWhere).toHaveBeenCalledWith('paid_at IS NULL');
+    });
   });
 
   describe('removeOrder', () => {
@@ -571,6 +656,25 @@ describe('OrderService', () => {
 
       expect(orderRepo.remove).toHaveBeenCalledWith(order);
       expect(result.message).toBe('Order item removed successfully');
+    });
+
+    it('voids an active unpaid split plan when an order is removed', async () => {
+      const orderRepo = mockOrderRepository();
+      orderRepo.findOne.mockResolvedValue({
+        id: 'o1',
+        tab_id: 'tab-1',
+        order_status: OrderStatus.PENDING_SUPERVISOR_APPROVAL,
+      });
+      orderRepo.remove.mockResolvedValue(undefined);
+      const billRepository = mockBillRepository();
+
+      const service = buildService({
+        orderRepository: orderRepo,
+        billRepository,
+      });
+      await service.removeOrder('o1');
+
+      expect(billRepository.createQueryBuilder).toHaveBeenCalled();
     });
   });
 

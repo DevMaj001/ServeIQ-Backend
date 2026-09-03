@@ -8,6 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, In, LessThanOrEqual } from 'typeorm';
 import { Order } from './entities/order.entity';
+import { Bill } from '../bill/entities/bill.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Tab } from '../tab/entities/tab.entity';
 import { Table } from '../table/entities/table.entity';
@@ -45,6 +46,8 @@ export class OrderService {
     private businessRepository: Repository<Business>,
     @InjectRepository(Department)
     private departmentRepo: Repository<Department>,
+    @InjectRepository(Bill)
+    private billRepository: Repository<Bill>,
     @Inject(DataSource)
     private dataSource: DataSource,
     private ingredientService: IngredientService,
@@ -189,6 +192,21 @@ export class OrderService {
           orders.push(await manager.getRepository(Order).save(order));
         }
 
+        // A fresh round invalidates any existing split plan for this tab: the
+        // old share totals no longer match the combined order set. Paid shares
+        // are left alone; the unpaid plan rows are voided so the customer sees
+        // the live bill instead of a stale split.
+        await manager
+          .getRepository(Bill)
+          .createQueryBuilder()
+          .update(Bill)
+          .set({ voided_at: new Date() })
+          .where('tab_id = :tabId', { tabId })
+          .andWhere('split_group IS NOT NULL')
+          .andWhere('paid_at IS NULL')
+          .andWhere('voided_at IS NULL')
+          .execute();
+
         await this.ingredientService.deductByTab(
           { id: tabId, branch_id: branchId },
           items.map((item) => ({
@@ -272,7 +290,9 @@ export class OrderService {
     order.subtotal_kobo =
       order.quantity * order.unit_price_kobo + modifierTotal;
 
-    return this.orderRepository.save(order);
+    const saved = await this.orderRepository.save(order);
+    await this.invalidateSplitPlan(order.tab_id);
+    return saved;
   }
 
   async removeOrder(id: string, branchId?: string) {
@@ -285,7 +305,29 @@ export class OrderService {
     }
 
     await this.orderRepository.remove(order);
+    await this.invalidateSplitPlan(order.tab_id);
     return { message: 'Order item removed successfully' };
+  }
+
+  /**
+   * A split/plan is built over the tab's orders at the moment it is created. If
+   * the tab's order set changes afterwards (add/remove/update) while the plan is
+   * still being collected, the old share totals are now stale and must not keep
+   * surfacing to the customer (the public tracking page or a later settle). Void
+   * any unpaid, unsettled split-group rows so the tab's live bill is the source
+   * of truth. Paid split rows are left intact (they represent real collected
+   * money); the wholesale settle path clears those.
+   */
+  private async invalidateSplitPlan(tabId: string) {
+    await this.billRepository
+      .createQueryBuilder()
+      .update(Bill)
+      .set({ voided_at: new Date() })
+      .where('tab_id = :tabId', { tabId })
+      .andWhere('split_group IS NOT NULL')
+      .andWhere('paid_at IS NULL')
+      .andWhere('voided_at IS NULL')
+      .execute();
   }
 
   private async getTabForOrder(orderId: string, branchId?: string) {

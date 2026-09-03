@@ -365,26 +365,37 @@ export class CustomerService {
     // Include split payment progress so a self-service dine-in customer can see
     // how much of the bill has been settled across guests. Takeaway never
     // splits, but returning it harmlessly for dine-in is what the UI needs.
+    //
+    // The plan only counts if it reconciles with the LIVE order total. Splits are
+    // built over the order set at plan-creation time; if the order has since
+    // changed (and the stale plan wasn't voided), the old share totals no longer
+    // match and must not be presented as the group balance — that would show a
+    // bogus total (e.g. an earlier ₦37,835) next to a now-smaller order.
     if (tab.tab_type !== 'takeaway') {
       const splits = await this.billRepo.find({
         where: { tab_id: tabId, split_group: Not(IsNull()), voided_at: IsNull() },
         order: { sequence: 'ASC' },
       });
       if (splits.length > 0) {
-        const paid = splits.filter((b) => b.paid_at);
-        const paidKobo = paid.reduce((s, b) => s + (b.payment_amount_kobo ?? b.total_kobo ?? 0), 0);
         const sumKobo = splits.reduce((s, b) => s + (b.total_kobo ?? 0), 0);
-        return {
-          ...base,
-          split_payment: {
-            total_guests: splits.length,
-            paid_guests: paid.length,
-            total_kobo: sumKobo,
-            paid_kobo: paidKobo,
-            remaining_kobo: Math.max(0, sumKobo - paidKobo),
-            all_paid: paid.length === splits.length && splits.length > 0,
-          },
-        };
+        // Guard against zero/one-off rounding drift and stale totals.
+        const orderTotal = base.total_kobo;
+        const off = Math.abs(sumKobo - orderTotal);
+        if (off <= 1 || sumKobo === 0) {
+          const paid = splits.filter((b) => b.paid_at);
+          const paidKobo = paid.reduce((s, b) => s + (b.payment_amount_kobo ?? b.total_kobo ?? 0), 0);
+          return {
+            ...base,
+            split_payment: {
+              total_guests: splits.length,
+              paid_guests: paid.length,
+              total_kobo: sumKobo,
+              paid_kobo: paidKobo,
+              remaining_kobo: Math.max(0, sumKobo - paidKobo),
+              all_paid: paid.length === splits.length && splits.length > 0,
+            },
+          };
+        }
       }
     }
 
