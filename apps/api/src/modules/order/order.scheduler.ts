@@ -26,7 +26,11 @@ export class OrderScheduler {
 
     const expired = await this.orderRepo.find({
       where: {
-        order_status: OrderStatus.APPROVED,
+        order_status: In([
+          OrderStatus.APPROVED,
+          OrderStatus.ASSIGNED_TO_DEPARTMENT,
+          OrderStatus.PREPARING,
+        ]),
         timer_ends_at: LessThanOrEqual(now),
       },
     });

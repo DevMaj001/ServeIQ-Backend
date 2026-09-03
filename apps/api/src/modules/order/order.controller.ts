@@ -299,4 +299,34 @@ export class OrderController {
   async deliver(@Param('id') id: string, @Request() req: any) {
     return this.orderService.deliver(id, req.user.userId, req.user.branchId);
   }
+
+  @Post(':id/accept')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERVISOR)
+  @ApiOperation({
+    summary:
+      'KDS: accept a dispatched order into preparation (Owner/Manager/Supervisor)',
+  })
+  @ApiParam({ name: 'id', description: 'Order item UUID' })
+  @ApiResponse({ status: 200, description: 'Order accepted into preparation.' })
+  @ApiResponse({ status: 400, description: 'Order is not dispatched.' })
+  @ApiResponse({ status: 404, description: 'Order not found.' })
+  async accept(@Param('id') id: string, @Request() req: any) {
+    return this.orderService.accept(id, req.user.userId, req.user.branchId);
+  }
+
+  @Post(':id/bump')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERVISOR)
+  @ApiOperation({
+    summary:
+      'KDS: mark a preparing/dispatched order as ready for pickup (Owner/Manager/Supervisor)',
+  })
+  @ApiParam({ name: 'id', description: 'Order item UUID' })
+  @ApiResponse({ status: 200, description: 'Order marked ready for pickup.' })
+  @ApiResponse({ status: 400, description: 'Order cannot be bumped in this state.' })
+  @ApiResponse({ status: 404, description: 'Order not found.' })
+  async bump(@Param('id') id: string, @Request() req: any) {
+    return this.orderService.bump(id, req.user.userId, req.user.branchId);
+  }
 }

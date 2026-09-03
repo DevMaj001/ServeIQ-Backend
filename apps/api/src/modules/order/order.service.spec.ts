@@ -634,13 +634,251 @@ describe('OrderService', () => {
       expect(result.order_status).toBe(OrderStatus.APPROVED);
       expect(result.approved_by).toBe('user-1');
       expect(auditService.log).toHaveBeenCalled();
-      expect(notificationService.create).toHaveBeenCalledWith(
+        expect(notificationService.create).toHaveBeenCalledWith(
         expect.objectContaining({
           message: expect.stringContaining('Tracking: SVQ-ABCD-123'),
         }),
       );
     });
+
+    it('auto-dispatches to ASSIGNED_TO_DEPARTMENT when branch kds_enabled', async () => {
+      const deptRepo = mockDepartmentRepo();
+      deptRepo.findOne.mockResolvedValue({
+        id: 'dept-1',
+        name: 'Kitchen',
+        branch_id: 'branch-1',
+      });
+
+      const orderRepo = mockOrderRepository();
+      orderRepo.findOne.mockResolvedValue({
+        id: 'o1',
+        tab_id: 'tab-1',
+        order_status: OrderStatus.PENDING_SUPERVISOR_APPROVAL,
+      });
+
+      const tabRepo = mockTabRepository();
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        tracking_code: 'SVQ-ABCD-123',
+        status: 'open',
+      });
+
+      const dataSource: any = {
+        transaction: jest.fn(async (cb) => {
+          const m = {
+            getRepository: jest.fn().mockReturnValue({
+              findOne: jest.fn(({ where }: any) => {
+                if (where.id === 'branch-1') {
+                  return Promise.resolve({
+                    id: 'branch-1',
+                    settings: { feature_flags: { kds_enabled: true } },
+                  });
+                }
+                return Promise.resolve({
+                  id: 'o1',
+                  tab_id: 'tab-1',
+                  order_status: OrderStatus.PENDING_SUPERVISOR_APPROVAL,
+                });
+              }),
+              save: jest.fn(async (order) => ({ ...order, id: 'o1' })),
+            }),
+          };
+          return cb(m);
+        }),
+      };
+
+      const service = buildService({
+        tabRepository: tabRepo,
+        departmentRepo: deptRepo,
+        orderRepository: orderRepo,
+        dataSource,
+      });
+
+      const result = await service.approve('o1', 'user-1', {
+        department: 'dept-1',
+        estimated_preparation_time_seconds: 600,
+      });
+
+      expect(result.order_status).toBe(OrderStatus.ASSIGNED_TO_DEPARTMENT);
+      expect(result.preparing_at).toBeNull();
+    });
   });
+
+  describe('accept', () => {
+    it('accepts a dispatched order into preparing', async () => {
+      const orderRepo = mockOrderRepository();
+      orderRepo.findOne.mockResolvedValue({ id: 'o1', tab_id: 'tab-1' });
+
+      const tabRepo = mockTabRepository();
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        status: 'open',
+      });
+
+      const dataSource: any = {
+        transaction: jest.fn(async (cb) => {
+          const m = {
+            getRepository: jest.fn().mockReturnValue({
+              findOne: jest.fn().mockResolvedValue({
+                id: 'o1',
+                tab_id: 'tab-1',
+                order_status: OrderStatus.ASSIGNED_TO_DEPARTMENT,
+              }),
+              save: jest.fn(async (order) => order),
+            }),
+          };
+          return cb(m);
+        }),
+      };
+
+      const auditService = mockAuditService();
+      const service = buildService({
+        orderRepository: orderRepo,
+        tabRepository: tabRepo,
+        dataSource,
+        auditService,
+      });
+
+      const result = await service.accept('o1', 'user-1');
+
+      expect(result.order_status).toBe(OrderStatus.PREPARING);
+      expect(result.preparing_at).toBeInstanceOf(Date);
+      expect(auditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'order.accept' }),
+      );
+    });
+
+    it('throws when order is not dispatched', async () => {
+      const orderRepo = mockOrderRepository();
+      orderRepo.findOne.mockResolvedValue({ id: 'o1', tab_id: 'tab-1' });
+
+      const tabRepo = mockTabRepository();
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        status: 'open',
+      });
+
+      const dataSource: any = {
+        transaction: jest.fn(async (cb) => {
+          const m = {
+            getRepository: jest.fn().mockReturnValue({
+              findOne: jest.fn().mockResolvedValue({
+                id: 'o1',
+                tab_id: 'tab-1',
+                order_status: OrderStatus.APPROVED,
+              }),
+              save: jest.fn(async (order) => order),
+            }),
+          };
+          return cb(m);
+        }),
+      };
+
+      const service = buildService({
+        orderRepository: orderRepo,
+        tabRepository: tabRepo,
+        dataSource,
+      });
+
+      await expect(service.accept('o1', 'user-1')).rejects.toThrow(
+        'not dispatched',
+      );
+    });
+  });
+
+  describe('bump', () => {
+    it('bumps a preparing order to ready for pickup and notifies', async () => {
+      const orderRepo = mockOrderRepository();
+      orderRepo.findOne.mockResolvedValue({ id: 'o1', tab_id: 'tab-1' });
+
+      const tabRepo = mockTabRepository();
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        status: 'open',
+        waiter_id: 'waiter-1',
+        tracking_code: 'SVQ-ABCD-123',
+      });
+
+      const notificationService = mockNotificationService();
+
+      const dataSource: any = {
+        transaction: jest.fn(async (cb) => {
+          const m = {
+            getRepository: jest.fn().mockReturnValue({
+              findOne: jest.fn().mockResolvedValue({
+                id: 'o1',
+                tab_id: 'tab-1',
+                order_status: OrderStatus.PREPARING,
+              }),
+              save: jest.fn(async (order) => order),
+            }),
+          };
+          return cb(m);
+        }),
+      };
+
+      const service = buildService({
+        orderRepository: orderRepo,
+        tabRepository: tabRepo,
+        dataSource,
+        notificationService,
+      });
+
+      const result = await service.bump('o1', 'user-1');
+
+      expect(result.order_status).toBe(OrderStatus.READY_FOR_PICKUP);
+      expect(result.actual_ready_time).toBeInstanceOf(Date);
+      expect(notificationService.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          user_id: 'waiter-1',
+          type: 'order_ready',
+        }),
+      );
+    });
+
+    it('throws when order is already terminal', async () => {
+      const orderRepo = mockOrderRepository();
+      orderRepo.findOne.mockResolvedValue({ id: 'o1', tab_id: 'tab-1' });
+
+      const tabRepo = mockTabRepository();
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        status: 'open',
+      });
+
+      const dataSource: any = {
+        transaction: jest.fn(async (cb) => {
+          const m = {
+            getRepository: jest.fn().mockReturnValue({
+              findOne: jest.fn().mockResolvedValue({
+                id: 'o1',
+                tab_id: 'tab-1',
+                order_status: OrderStatus.DELIVERED,
+              }),
+              save: jest.fn(async (order) => order),
+            }),
+          };
+          return cb(m);
+        }),
+      };
+
+      const service = buildService({
+        orderRepository: orderRepo,
+        tabRepository: tabRepo,
+        dataSource,
+      });
+
+      await expect(service.bump('o1', 'user-1')).rejects.toThrow(
+        'cannot be bumped',
+      );
+    });
+  });
+
 
   describe('decline', () => {
     it('declines a pending order', async () => {

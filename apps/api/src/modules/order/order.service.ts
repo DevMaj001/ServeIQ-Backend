@@ -345,14 +345,8 @@ export class OrderService {
           throw new NotFoundException('Department not found in this branch');
 
         const now = new Date();
-        order.order_status = OrderStatus.APPROVED;
         order.approved_by = userId;
         order.approved_at = now;
-        // preparing_at intentionally set to the same timestamp as approved_at because there is
-        // no Chef-confirmed "cooking started" signal yet. When the planned Chef role (V1.2)
-        // adds a real PREPARING status transition, replace this line with the independent
-        // timestamp set at that actual transition point.
-        order.preparing_at = now;
         order.assigned_department = departmentId;
         order.estimated_preparation_time_seconds =
           dto.estimated_preparation_time_seconds;
@@ -360,6 +354,25 @@ export class OrderService {
         order.timer_ends_at = new Date(
           now.getTime() + dto.estimated_preparation_time_seconds * 1000,
         );
+
+        // Default status after approval. The KDS layer is optional: for branches with
+        // kitchen-display infrastructure enabled (kds_enabled), approval auto-dispatches
+        // the order to the KDS (ASSIGNED_TO_DEPARTMENT) so a chef accepts and bumps it.
+        // For all other branches the legacy behaviour is preserved: the order stays
+        // APPROVED and the timer cron moves it to READY_FOR_PICKUP.
+        const branch = await manager.getRepository(Branch).findOne({
+          where: { id: tab.branch_id },
+        });
+        const kdsEnabled =
+          (branch?.settings?.feature_flags as Record<string, boolean> | undefined)
+            ?.kds_enabled === true;
+        order.order_status = kdsEnabled
+          ? OrderStatus.ASSIGNED_TO_DEPARTMENT
+          : OrderStatus.APPROVED;
+        // preparing_at is set to the approval timestamp only when the branch has no KDS
+        // (no chef-confirmed "cooking started" signal). Once the KDS chef accepts, the
+        // accept() transition overwrites preparing_at with the real start time.
+        order.preparing_at = kdsEnabled ? null : now;
 
         await manager.getRepository(Order).save(order);
 
@@ -639,6 +652,134 @@ export class OrderService {
         );
         this.realtimeService.emitDashboardUpdate(tab.branch_id, {
           type: 'order_delivered',
+          order: savedOrder,
+        });
+        return savedOrder;
+      });
+  }
+
+  /**
+   * KDS: chef accepts a dispatched order, moving it from ASSIGNED_TO_DEPARTMENT
+   * to PREPARING and stamping the real "cooking started" time (preparing_at).
+   * Only relevant for branches with KDS enabled; otherwise order stays APPROVED
+   * and the timer cron advances it directly to READY_FOR_PICKUP.
+   */
+  async accept(id: string, userId: string, branchId?: string) {
+    const { tab } = await this.getTabForOrder(id, branchId);
+    const alphaIds = [id].sort();
+    return this.dataSource
+      .transaction(async (manager) => {
+        const order = await manager.getRepository(Order).findOne({
+          where: { id: alphaIds[0] },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!order) throw new NotFoundException('Order not found');
+        if (order.order_status !== OrderStatus.ASSIGNED_TO_DEPARTMENT) {
+          throw new BadRequestException(
+            'Order is not dispatched to a department',
+          );
+        }
+
+        order.order_status = OrderStatus.PREPARING;
+        order.preparing_at = new Date();
+
+        await manager.getRepository(Order).save(order);
+
+        await this.auditService.log({
+          branchId: tab.branch_id,
+          userId,
+          action: 'order.accept',
+          entityId: id,
+          entityType: 'order',
+        });
+
+        return order;
+      })
+      .then((savedOrder) => {
+        this.realtimeService.emitOrderUpdated(tab.branch_id, savedOrder.id, {
+          order_status: savedOrder.order_status,
+        });
+        this.realtimeService.emitOrderStatusChange(
+          tab.branch_id,
+          savedOrder.id,
+          savedOrder.order_status,
+          savedOrder.tab_id,
+        );
+        this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+          type: 'order_preparing',
+          order: savedOrder,
+        });
+        return savedOrder;
+      });
+  }
+
+  /**
+   * KDS: chef completes a preparing/dispatched order, moving it to
+   * READY_FOR_PICKUP and stamping actual_ready_time. Works from
+   * ASSIGNED_TO_DEPARTMENT, PREPARING or APPROVED so a chef can bump even
+   * before the passed timer. Safe no-op if already READY (idempotent-ish).
+   */
+  async bump(id: string, userId: string, branchId?: string) {
+    const { tab } = await this.getTabForOrder(id, branchId);
+    const alphaIds = [id].sort();
+    return this.dataSource
+      .transaction(async (manager) => {
+        const order = await manager.getRepository(Order).findOne({
+          where: { id: alphaIds[0] },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!order) throw new NotFoundException('Order not found');
+        if (
+          order.order_status !== OrderStatus.ASSIGNED_TO_DEPARTMENT &&
+          order.order_status !== OrderStatus.PREPARING &&
+          order.order_status !== OrderStatus.APPROVED
+        ) {
+          throw new BadRequestException('Order cannot be bumped in this state');
+        }
+
+        order.order_status = OrderStatus.READY_FOR_PICKUP;
+        order.actual_ready_time = new Date();
+
+        await manager.getRepository(Order).save(order);
+
+        await this.auditService.log({
+          branchId: tab.branch_id,
+          userId,
+          action: 'order.bump',
+          entityId: id,
+          entityType: 'order',
+        });
+
+        return order;
+      })
+      .then(async (savedOrder) => {
+        const orderTab = await this.tabRepository.findOne({
+          where: { id: savedOrder.tab_id },
+        });
+        await this.notificationService.create({
+          branch_id: tab.branch_id,
+          user_id: orderTab?.waiter_id ?? null,
+          type: NotificationType.ORDER_READY,
+          title: 'Order Ready',
+          message: `Order ${savedOrder.id.slice(0, 8)}… is ready for pickup.`,
+          data: {
+            order_id: savedOrder.id,
+            tab_id: savedOrder.tab_id,
+            tracking_code: orderTab?.tracking_code,
+          },
+        });
+
+        this.realtimeService.emitOrderUpdated(tab.branch_id, savedOrder.id, {
+          order_status: savedOrder.order_status,
+        });
+        this.realtimeService.emitOrderStatusChange(
+          tab.branch_id,
+          savedOrder.id,
+          savedOrder.order_status,
+          savedOrder.tab_id,
+        );
+        this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+          type: 'order_ready',
           order: savedOrder,
         });
         return savedOrder;
