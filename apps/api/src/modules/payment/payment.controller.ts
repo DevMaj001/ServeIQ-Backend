@@ -276,15 +276,11 @@ export class PaymentController {
     });
     const settings = branch?.settings || {};
     const providerConfig = this.findProviderConfig(settings, 'monniepoint');
-    if (!providerConfig) {
-      throw new ForbiddenException('Moniepoint webhook not configured');
-    }
 
     const isTestSimulation = this.isTestSimulation(req);
 
-    if (!isTestSimulation && providerConfig.verification_method === 'hmac-sha512') {
-      const secret =
-        providerConfig.config.webhook_secret || providerConfig.config.secret;
+    if (!isTestSimulation && providerConfig?.verification_method === 'hmac-sha512') {
+      const secret = providerConfig.config.webhook_secret || providerConfig.config.secret;
       if (!secret) {
         throw new ForbiddenException('Moniepoint webhook secret not configured');
       }
@@ -293,23 +289,21 @@ export class PaymentController {
       }
     }
 
+    if (!isTestSimulation && !providerConfig) {
+      throw new ForbiddenException('Moniepoint webhook not configured');
+    }
+
     if (bill.paid_at) return { received: true, status: 'already_paid' };
 
-    await this.billService.processPayment(
-      tab.id,
-      tab.branch_id,
-      'system-webhook',
-      'owner',
-      {
-        method: PaymentMethod.POS,
-        amount: amount,
-        reference: reference,
-        terminal_id: terminalId,
-        idempotency_key: `monniepoint-${reference}`,
-      },
-    );
-
-    return { received: true, status: 'processed' };
+    return this.routeWebhookPayment({
+      bill,
+      tab,
+      reference,
+      amount,
+      method: PaymentMethod.POS,
+      terminalId,
+      idempotencyKey: `monniepoint-${reference}`,
+    });
   }
 
   @Post('webhooks/opay')
@@ -378,31 +372,83 @@ export class PaymentController {
 
     const method =
       transactionType === 'POS' ? PaymentMethod.POS : PaymentMethod.TRANSFER;
-    await this.billService.processPayment(
-      tab.id,
-      tab.branch_id,
-      'system-webhook',
-      'owner',
-      {
-        method,
-        amount: amount,
-        reference: reference,
-        idempotency_key: `opay-${reference}`,
-      },
-    );
-
-    return { received: true, status: 'processed' };
+    return this.routeWebhookPayment({
+      bill,
+      tab,
+      reference,
+      amount,
+      method,
+      terminalId: undefined,
+      idempotencyKey: `opay-${reference}`,
+    });
   }
 
 /** Test mode: a dev-only header that bypasses provider signature
  *  verification so the sandbox "Simulate Payment" works before real
  *  keys are configured. Shared by both webhook paths.
  *  Hard-disabled in production regardless of headers. */
-private isTestSimulation(req: Request): boolean {
+  private isTestSimulation(req: Request): boolean {
     if (process.env.NODE_ENV === 'production') {
       return false;
     }
     return req.headers['x-simulate'] === '1';
+  }
+
+  /** Route an already-verified webhook payment to the correct backend path.
+   *
+   *  Webhooks are naturally partial: providers report only what this guest
+   *  was charged. A reference pointing at a split row must settle that single
+   *  share (processSplitPayment) rather than the tab's whole bill; routing it
+   *  through the wholesale processPayment would hit its underpayment guard and
+   *  fail every split card/transfer. Plain (non-split) references keep the
+   *  existing wholesale behaviour. */
+  private async routeWebhookPayment(params: {
+    bill: Bill;
+    tab: Tab;
+    reference: string;
+    amount: number;
+    method: PaymentMethod;
+    terminalId?: string;
+    idempotencyKey: string;
+  }): Promise<{ received: boolean; error?: string; status?: string }> {
+    const {
+      bill,
+      tab,
+      reference,
+      amount,
+      method,
+      terminalId,
+      idempotencyKey,
+    } = params;
+
+    const dto: ProcessPaymentDto = {
+      method,
+      amount,
+      reference,
+      ...(terminalId ? { terminal_id: terminalId } : {}),
+      idempotency_key: idempotencyKey,
+    };
+
+    if (bill.split_group) {
+      await this.billService.processSplitPayment(
+        tab.id,
+        bill.id,
+        tab.branch_id,
+        'system-webhook',
+        'owner',
+        dto,
+      );
+    } else {
+      await this.billService.processPayment(
+        tab.id,
+        tab.branch_id,
+        'system-webhook',
+        'owner',
+        dto,
+      );
+    }
+
+    return { received: true, status: 'processed' };
   }
 
   private findProviderConfig(

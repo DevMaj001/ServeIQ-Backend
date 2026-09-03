@@ -1024,6 +1024,16 @@ export class BillService {
       if (dup?.paid_at) return dup;
     }
 
+    // Reject over/under-payments against this split's own expected total. Each
+    // share has its own total (unlike the wholesale bill), so the settled amount
+    // must match it — guards against a webhook settling the wrong share or a
+    // truncated reference silently closing a smaller/larger allocation.
+    if (bill.total_kobo && paymentDto.amount !== bill.total_kobo) {
+      throw new BadRequestException(
+        `Payment amount ${paymentDto.amount} does not match split total ${bill.total_kobo}`,
+      );
+    }
+
     bill.payment_method = paymentDto.method;
     bill.payment_amount_kobo = paymentDto.amount;
     if (paymentDto.reference) bill.payment_reference = paymentDto.reference;

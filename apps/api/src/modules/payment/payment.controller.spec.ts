@@ -48,7 +48,10 @@ describe('PaymentController', () => {
     orderRepo = mockRepo();
     posTerminalRepo = mockRepo();
     branchRepo = mockRepo();
-    billService = { processPayment: jest.fn().mockResolvedValue({}) };
+    billService = {
+      processPayment: jest.fn().mockResolvedValue({}),
+      processSplitPayment: jest.fn().mockResolvedValue({}),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [PaymentController],
@@ -157,6 +160,55 @@ describe('PaymentController', () => {
           method: PaymentMethod.POS,
           amount: 150000,
           reference: 'ref-1',
+          terminal_id: 'term-1',
+          idempotency_key: 'monniepoint-ref-1',
+        }),
+      );
+    });
+
+    it('should route a split-bill Moniepoint webhook to processSplitPayment', async () => {
+      billRepo.findOne.mockResolvedValue({
+        id: 'split-bill-1',
+        tab_id: 'tab-1',
+        paid_at: null,
+        split_group: 'split_1690000000000_tab-1',
+        total_kobo: 60000,
+        payment_reference: 'ref-1',
+      });
+      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
+      branchRepo.findOne.mockResolvedValue({
+        settings: {
+          payment_providers: [
+            {
+              name: 'monniepoint',
+              type: 'webhook',
+              label: 'Moniepoint',
+              verification_method: 'none',
+              config: {},
+            },
+          ],
+        },
+      });
+
+      const result = await controller.monniepointWebhook(mockSimReq, 'sig', {
+        data: {
+          reference: 'ref-1',
+          amount: 60000,
+          status: 'SUCCESSFUL',
+          terminalId: 'term-1',
+        },
+      });
+      expect(result.status).toBe('processed');
+      expect(billService.processPayment).not.toHaveBeenCalled();
+      expect(billService.processSplitPayment).toHaveBeenCalledWith(
+        'tab-1',
+        'split-bill-1',
+        'branch-1',
+        'system-webhook',
+        'owner',
+        expect.objectContaining({
+          method: PaymentMethod.POS,
+          amount: 60000,
           terminal_id: 'term-1',
           idempotency_key: 'monniepoint-ref-1',
         }),
@@ -286,6 +338,55 @@ describe('PaymentController', () => {
         expect.objectContaining({
           method: PaymentMethod.TRANSFER,
           amount: 50000,
+          idempotency_key: 'opay-ref-1',
+        }),
+      );
+    });
+
+    it('should route a split-bill webhook to processSplitPayment instead of processPayment', async () => {
+      billRepo.findOne.mockResolvedValue({
+        id: 'split-bill-1',
+        tab_id: 'tab-1',
+        paid_at: null,
+        split_group: 'split_1690000000000_tab-1',
+        total_kobo: 50000,
+        payment_reference: 'ref-1',
+      });
+      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
+      branchRepo.findOne.mockResolvedValue({
+        settings: {
+          payment_providers: [
+            {
+              name: 'opay',
+              type: 'webhook',
+              label: 'OPay',
+              verification_method: 'none',
+              config: {},
+            },
+          ],
+        },
+      });
+
+      const result = await controller.opayWebhook(mockSimReq, 'valid-sig', {
+        data: {
+          reference: 'ref-1',
+          amount: 50000,
+          status: 'SUCCESS',
+          transactionType: 'TRANSFER',
+        },
+      });
+      expect(result.status).toBe('processed');
+      expect(billService.processPayment).not.toHaveBeenCalled();
+      expect(billService.processSplitPayment).toHaveBeenCalledWith(
+        'tab-1',
+        'split-bill-1',
+        'branch-1',
+        'system-webhook',
+        'owner',
+        expect.objectContaining({
+          method: PaymentMethod.TRANSFER,
+          amount: 50000,
+          reference: 'ref-1',
           idempotency_key: 'opay-ref-1',
         }),
       );
