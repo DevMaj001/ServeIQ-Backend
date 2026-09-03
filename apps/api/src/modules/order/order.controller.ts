@@ -127,6 +127,15 @@ export class OrderController {
     return this.orderService.findReadyForPickupByBranch(req.user.branchId);
   }
 
+  @Get('pending-cash')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER, UserRole.WAITER)
+  @ApiOperation({ summary: 'Get held orders awaiting cash confirmation at the counter' })
+  @ApiResponse({ status: 200, description: 'Pending cash orders list.' })
+  async findPendingCash(@Request() req: any) {
+    return this.orderService.findPendingCashByBranch(req.user.branchId);
+  }
+
   @Get('tab/:tabId')
   @ApiOperation({ summary: 'Get all orders for a specific tab' })
   @ApiParam({

@@ -921,6 +921,15 @@ export class OrderService {
     return data;
   }
 
+  async findPendingCashByBranch(branchId: string) {
+    const { data } = await this.findGroupedOrdersByBranch(
+      branchId,
+      [OrderStatus.PENDING_PAYMENT_APPROVAL],
+      'created_at',
+    );
+    return data;
+  }
+
   async expireTimers() {
     const now = new Date();
     const expired = await this.orderRepository.find({
