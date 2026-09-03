@@ -27,8 +27,6 @@ import { ReceiptService } from './receipt.service';
 import { CloudinaryService } from '../../cloudinary/cloudinary.service';
 import { RealtimeService } from '../gateway/realtime.service';
 import { getPublicServer } from '../gateway/gateway.constants';
-import { Department } from '../department/entities/department.entity';
-import { OrderService } from '../order/order.service';
 
 @Injectable()
 export class BillService {
@@ -49,15 +47,12 @@ export class BillService {
     private branchRepository: Repository<Branch>,
     @InjectRepository(Business)
     private businessRepository: Repository<Business>,
-    @InjectRepository(Department)
-    private departmentRepository: Repository<Department>,
     @Inject(DataSource)
     private dataSource: DataSource,
     private ingredientService: IngredientService,
     private receiptService: ReceiptService,
     private cloudinaryService: CloudinaryService,
     private realtimeService: RealtimeService,
-    private orderService: OrderService,
   ) {}
 
   async generateBill(
@@ -485,49 +480,9 @@ export class BillService {
         idempotency_key: `cash-confirm-${tabId}`,
       });
     }
-
-    // After processPayment, held takeaway orders are now PENDING_SUPERVISOR_APPROVAL.
-    // Auto-approve them so the supervisor's single action releases the order to the kitchen.
-    const heldOrders = await this.orderRepository.find({
-      where: { tab_id: tabId, order_status: OrderStatus.PENDING_SUPERVISOR_APPROVAL },
-    });
-
-    let approvedCount = 0;
-    if (heldOrders.length > 0) {
-      const branch = await this.branchRepository.findOne({
-        where: { id: branchId },
-      });
-      const dept = await this.departmentRepository.findOne({
-        where: { branch_id: branchId },
-      });
-      const settings = (branch?.settings as any) || {};
-      const prep =
-        Number(settings?.takeaway_estimated_prep_seconds) > 0
-          ? Number(settings.takeaway_estimated_prep_seconds)
-          : 600;
-
-      if (dept) {
-        for (const order of heldOrders) {
-          try {
-            await this.orderService.approve(
-              order.id,
-              userId,
-              {
-                department: dept.id,
-                estimated_preparation_time_seconds: prep,
-              },
-              branchId,
-            );
-            approvedCount++;
-          } catch (err) {
-            console.error(
-              `confirmCashPayment: failed to approve order ${order.id}:`,
-              err instanceof Error ? err.message : String(err),
-            );
-          }
-        }
-      }
-    }
+    // processPayment releases held takeaway orders to PENDING_SUPERVISOR_APPROVAL,
+    // so they land back in the supervisor's Pending queue for manual approval
+    // (department + prep time) before they can reach the kitchen.
 
     const refreshed = await this.billRepository.findOne({
       where: { tab_id: tabId },
@@ -538,12 +493,8 @@ export class BillService {
       tab_id: tabId,
       payment_status: refreshed?.payment_status,
       payment_method: refreshed?.payment_method,
-      approved_orders: approvedCount,
-      requires_manual_approval: Math.max(0, heldOrders.length - approvedCount),
       message:
-        approvedCount === heldOrders.length
-          ? 'Cash confirmed and order released to kitchen'
-          : 'Cash confirmed; some orders need manual supervisor approval (no department configured)',
+        'Cash confirmed - order returned to pending for supervisor approval',
     };
   }
 
