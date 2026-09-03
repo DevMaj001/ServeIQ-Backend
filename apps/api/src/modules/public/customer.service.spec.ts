@@ -12,6 +12,7 @@ import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Order } from '../order/entities/order.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { Review } from '../review/entities/review.entity';
+import { Bill } from '../bill/entities/bill.entity';
 import { TrackingService } from '../tracking/tracking.service';
 import { RealtimeService } from '../gateway/realtime.service';
 import { DataSource } from 'typeorm';
@@ -48,6 +49,7 @@ describe('CustomerService.submitReview', () => {
         { provide: getRepositoryToken(Order), useValue: { find: jest.fn() } },
         { provide: getRepositoryToken(Branch), useValue: branchRepo },
         { provide: getRepositoryToken(Review), useValue: reviewRepo },
+        { provide: getRepositoryToken(Bill), useValue: { find: jest.fn() } },
         { provide: DataSource, useValue: {} },
         { provide: TrackingService, useValue: { generateUniqueCode: jest.fn() } },
         { provide: RealtimeService, useValue: {} },
