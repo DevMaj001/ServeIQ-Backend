@@ -663,6 +663,8 @@ export class BillService {
     if (!tab) throw new NotFoundException('Tab not found');
     if (tab.branch_id !== branchId)
       throw new ForbiddenException('Tab does not belong to your branch');
+    if (tab.tab_type === 'takeaway')
+      throw new BadRequestException('Split billing is not available for takeaway orders');
 
     const orders = await this.orderRepository.find({
       where: { tab_id: tabId },
@@ -727,6 +729,8 @@ export class BillService {
     if (!tab) throw new NotFoundException('Tab not found');
     if (tab.branch_id !== branchId)
       throw new ForbiddenException('Tab does not belong to your branch');
+    if (tab.tab_type === 'takeaway')
+      throw new BadRequestException('Split billing is not available for takeaway orders');
 
     const allOrders = await this.orderRepository.find({
       where: { tab_id: tabId },
@@ -790,6 +794,8 @@ export class BillService {
     if (!tab) throw new NotFoundException('Tab not found');
     if (tab.branch_id !== branchId)
       throw new ForbiddenException('Tab does not belong to your branch');
+    if (tab.tab_type === 'takeaway')
+      throw new BadRequestException('Split billing is not available for takeaway orders');
 
     const allOrders = await this.orderRepository.find({
       where: { tab_id: tabId },
