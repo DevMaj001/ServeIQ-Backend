@@ -6,13 +6,14 @@ import {
   Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, In } from 'typeorm';
+import { Repository, DataSource, In, Not, IsNull } from 'typeorm';
 import { Tab } from '../tab/entities/tab.entity';
 import { Order } from '../order/entities/order.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Table } from '../table/entities/table.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { Review } from '../review/entities/review.entity';
+import { Bill } from '../bill/entities/bill.entity';
 import { TrackingService } from '../tracking/tracking.service';
 import { RealtimeService } from '../gateway/realtime.service';
 import { TabType, FulfillmentType, OrderStatus } from '../../common/shared';
@@ -32,6 +33,8 @@ export class CustomerService {
     private branchRepo: Repository<Branch>,
     @InjectRepository(Review)
     private reviewRepo: Repository<Review>,
+    @InjectRepository(Bill)
+    private billRepo: Repository<Bill>,
     @Inject(DataSource)
     private dataSource: DataSource,
     private trackingService: TrackingService,
@@ -336,7 +339,7 @@ export class CustomerService {
       order: { created_at: 'ASC' },
     });
 
-    return {
+    const base = {
       id: tab.id,
       table_id: tab.table_id,
       status: tab.status,
@@ -358,5 +361,33 @@ export class CustomerService {
         created_at: o.created_at,
       })),
     };
+
+    // Include split payment progress so a self-service dine-in customer can see
+    // how much of the bill has been settled across guests. Takeaway never
+    // splits, but returning it harmlessly for dine-in is what the UI needs.
+    if (tab.tab_type !== 'takeaway') {
+      const splits = await this.billRepo.find({
+        where: { tab_id: tabId, split_group: Not(IsNull()), voided_at: IsNull() },
+        order: { sequence: 'ASC' },
+      });
+      if (splits.length > 0) {
+        const paid = splits.filter((b) => b.paid_at);
+        const paidKobo = paid.reduce((s, b) => s + (b.payment_amount_kobo ?? b.total_kobo ?? 0), 0);
+        const sumKobo = splits.reduce((s, b) => s + (b.total_kobo ?? 0), 0);
+        return {
+          ...base,
+          split_payment: {
+            total_guests: splits.length,
+            paid_guests: paid.length,
+            total_kobo: sumKobo,
+            paid_kobo: paidKobo,
+            remaining_kobo: Math.max(0, sumKobo - paidKobo),
+            all_paid: paid.length === splits.length && splits.length > 0,
+          },
+        };
+      }
+    }
+
+    return base;
   }
 }

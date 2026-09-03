@@ -12,6 +12,7 @@ import { Table } from '../table/entities/table.entity';
 import { Order } from '../order/entities/order.entity';
 import { Review } from '../review/entities/review.entity';
 import { Business } from '../business/entities/business.entity';
+import { Bill } from '../bill/entities/bill.entity';
 import { TrackingModule } from '../tracking/tracking.module';
 
 @Module({
@@ -25,6 +26,7 @@ import { TrackingModule } from '../tracking/tracking.module';
       Order,
       Review,
       Business,
+      Bill,
     ]),
     TrackingModule,
   ],
