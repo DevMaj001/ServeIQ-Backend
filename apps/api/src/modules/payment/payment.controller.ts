@@ -198,6 +198,20 @@ export class PaymentController {
       };
     }
 
+    // Idempotency: if this tab already has a pending-cash request, return the
+    // current state instead of re-creating/re-flipping — prevents a customer
+    // spamming the button from stacking up duplicate supervisor requests.
+    if (existingBill?.payment_status === 'pending_cash' && !existingBill.voided_at) {
+      return {
+        tab_id: tab.id,
+        payment_status: existingBill.payment_status,
+        payment_method: existingBill.payment_method,
+        amount_kobo: existingBill.total_kobo,
+        amount_formatted: `₦${(existingBill.total_kobo / 100).toFixed(2)}`,
+        message: 'Cash payment request already awaiting confirmation',
+      };
+    }
+
     let bill = existingBill;
     if (!bill) {
       const paymentReference = `PAY-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;

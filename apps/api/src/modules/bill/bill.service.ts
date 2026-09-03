@@ -498,6 +498,76 @@ export class BillService {
     };
   }
 
+  /**
+   * Supervisor removes a pending-cash request (e.g. customer abandoned the order
+   * or spammed the cash button). Voids the awaiting-cash bill and releases any
+   * orders held in PENDING_PAYMENT_APPROVAL back to PENDING_SUPERVISOR_APPROVAL,
+   * leaving the tab open so the customer can re-pay another way. Idempotent: a
+   * second call for an already-voided/paid request is a safe no-op.
+   */
+  async removeCashRequest(
+    tabId: string,
+    branchId: string,
+    userId: string,
+  ) {
+    const tab = await this.tabRepository.findOne({ where: { id: tabId } });
+    if (!tab) throw new NotFoundException('Tab not found');
+    if (tab.branch_id !== branchId)
+      throw new ForbiddenException('Tab does not belong to your branch');
+    if (tab.status === 'paid')
+      throw new BadRequestException('Tab is already paid');
+
+    const bill = await this.billRepository.findOne({
+      where: { tab_id: tabId, voided_at: IsNull() },
+      order: { created_at: 'DESC' },
+      lock: { mode: 'pessimistic_write' },
+    });
+
+    let removed = false;
+    if (bill) {
+      if (bill.paid_at) {
+        throw new BadRequestException(
+          'Payment was already confirmed for this order; use Confirm Cash instead',
+        );
+      }
+      bill.voided_at = new Date();
+      bill.payment_status = 'pending_supervisor_approval';
+      await this.billRepository.save(bill);
+      removed = true;
+    }
+
+    // Release any orders held awaiting cash back to the supervisor approval queue
+    // so they aren't stuck and the tab can be paid another way.
+    const released = await this.orderRepository
+      .createQueryBuilder()
+      .update(Order)
+      .set({ order_status: OrderStatus.PENDING_SUPERVISOR_APPROVAL })
+      .where('tab_id = :tabId', { tabId })
+      .andWhere('order_status = :held', {
+        held: OrderStatus.PENDING_PAYMENT_APPROVAL,
+      })
+      .execute();
+    const releasedCount = released.affected ?? 0;
+
+    removed = removed || releasedCount > 0;
+
+    if (removed) {
+      this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+        type: 'cash_request_removed',
+        tabId,
+        userId,
+      });
+    }
+
+    return {
+      tab_id: tabId,
+      removed,
+      message: removed
+        ? 'Cash payment request removed. Order released back to pending.'
+        : 'No pending cash request found for this order.',
+    };
+  }
+
   private async buildReceiptData(tabId: string) {
     const tab = await this.tabRepository.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
