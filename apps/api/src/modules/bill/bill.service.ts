@@ -520,7 +520,6 @@ export class BillService {
     const bill = await this.billRepository.findOne({
       where: { tab_id: tabId, voided_at: IsNull() },
       order: { created_at: 'DESC' },
-      lock: { mode: 'pessimistic_write' },
     });
 
     let removed = false;
