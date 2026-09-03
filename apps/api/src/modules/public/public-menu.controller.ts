@@ -57,6 +57,10 @@ export class PublicMenuController {
       logo_url: branch.business.logo_url || null,
       brand_primary_color: branch.business.brand_primary_color || null,
       brand_accent_color: branch.business.brand_accent_color || null,
+      tax_rate: Number(branch.business.tax_rate ?? 7.5),
+      service_charge_percent: Number(
+        branch.business.service_charge_percent ?? 10,
+      ),
       items: mapped,
     };
   }
