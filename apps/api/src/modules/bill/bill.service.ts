@@ -530,7 +530,7 @@ export class BillService {
         );
       }
       bill.voided_at = new Date();
-      bill.payment_status = 'pending_supervisor_approval';
+      bill.payment_status = 'voided';
       await this.billRepository.save(bill);
       removed = true;
     }
