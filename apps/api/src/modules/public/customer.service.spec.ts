@@ -11,6 +11,7 @@ import { Table } from '../table/entities/table.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Order } from '../order/entities/order.entity';
 import { Branch } from '../branch/entities/branch.entity';
+import { Business } from '../business/entities/business.entity';
 import { Review } from '../review/entities/review.entity';
 import { Bill } from '../bill/entities/bill.entity';
 import { TrackingService } from '../tracking/tracking.service';
@@ -48,6 +49,10 @@ describe('CustomerService.submitReview', () => {
         },
         { provide: getRepositoryToken(Order), useValue: { find: jest.fn() } },
         { provide: getRepositoryToken(Branch), useValue: branchRepo },
+        {
+          provide: getRepositoryToken(Business),
+          useValue: { findOne: jest.fn() },
+        },
         { provide: getRepositoryToken(Review), useValue: reviewRepo },
         { provide: getRepositoryToken(Bill), useValue: { find: jest.fn() } },
         { provide: DataSource, useValue: {} },

@@ -12,11 +12,17 @@ import { Order } from '../order/entities/order.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Table } from '../table/entities/table.entity';
 import { Branch } from '../branch/entities/branch.entity';
+import { Business } from '../business/entities/business.entity';
 import { Review } from '../review/entities/review.entity';
 import { Bill } from '../bill/entities/bill.entity';
 import { TrackingService } from '../tracking/tracking.service';
 import { RealtimeService } from '../gateway/realtime.service';
-import { TabType, FulfillmentType, OrderStatus } from '../../common/shared';
+import {
+  TabType,
+  FulfillmentType,
+  OrderStatus,
+  isBillable,
+} from '../../common/shared';
 
 @Injectable()
 export class CustomerService {
@@ -31,6 +37,8 @@ export class CustomerService {
     private orderRepo: Repository<Order>,
     @InjectRepository(Branch)
     private branchRepo: Repository<Branch>,
+    @InjectRepository(Business)
+    private businessRepo: Repository<Business>,
     @InjectRepository(Review)
     private reviewRepo: Repository<Review>,
     @InjectRepository(Bill)
@@ -339,6 +347,36 @@ export class CustomerService {
       order: { created_at: 'ASC' },
     });
 
+    const menuItemIds = [...new Set(orders.map((o) => o.menu_item_id).filter(Boolean))];
+    const menuItems = menuItemIds.length
+      ? await this.menuItemRepo.find({ where: { id: In(menuItemIds) } })
+      : [];
+    const menuMap = new Map(menuItems.map((m) => [m.id, m]));
+
+    // Match the bill exactly: excluded (declined/cancelled) orders never count
+    // toward the subtotal, and the total adds service charge + VAT on top.
+    const subtotalKobo = orders
+      .filter((o) => isBillable(o.order_status))
+      .reduce((sum, o) => sum + (o.subtotal_kobo ?? 0), 0);
+
+    const tabBranch = await this.branchRepo.findOne({
+      where: { id: tab.branch_id },
+    });
+    const business = tabBranch
+      ? await this.businessRepo.findOne({
+          where: { id: tabBranch.business_id },
+        })
+      : null;
+    const serviceChargePercent = Number(
+      business?.service_charge_percent ?? 10,
+    );
+    const serviceChargeKobo = Math.round(
+      subtotalKobo * (serviceChargePercent / 100),
+    );
+    const taxRatePercent = Number(business?.tax_rate ?? 7.5);
+    const taxKobo = Math.round(subtotalKobo * (taxRatePercent / 100));
+    const totalKobo = subtotalKobo + serviceChargeKobo + taxKobo;
+
     const base = {
       id: tab.id,
       table_id: tab.table_id,
@@ -349,10 +387,16 @@ export class CustomerService {
       tracking_code: tab.tracking_code,
       tracking_generated_at: tab.tracking_generated_at,
       opened_at: tab.opened_at,
-      total_kobo: orders.reduce((sum, o) => sum + o.subtotal_kobo, 0),
+      total_kobo: totalKobo,
+      subtotal_kobo: subtotalKobo,
+      service_charge_kobo: serviceChargeKobo,
+      tax_kobo: taxKobo,
+      service_charge_percent: serviceChargePercent,
+      tax_rate_percent: taxRatePercent,
       orders: orders.map((o) => ({
         id: o.id,
         menu_item_id: o.menu_item_id,
+        menu_item_name: menuMap.get(o.menu_item_id)?.name || null,
         quantity: o.quantity,
         subtotal_kobo: o.subtotal_kobo,
         order_status: o.order_status,
