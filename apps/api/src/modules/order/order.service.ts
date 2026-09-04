@@ -6,7 +6,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, In, LessThanOrEqual } from 'typeorm';
+import { Repository, DataSource, In, IsNull, LessThanOrEqual } from 'typeorm';
 import { Order } from './entities/order.entity';
 import { Bill } from '../bill/entities/bill.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
@@ -969,7 +969,24 @@ export class OrderService {
       [OrderStatus.PENDING_PAYMENT_APPROVAL],
       'created_at',
     );
-    return data;
+    if (!data || data.length === 0) return data;
+
+    // Only tabs with an active cash-intent request have orders "awaiting cash
+    // confirmation at the counter". Takeaway orders are HELD in
+    // PENDING_PAYMENT_APPROVAL from the moment the customer places them under the
+    // prepay policy — surfacing them all would flag every takeaway order as a
+    // cash payment before the customer has chosen a method. Filter by the bill so
+    // a cash approval only appears once the customer explicitly chooses cash.
+    const tabIds = data.map((g: any) => g.tabId);
+    const cashBills = await this.billRepository.find({
+      where: {
+        tab_id: In(tabIds),
+        payment_status: 'pending_cash',
+        voided_at: IsNull(),
+      },
+    });
+    const cashTabIds = new Set(cashBills.map((b) => b.tab_id));
+    return data.filter((g: any) => cashTabIds.has(g.tabId));
   }
 
   async expireTimers() {

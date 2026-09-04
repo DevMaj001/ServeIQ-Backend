@@ -1,5 +1,6 @@
 import { OrderService } from './order.service';
 import { Bill } from '../bill/entities/bill.entity';
+import { In, IsNull } from 'typeorm';
 import { OrderStatus } from '../../common/shared';
 
 const mockRealtimeService = () => ({
@@ -1029,6 +1030,67 @@ describe('OrderService', () => {
       expect(result.declined_by).toBe('user-1');
       expect(result.decline_reason).toBe('Out of stock');
       expect(auditService.log).toHaveBeenCalled();
+    });
+  });
+
+  describe('findPendingCashByBranch', () => {
+    it('returns only orders whose tab has an active pending-cash bill', async () => {
+      const dataSource = {
+        query: jest.fn().mockResolvedValue([
+          { tabId: 'tab-1', totalKobo: 5000, items: [] },
+          { tabId: 'tab-2', totalKobo: 7000, items: [] },
+        ]),
+      };
+      const billRepository = {
+        find: jest.fn().mockResolvedValue([
+          { tab_id: 'tab-1', payment_status: 'pending_cash', voided_at: null },
+        ]),
+      };
+
+      const service = buildService({ dataSource, billRepository });
+      const result = await service.findPendingCashByBranch('branch-1');
+
+      expect(billRepository.find).toHaveBeenCalledWith({
+        where: {
+          tab_id: In(['tab-1', 'tab-2']),
+          payment_status: 'pending_cash',
+          voided_at: IsNull(),
+        },
+      });
+      expect(result).toHaveLength(1);
+      expect(result[0].tabId).toBe('tab-1');
+    });
+
+    it('returns empty when a takeaway order is held without a cash choice', async () => {
+      const dataSource = {
+        query: jest.fn().mockResolvedValue([
+          { tabId: 'tab-1', totalKobo: 5000, items: [] },
+        ]),
+      };
+      // Customer placed the order but has NOT committed to cash -> no cash bill.
+      const billRepository = {
+        find: jest.fn().mockResolvedValue([]),
+      };
+
+      const service = buildService({ dataSource, billRepository });
+      const result = await service.findPendingCashByBranch('branch-1');
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('returns empty immediately when there are no held orders', async () => {
+      const dataSource = {
+        query: jest.fn().mockResolvedValue([]),
+      };
+      const billRepository = {
+        find: jest.fn(),
+      };
+
+      const service = buildService({ dataSource, billRepository });
+      const result = await service.findPendingCashByBranch('branch-1');
+
+      expect(billRepository.find).not.toHaveBeenCalled();
+      expect(result).toEqual([]);
     });
   });
 

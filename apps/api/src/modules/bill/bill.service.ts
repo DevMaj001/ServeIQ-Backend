@@ -514,20 +514,9 @@ export class BillService {
       removed = true;
     }
 
-    // Release any orders held awaiting cash back to the supervisor approval queue
-    // so they aren't stuck and the tab can be paid another way.
-    const released = await this.orderRepository
-      .createQueryBuilder()
-      .update(Order)
-      .set({ order_status: OrderStatus.PENDING_SUPERVISOR_APPROVAL })
-      .where('tab_id = :tabId', { tabId })
-      .andWhere('order_status = :held', {
-        held: OrderStatus.PENDING_PAYMENT_APPROVAL,
-      })
-      .execute();
-    const releasedCount = released.affected ?? 0;
-
-    removed = removed || releasedCount > 0;
+    // When a cash request is rejected, keep orders in PENDING_PAYMENT_APPROVAL
+    // so the customer can retry with another payment method (transfer/POS).
+    // Do NOT move them to PENDING_SUPERVISOR_APPROVAL.
 
     if (removed) {
       this.realtimeService.emitDashboardUpdate(tab.branch_id, {
@@ -541,7 +530,7 @@ export class BillService {
       tab_id: tabId,
       removed,
       message: removed
-        ? 'Cash payment request removed. Order released back to pending.'
+        ? 'Cash payment request removed. Customer can retry payment.'
         : 'No pending cash request found for this order.',
     };
   }
