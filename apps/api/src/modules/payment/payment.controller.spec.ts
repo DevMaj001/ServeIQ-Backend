@@ -124,6 +124,7 @@ describe('PaymentController', () => {
         tab_id: 'tab-1',
         paid_at: null,
         payment_reference: 'ref-1',
+        total_kobo: 150000,
       });
       tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
       branchRepo.findOne.mockResolvedValue({
@@ -212,6 +213,7 @@ describe('PaymentController', () => {
         tab_id: 'tab-1',
         paid_at: null,
         payment_reference: 'ref-1',
+        total_kobo: 50000,
       });
       tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
       branchRepo.findOne.mockResolvedValue({
@@ -255,6 +257,7 @@ describe('PaymentController', () => {
         tab_id: 'tab-1',
         paid_at: null,
         payment_reference: 'ref-1',
+        total_kobo: 50000,
       });
       tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
       branchRepo.findOne.mockResolvedValue({
@@ -347,6 +350,7 @@ describe('PaymentController', () => {
         tab_id: 'tab-1',
         paid_at: null,
         payment_reference: 'ref-1',
+        total_kobo: 50000,
       });
       tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
       branchRepo.findOne.mockResolvedValue({
@@ -400,6 +404,213 @@ describe('PaymentController', () => {
       await expect(
         controller.opayWebhook(req, wrongSig, payload),
       ).rejects.toThrow('Invalid OPay signature');
+    });
+  });
+
+  describe('monniepointWebhook amount normalization', () => {
+    it('should settle a naira-denominated amount by converting to kobo', async () => {
+      billRepo.findOne.mockResolvedValue({
+        tab_id: 'tab-1',
+        paid_at: null,
+        payment_reference: 'ref-1',
+        total_kobo: 150000,
+      });
+      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
+      branchRepo.findOne.mockResolvedValue({
+        settings: {
+          payment_providers: [
+            {
+              name: 'monniepoint',
+              type: 'webhook',
+              label: 'Moniepoint',
+              verification_method: 'none',
+              config: {},
+            },
+          ],
+        },
+      });
+
+      const result = await controller.monniepointWebhook(mockReq, 'sig', {
+        data: {
+          reference: 'ref-1',
+          amount: 1500,
+          status: 'SUCCESSFUL',
+          terminalId: 'term-1',
+        },
+      });
+      expect(result.status).toBe('processed');
+      expect(billService.processPayment).toHaveBeenCalledWith(
+        'tab-1',
+        'branch-1',
+        'system-webhook',
+        'owner',
+        expect.objectContaining({ amount: 150000 }),
+      );
+    });
+
+    it('should reject an amount that matches neither kobo nor naira', async () => {
+      billRepo.findOne.mockResolvedValue({
+        tab_id: 'tab-1',
+        paid_at: null,
+        payment_reference: 'ref-1',
+        total_kobo: 150000,
+      });
+      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
+      branchRepo.findOne.mockResolvedValue({
+        settings: {
+          payment_providers: [
+            {
+              name: 'monniepoint',
+              type: 'webhook',
+              label: 'Moniepoint',
+              verification_method: 'none',
+              config: {},
+            },
+          ],
+        },
+      });
+
+      const result = await controller.monniepointWebhook(mockReq, 'sig', {
+        data: {
+          reference: 'ref-1',
+          amount: 123,
+          status: 'SUCCESSFUL',
+          terminalId: 'term-1',
+        },
+      });
+      expect(result.error).toBe('Amount mismatch');
+      expect(billService.processPayment).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('monniepointWebhook raw-body HMAC-SHA512 signature', () => {
+    const secret = 'whsec_test';
+    const payload = {
+      data: { reference: 'ref-1', amount: 50000, status: 'SUCCESSFUL', terminalId: 'term-1' },
+    };
+    const rawBody = JSON.stringify(payload);
+    const signBody = (body: string) =>
+      crypto.createHmac('sha512', secret).update(body).digest('hex');
+
+    function configureBranch() {
+      billRepo.findOne.mockResolvedValue({
+        tab_id: 'tab-1',
+        paid_at: null,
+        payment_reference: 'ref-1',
+        total_kobo: 50000,
+      });
+      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
+      branchRepo.findOne.mockResolvedValue({
+        settings: {
+          payment_providers: [
+            {
+              name: 'monniepoint',
+              type: 'webhook',
+              label: 'Moniepoint',
+              verification_method: 'hmac-sha512',
+              config: { webhook_secret: secret },
+            },
+          ],
+        },
+      });
+    }
+
+    it('should accept a valid raw-body HMAC-SHA512 signature', async () => {
+      configureBranch();
+      const req = { rawBody, headers: {} } as any;
+      const result = await controller.monniepointWebhook(
+        req,
+        signBody(rawBody),
+        payload,
+      );
+      expect(result.status).toBe('processed');
+    });
+
+    it('should reject an invalid raw-body signature', async () => {
+      configureBranch();
+      const req = { rawBody, headers: {} } as any;
+      await expect(
+        controller.monniepointWebhook(req, 'wrong-signature', payload),
+      ).rejects.toThrow('Invalid Moniepoint signature');
+    });
+  });
+
+  describe('opayWebhook amount+account fallback', () => {
+    function mockQbReturning(rows: any[]) {
+      const qb: any = {};
+      qb.innerJoin = jest.fn().mockReturnValue(qb);
+      qb.where = jest.fn().mockReturnValue(qb);
+      qb.andWhere = jest.fn().mockReturnValue(qb);
+      qb.orderBy = jest.fn().mockReturnValue(qb);
+      qb.getMany = jest.fn().mockResolvedValue(rows);
+      return qb;
+    }
+
+    it('should settle the single matching unsettled bill by branch + amount', async () => {
+      // Reference lookup finds nothing.
+      billRepo.findOne.mockResolvedValue(null);
+      // Deposit account maps to the branch that configured OPay.
+      branchRepo.find.mockResolvedValue([
+        {
+          id: 'branch-1',
+          settings: {
+            payment_providers: [
+              {
+                name: 'opay',
+                type: 'webhook',
+                label: 'OPay',
+                verification_method: 'rsa',
+                config: {
+                  public_key: 'not-used-due-to-simulate',
+                  account_number: '0123456789',
+                },
+              },
+            ],
+          },
+        },
+      ]);
+      billRepo.createQueryBuilder.mockReturnValue(
+        mockQbReturning([
+          {
+            id: 'bill-fb',
+            tab_id: 'tab-fb',
+            total_kobo: 50000,
+            paid_at: null,
+            voided_at: null,
+          },
+        ]),
+      );
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-fb',
+        branch_id: 'branch-1',
+      });
+      billService.processPayment.mockResolvedValue({});
+
+      const result = await controller.opayWebhook(
+        mockSimReq,
+        'sig',
+        {
+          data: {
+            reference: 'provider-ref-xyz',
+            amount: 500,
+            status: 'SUCCESS',
+            transactionType: 'TRANSFER',
+            account_number: '0123456789',
+          },
+        },
+      );
+      expect(result.status).toBe('processed');
+      expect(billService.processPayment).toHaveBeenCalledWith(
+        'tab-fb',
+        'branch-1',
+        'system-webhook',
+        'owner',
+        expect.objectContaining({
+          method: PaymentMethod.TRANSFER,
+          amount: 50000,
+          idempotency_key: 'opay-provider-ref-xyz',
+        }),
+      );
     });
   });
 });

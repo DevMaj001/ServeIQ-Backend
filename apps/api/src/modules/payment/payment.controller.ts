@@ -282,57 +282,71 @@ export class PaymentController {
   @ApiHeader({
     name: 'x-moniepoint-signature',
     required: true,
-    description: 'HMAC-SHA512 signature',
+    description: 'HMAC signature',
   })
   async monniepointWebhook(
     @Req() req: Request,
     @Headers('x-moniepoint-signature') signature: string,
     @Body() payload: any,
   ) {
-    const { reference, amount, status, terminalId } = payload?.data || payload;
+    const { reference, amount, status, terminalId, account_number } =
+      payload?.data || payload;
     if (!reference || !amount || status !== 'SUCCESSFUL') {
       return { received: true };
     }
 
-    const bill = await this.billRepo.findOne({
-      where: { payment_reference: reference },
+    // Resolve the bill first (reference, else branch-scoped amount). We must
+    // have a real target before enforcing provider config/signature so that
+    // unknown references return gracefully instead of throwing.
+    const resolved = await this.resolveWebhookBill({
+      reference,
+      amount,
+      terminalId,
+      accountNumber: account_number,
+      provider: 'monniepoint',
     });
-    if (!bill) {
+    if (!resolved) {
       return { received: true, error: 'Bill not found' };
     }
+    const { bill, tab, branch } = resolved;
 
-    const tab = await this.tabRepo.findOne({ where: { id: bill.tab_id } });
-    if (!tab) return { received: true, error: 'Tab not found' };
-
-    const branch = await this.branchRepo.findOne({
-      where: { id: tab.branch_id },
-    });
-    const settings = branch?.settings || {};
-    const providerConfig = this.findProviderConfig(settings, 'monniepoint');
-
+    const providerConfig = branch
+      ? this.findProviderConfig(branch.settings, 'monniepoint')
+      : null;
     const isTestSimulation = this.isTestSimulation(req);
-
-    if (!isTestSimulation && providerConfig?.verification_method === 'hmac-sha512') {
-      const secret = providerConfig.config.webhook_secret || providerConfig.config.secret;
-      if (!secret) {
-        throw new ForbiddenException('Moniepoint webhook secret not configured');
-      }
-      if (!this.verifyHmacSignature(payload, signature, secret)) {
-        throw new ForbiddenException('Invalid Moniepoint signature');
-      }
-    }
 
     if (!isTestSimulation && !providerConfig) {
       throw new ForbiddenException('Moniepoint webhook not configured');
     }
 
+    if (
+      !isTestSimulation &&
+      providerConfig?.verification_method === 'hmac-sha512'
+    ) {
+      const secret =
+        providerConfig.config.webhook_secret || providerConfig.config.secret;
+      if (!secret) {
+        throw new ForbiddenException('Moniepoint webhook secret not configured');
+      }
+      if (!this.verifyMoniepointSignature(req, payload, signature, secret)) {
+        throw new ForbiddenException('Invalid Moniepoint signature');
+      }
+    }
+
     if (bill.paid_at) return { received: true, status: 'already_paid' };
+
+    // Normalize the provider's amount (naira or kobo) to kobo against the
+    // bill's known total before settling.
+    const amountKobo = this.normalizeAmountToKobo(amount, bill.total_kobo);
+    if (amountKobo === null) {
+      return { received: true, error: 'Amount mismatch' };
+    }
 
     return this.routeWebhookPayment({
       bill,
       tab,
       reference,
-      amount,
+      amount: amountKobo,
       method: PaymentMethod.POS,
       terminalId,
       idempotencyKey: `monniepoint-${reference}`,
@@ -352,28 +366,26 @@ export class PaymentController {
     @Headers('x-opay-signature') signature: string,
     @Body() payload: any,
   ) {
-    const { reference, amount, status, transactionType } =
+    const { reference, amount, status, transactionType, account_number } =
       payload?.data || payload;
     if (!reference || !amount || status !== 'SUCCESS') {
       return { received: true };
     }
 
-    const bill = await this.billRepo.findOne({
-      where: { payment_reference: reference },
+    const resolved = await this.resolveWebhookBill({
+      reference,
+      amount,
+      accountNumber: account_number,
+      provider: 'opay',
     });
-    if (!bill) {
+    if (!resolved) {
       return { received: true, error: 'Bill not found' };
     }
+    const { bill, tab, branch } = resolved;
 
-    const tab = await this.tabRepo.findOne({ where: { id: bill.tab_id } });
-    if (!tab) return { received: true, error: 'Tab not found' };
-
-    const branch = await this.branchRepo.findOne({
-      where: { id: tab.branch_id },
-    });
-    const settings = branch?.settings || {};
-    const providerConfig = this.findProviderConfig(settings, 'opay');
-
+    const providerConfig = branch
+      ? this.findProviderConfig(branch.settings, 'opay')
+      : null;
     const isTestSimulation = this.isTestSimulation(req);
 
     if (
@@ -403,13 +415,18 @@ export class PaymentController {
 
     if (bill.paid_at) return { received: true, status: 'already_paid' };
 
+    const amountKobo = this.normalizeAmountToKobo(amount, bill.total_kobo);
+    if (amountKobo === null) {
+      return { received: true, error: 'Amount mismatch' };
+    }
+
     const method =
       transactionType === 'POS' ? PaymentMethod.POS : PaymentMethod.TRANSFER;
     return this.routeWebhookPayment({
       bill,
       tab,
       reference,
-      amount,
+      amount: amountKobo,
       method,
       terminalId: undefined,
       idempotencyKey: `opay-${reference}`,
@@ -478,19 +495,181 @@ export class PaymentController {
     return providers.find((p: any) => p.name === providerName) || null;
   }
 
-  private verifyHmacSignature(
+  private safeEqual(a: string, b: string): boolean {
+    const ab = Buffer.from(a || '');
+    const bb = Buffer.from(b || '');
+    if (ab.length !== bb.length) return false;
+    return crypto.timingSafeEqual(ab, bb);
+  }
+
+  /** Verify a Moniepoint webhook signature against a raw body (not re-serialized
+   *  JSON) so the digest matches exactly what the provider signed. Accepts both
+   *  the simple HMAC-SHA512(hex) over the raw body and Moniepoint's documented
+   *  HMAC-SHA256(base64) over `${webhookId}__${timestamp}__${rawBody}`, depending
+   *  on which dashboard/integration is used. */
+  private verifyMoniepointSignature(
+    req: Request,
     payload: any,
     signature: string,
     secret: string,
   ): boolean {
-    const expected = crypto
+    const sig =
+      signature || String(req.headers['moniepoint-webhook-signature'] || '');
+    if (!sig) return false;
+    const rawBody: Buffer = (req as any).rawBody
+      ? Buffer.from((req as any).rawBody)
+      : Buffer.from(JSON.stringify(payload));
+
+    const hmacSha512 = crypto
       .createHmac('sha512', secret)
-      .update(JSON.stringify(payload))
+      .update(rawBody)
       .digest('hex');
-    const sigBuf = Buffer.from(signature || '');
-    const expBuf = Buffer.from(expected);
-    if (sigBuf.length !== expBuf.length) return false;
-    return crypto.timingSafeEqual(sigBuf, expBuf);
+    if (this.safeEqual(sig.replace(/^sha512=/i, ''), hmacSha512)) return true;
+
+    const webhookId = req.headers['moniepoint-webhook-id'];
+    const timestamp = req.headers['moniepoint-webhook-timestamp'];
+    if (webhookId && timestamp) {
+      const signed = `${webhookId}__${timestamp}__${rawBody.toString('utf8')}`;
+      const hmacSha256 = crypto
+        .createHmac('sha256', secret)
+        .update(signed)
+        .digest('base64');
+      if (this.safeEqual(sig, hmacSha256)) return true;
+    }
+    return false;
+  }
+
+  /** Convert a provider webhook amount (naira or kobo) to kobo using the bill's
+   *  known total as ground truth. Returns null when neither interpretation
+   *  matches, which lets callers reject amount mismatches safely. */
+  private normalizeAmountToKobo(
+    amount: any,
+    billTotalKobo: number,
+  ): number | null {
+    const n = Number(amount);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    const asKobo = Math.round(n);
+    const asNairaToKobo = Math.round(n * 100);
+    if (asKobo === billTotalKobo) return asKobo;
+    if (asNairaToKobo === billTotalKobo) return asNairaToKobo;
+    return null;
+  }
+
+  /** Map a deposited account number to the branch that configured it as a
+   *  payment provider (or POS transfer) account. Used to scope transfer
+   *  webhooks to a branch when the provider reference does not match a bill. */
+  private async findBranchByAccount(account: string): Promise<Branch | null> {
+    if (!account) return null;
+    const branches = await this.branchRepo.find();
+    for (const branch of branches) {
+      const providers = Array.isArray(branch.settings?.payment_providers)
+        ? branch.settings.payment_providers
+        : [];
+      for (const p of providers) {
+        const acc =
+          p?.config?.account_number ||
+          p?.config?.accountNumber ||
+          p?.config?.account;
+        if (acc && String(acc) === String(account)) return branch;
+      }
+    }
+    return null;
+  }
+
+  /** Resolve the branch a webhook concerns, preferring explicit identifiers in
+   *  the payload over a reference round-trip: terminal id, then deposit account
+   *  number, then payment reference. Returns null when nothing can be resolved. */
+  private async resolveWebhookBranch(opts: {
+    provider: 'monniepoint' | 'opay';
+    reference?: string;
+    terminalId?: string;
+    accountNumber?: string;
+  }): Promise<Branch | null> {
+    if (opts.terminalId) {
+      const term = await this.posTerminalRepo.findOne({
+        where: { id: opts.terminalId },
+      });
+      if (term) {
+        const b = await this.branchRepo.findOne({
+          where: { id: term.branch_id },
+        });
+        if (b) return b;
+      }
+    }
+    if (opts.accountNumber) {
+      const byAccount = await this.findBranchByAccount(opts.accountNumber);
+      if (byAccount) return byAccount;
+    }
+    if (opts.reference) {
+      const bill = await this.billRepo.findOne({
+        where: { payment_reference: opts.reference },
+      });
+      if (bill) {
+        const tab = await this.tabRepo.findOne({ where: { id: bill.tab_id } });
+        if (tab) {
+          return this.branchRepo.findOne({ where: { id: tab.branch_id } });
+        }
+      }
+    }
+    return null;
+  }
+
+  /** Locate the bill a webhook should settle.
+   *
+   *  Primary path: exact payment_reference match (used when the reference is
+   *  known to the provider, e.g. entered on a POS terminal).
+   *
+   *  Fallback for transfers: the provider sends its own transaction reference,
+   *  so match by branch + exact amount. Only auto-confirms when there is exactly
+   *  one unsettled bill with that total in the branch, avoiding ambiguous or
+   *  incorrect settlements. */
+  private async resolveWebhookBill(opts: {
+    reference?: string;
+    amount: any;
+    provider: 'monniepoint' | 'opay';
+    terminalId?: string;
+    accountNumber?: string;
+  }): Promise<{ bill: Bill; tab: Tab; branch: Branch | null } | null> {
+    if (opts.reference) {
+      const bill = await this.billRepo.findOne({
+        where: { payment_reference: opts.reference },
+      });
+      if (bill) {
+        const tab = await this.tabRepo.findOne({ where: { id: bill.tab_id } });
+        if (tab) {
+          const branch = await this.branchRepo.findOne({
+            where: { id: tab.branch_id },
+          });
+          return { bill, tab, branch };
+        }
+      }
+    }
+
+    const branch = await this.resolveWebhookBranch({
+      provider: opts.provider,
+      reference: opts.reference,
+      terminalId: opts.terminalId,
+      accountNumber: opts.accountNumber,
+    });
+    if (!branch) return null;
+
+    const candidateBills = await this.billRepo
+      .createQueryBuilder('bill')
+      .innerJoin('tabs', 'tab', 'tab.id = bill.tab_id')
+      .where('tab.branch_id = :branchId', { branchId: branch.id })
+      .andWhere('bill.voided_at IS NULL')
+      .andWhere('bill.paid_at IS NULL')
+      .orderBy('bill.created_at', 'DESC')
+      .getMany();
+    const matches = candidateBills.filter(
+      (c) => this.normalizeAmountToKobo(opts.amount, c.total_kobo) !== null,
+    );
+    if (matches.length !== 1) return null;
+
+    const bill = matches[0];
+    const tab = await this.tabRepo.findOne({ where: { id: bill.tab_id } });
+    if (!tab) return null;
+    return { bill, tab, branch };
   }
 
   private verifyRsaSignature(
