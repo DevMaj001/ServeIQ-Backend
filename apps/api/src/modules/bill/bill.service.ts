@@ -823,6 +823,21 @@ export class BillService {
         ? mainBill.total_kobo
         : subtotalKobo;
 
+    // Root-cause guard: only ONE split plan may be live on a tab at a time.
+    // Opening the split screen / creating a plan must never leave a previous
+    // unpaid plan behind — otherwise buildReceiptData sums ALL non-voided plans
+    // and inflates the bill. Void any prior unpaid, non-voided split-group bills
+    // before seeding the new plan. Paid shares are untouched (real money).
+    await this.billRepository
+      .createQueryBuilder()
+      .update(Bill)
+      .set({ voided_at: new Date() })
+      .where('tab_id = :tabId', { tabId })
+      .andWhere('split_group IS NOT NULL')
+      .andWhere('paid_at IS NULL')
+      .andWhere('voided_at IS NULL')
+      .execute();
+
     const splitGroup = `plan_${Date.now()}_${tabId.slice(0, 8)}`;
     const bills = [];
     const allocationTotals: { alloc: any; baseKobo: number }[] = [];
