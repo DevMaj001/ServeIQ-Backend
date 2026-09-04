@@ -206,26 +206,13 @@ export class SyncService {
             terminal_id: payload.terminal_id,
             reference: payload.reference,
           };
-          if (payload.bill_id && payload.tab_id) {
-            // A split (per-guest) payment: settle only that split bill so the
-            // tab stays open until every guest's share has been collected.
-            await this.billService.processSplitPayment(
-              payload.tab_id,
-              payload.bill_id,
-              payload.branch_id || branch_id,
-              'offline-sync',
-              'owner',
-              opts,
-            );
-          } else {
-            await this.billService.processPayment(
-              payload.tab_id,
-              payload.branch_id || branch_id,
-              'offline-sync',
-              'owner',
-              opts,
-            );
-          }
+          await this.billService.processPayment(
+            payload.tab_id,
+            payload.branch_id || branch_id,
+            'offline-sync',
+            'owner',
+            opts,
+          );
           break;
         }
         default:

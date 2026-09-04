@@ -427,14 +427,10 @@ export class PaymentController {
     return req.headers['x-simulate'] === '1';
   }
 
-  /** Route an already-verified webhook payment to the correct backend path.
+  /** Route an already-verified webhook payment to the bill settlement path.
    *
-   *  Webhooks are naturally partial: providers report only what this guest
-   *  was charged. A reference pointing at a split row must settle that single
-   *  share (processSplitPayment) rather than the tab's whole bill; routing it
-   *  through the wholesale processPayment would hit its underpayment guard and
-   *  fail every split card/transfer. Plain (non-split) references keep the
-   *  existing wholesale behaviour. */
+   *  Every webhook settles the tab's single full-tab bill (processPayment).
+   *  Split-bill routing was removed with the split-billing feature. */
   private async routeWebhookPayment(params: {
     bill: Bill;
     tab: Tab;
@@ -462,24 +458,13 @@ export class PaymentController {
       idempotency_key: idempotencyKey,
     };
 
-    if (bill.split_group) {
-      await this.billService.processSplitPayment(
-        tab.id,
-        bill.id,
-        tab.branch_id,
-        'system-webhook',
-        'owner',
-        dto,
-      );
-    } else {
-      await this.billService.processPayment(
-        tab.id,
-        tab.branch_id,
-        'system-webhook',
-        'owner',
-        dto,
-      );
-    }
+    await this.billService.processPayment(
+      tab.id,
+      tab.branch_id,
+      'system-webhook',
+      'owner',
+      dto,
+    );
 
     return { received: true, status: 'processed' };
   }

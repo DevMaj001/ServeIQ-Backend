@@ -279,13 +279,6 @@ describe('BillService — security / data isolation', () => {
       expect(receiptService.generatePdf).not.toHaveBeenCalled();
     });
 
-    it('blocks getSplitBills for a tab from another branch', async () => {
-      const { service } = await buildService({ tab: foreignTab });
-      await expect(service.getSplitBills('tab-1', 'branch-A')).rejects.toThrow(
-        ForbiddenException,
-      );
-    });
-
     it('does not leak tab existence via timing (still rejects foreign branch)', async () => {
       const { service, billRepo, orderRepo } = await buildService({
         tab: foreignTab,
@@ -312,36 +305,6 @@ describe('BillService — security / data isolation', () => {
           amount: 100,
         } as any),
       ).rejects.toThrow('Tab does not belong to your branch');
-    });
-
-    it('blocks splitEvenly on a tab from another branch', async () => {
-      const { service } = await buildService({ tab: foreignTab });
-      await expect(
-        service.splitEvenly('tab-1', 'branch-A', 'owner-1', 'owner', 2),
-      ).rejects.toThrow(ForbiddenException);
-    });
-
-    it('blocks splitByItem on a tab from another branch', async () => {
-      const { service } = await buildService({ tab: foreignTab });
-      await expect(
-        service.splitByItem('tab-1', 'branch-A', 'owner-1', 'owner', [
-          { order_ids: ['o1'] },
-        ]),
-      ).rejects.toThrow(ForbiddenException);
-    });
-
-    it('blocks processSplitPayment on a tab from another branch', async () => {
-      const { service } = await buildService({ tab: foreignTab });
-      await expect(
-        service.processSplitPayment(
-          'tab-1',
-          'bill-1',
-          'branch-A',
-          'user-1',
-          'owner',
-          { amount: 100 } as any,
-        ),
-      ).rejects.toThrow(ForbiddenException);
     });
   });
 
