@@ -15,12 +15,11 @@ import {
 import { Plan } from './entities/plan.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { Business } from '../business/entities/business.entity';
-
-const Paystack = require('paystack');
+import { PaystackClient } from './paystack.client';
 
 @Injectable()
 export class SubscriptionService {
-  private paystack: any;
+  private paystack: PaystackClient | null;
 
   constructor(
     @InjectRepository(Subscription)
@@ -35,7 +34,9 @@ export class SubscriptionService {
   ) {
     const secretKey = this.configService.get<string>('PAYSTACK_SECRET_KEY');
     if (secretKey) {
-      this.paystack = new Paystack(secretKey);
+      this.paystack = new PaystackClient(secretKey);
+    } else {
+      this.paystack = null;
     }
   }
 
@@ -55,7 +56,8 @@ export class SubscriptionService {
   }
 
   async initialize(branchId: string, planId: string) {
-    if (!this.paystack) {
+    const paystack = this.paystack;
+    if (!paystack) {
       throw new BadRequestException(
         'Payment gateway (Paystack) is not configured',
       );
@@ -115,9 +117,7 @@ export class SubscriptionService {
     if (!customerCode) {
       let customerResp;
       try {
-        customerResp = await this.paystack.customer.create({
-          email: customerEmail,
-        });
+        customerResp = await paystack.createCustomer(customerEmail);
       } catch (e) {
         throw new BadRequestException(
           `Paystack customer creation failed: ${e.message}`,
@@ -143,7 +143,7 @@ export class SubscriptionService {
 
     let initializeResp;
     try {
-      initializeResp = await this.paystack.transaction.initialize({
+      initializeResp = await paystack.initializeTransaction({
         amount: plan.price,
         email: customerEmail,
         plan: paystackPlanCode,
@@ -404,17 +404,18 @@ export class SubscriptionService {
     subscription.canceled_at = new Date();
     await this.subscriptionRepo.save(subscription);
 
-    if (subscription.paystack_subscription_code) {
+    const paystack = this.paystack;
+    if (paystack && subscription.paystack_subscription_code) {
       try {
-        const sub = await this.paystack.subscription.get(
+        const sub = await paystack.getSubscription(
           subscription.paystack_subscription_code,
         );
         const token = sub?.data?.email_token;
         if (token) {
-          await this.paystack.subscription.disable({
-            code: subscription.paystack_subscription_code,
+          await paystack.disableSubscription(
+            subscription.paystack_subscription_code,
             token,
-          });
+          );
         }
       } catch {
         // if Paystack disable fails, local cancel is still recorded
