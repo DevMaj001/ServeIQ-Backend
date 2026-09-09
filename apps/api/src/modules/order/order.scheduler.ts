@@ -48,21 +48,37 @@ export class OrderScheduler {
     const tabs = await this.tabRepo.find({ where: { id: In(tabIds) } });
     const tabById = new Map(tabs.map((t) => [t.id, t]));
 
+    // Group expired orders by tab and send one notification per tab
+    const byTab = new Map<string, Order[]>();
     for (const order of expired) {
-      const tab = tabById.get(order.tab_id);
+      const arr = byTab.get(order.tab_id) ?? [];
+      arr.push(order);
+      byTab.set(order.tab_id, arr);
+    }
+
+    for (const [tabId, orders] of byTab) {
+      const tab = tabById.get(tabId);
       if (!tab) continue;
 
+      const orderIds = orders.map(o => o.id);
+      const count = orders.length;
       await this.notificationService.create({
         branch_id: tab.branch_id,
         user_id: tab.waiter_id ?? null,
         type: NotificationType.ORDER_READY,
-        title: 'Order Ready for Pickup',
-        message: `Order ${order.id.slice(0, 8)}… is ready`,
-        data: { order_id: order.id, tab_id: order.tab_id },
-      });
+        title: 'Orders Ready for Pickup',
+        message: count === 1
+          ? `Order ${orders[0].id.slice(0, 8)}… is ready`
+          : `${count} orders ready (${orderIds.map(id => id.slice(0, 8)).join(', ')})`,
+        data: {
+          order_ids: orderIds,
+          tab_id,
+          count,
+        },
+      );
 
       this.logger.log(
-        `Order ${order.id}: timer expired → ready_for_pickup, notification sent`,
+        `Tab ${tabId}: ${count} orders timer expired → ready_for_pickup`,
       );
     }
   }

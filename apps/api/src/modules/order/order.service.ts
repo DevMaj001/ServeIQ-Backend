@@ -54,7 +54,55 @@ export class OrderService {
     private auditService: AuditService,
     private notificationService: NotificationService,
     private realtimeService: RealtimeService,
-  ) {}
+  ) {
+    // In-memory buffer for batching order_ready notifications per tab
+    this.orderReadyBuffer = new Map<string, { orders: Order[]; timeout: NodeJS.Timeout }>();
+  }
+
+  private orderReadyBuffer: Map<string, { orders: Order[]; timeout: NodeJS.Timeout }>;
+
+  private flushOrderReadyBuffer(tabId: string) {
+    const entry = this.orderReadyBuffer.get(tabId);
+    if (!entry || entry.orders.length === 0) return;
+
+    const orders = entry.orders;
+    this.orderReadyBuffer.delete(tabId);
+    if (entry.timeout) clearTimeout(entry.timeout);
+
+    const tabIdStr = tabId;
+    this.sendOrderReadyBatch(orders);
+  }
+
+  private sendOrderReadyBatch(orders: Order[]) {
+    if (orders.length === 0) return;
+    const firstOrder = orders[0];
+    this.tabRepository.findOne({ where: { id: firstOrder.tab_id } }).then((tab) => {
+      if (!tab) return;
+      const orderIds = orders.map(o => o.id);
+      const count = orders.length;
+      this.notificationService.create({
+        branch_id: tab.branch_id,
+        user_id: tab.waiter_id ?? null,
+        type: NotificationType.ORDER_READY,
+        title: 'Orders Ready',
+        message: count === 1
+          ? `Order ${firstOrder.id.slice(0, 8)}… is ready for pickup.`
+          : `${count} orders ready for pickup (${orderIds.map(id => id.slice(0, 8)).join(', ')}).`,
+        data: {
+          order_ids: orderIds,
+          tab_id: firstOrder.tab_id,
+          tracking_code: tab.tracking_code,
+          count,
+        },
+      });
+      this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+        type: 'order_ready_batch',
+        orders: orderIds,
+        count,
+        tab_id: firstOrder.tab_id,
+      });
+    });
+  }
 
   async addOrderItems(
     tabId: string,
@@ -795,22 +843,11 @@ export class OrderService {
         return order;
       })
       .then(async (savedOrder) => {
-        const orderTab = await this.tabRepository.findOne({
+        const tab = await this.tabRepository.findOne({
           where: { id: savedOrder.tab_id },
         });
-        await this.notificationService.create({
-          branch_id: tab.branch_id,
-          user_id: orderTab?.waiter_id ?? null,
-          type: NotificationType.ORDER_READY,
-          title: 'Order Ready',
-          message: `Order ${savedOrder.id.slice(0, 8)}… is ready for pickup.`,
-          data: {
-            order_id: savedOrder.id,
-            tab_id: savedOrder.tab_id,
-            tracking_code: orderTab?.tracking_code,
-          },
-        });
 
+        // Emit realtime events immediately
         this.realtimeService.emitOrderUpdated(tab.branch_id, savedOrder.id, {
           order_status: savedOrder.order_status,
         });
@@ -820,10 +857,19 @@ export class OrderService {
           savedOrder.order_status,
           savedOrder.tab_id,
         );
-        this.realtimeService.emitDashboardUpdate(tab.branch_id, {
-          type: 'order_ready',
-          order: savedOrder,
-        });
+
+        // Buffer notification per tab (flush after 5s)
+        const tabId = savedOrder.tab_id;
+        const entry = this.orderReadyBuffer.get(tabId);
+        if (!entry) {
+          this.orderReadyBuffer.set(tabId, {
+            orders: [savedOrder],
+            timeout: setTimeout(() => this.flushOrderReadyBuffer(tabId), 5000),
+          });
+        } else {
+          entry.orders.push(savedOrder);
+        }
+
         return savedOrder;
       });
   }
