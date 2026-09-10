@@ -115,9 +115,7 @@ export class PaymentController {
           where: { id: tabBranch.business_id },
         })
       : null;
-    const serviceChargePercent = Number(
-      business?.service_charge_percent ?? 10,
-    );
+    const serviceChargePercent = Number(business?.service_charge_percent ?? 10);
     const serviceChargeKobo = Math.round(
       subtotalKobo * (serviceChargePercent / 100),
     );
@@ -155,11 +153,26 @@ export class PaymentController {
     const settings = branch?.settings || {};
     const paymentMethods = buildPaymentMethods(activeTerminals, settings);
 
+    const currency = business?.currency ?? 'NGN';
+    const symbolMap: Record<string, string> = {
+      NGN: '\u20A6',
+      USD: '$',
+      GBP: '\u00A3',
+      EUR: '\u20AC',
+      GHS: 'GH\u00A2',
+      KES: 'KSh',
+      ZAR: 'R',
+      XOF: 'CFA',
+    };
+
     return {
       bill_id: bill.id,
       tab_id: tab.id,
       amount_kobo: bill.total_kobo,
-      amount_formatted: `₦${(bill.total_kobo / 100).toFixed(2)}`,
+      amount_formatted: `${symbolMap[currency] ?? currency}${(
+        bill.total_kobo / 100
+      ).toFixed(2)}`,
+      currency,
       payment_reference: bill.payment_reference,
       payment_methods: paymentMethods,
     };
@@ -220,7 +233,10 @@ export class PaymentController {
     // Idempotency: if this tab already has a pending-cash request, return the
     // current state instead of re-creating/re-flipping — prevents a customer
     // spamming the button from stacking up duplicate supervisor requests.
-    if (existingBill?.payment_status === 'pending_cash' && !existingBill.voided_at) {
+    if (
+      existingBill?.payment_status === 'pending_cash' &&
+      !existingBill.voided_at
+    ) {
       return {
         tab_id: tab.id,
         payment_status: existingBill.payment_status,
@@ -326,7 +342,9 @@ export class PaymentController {
       const secret =
         providerConfig.config.webhook_secret || providerConfig.config.secret;
       if (!secret) {
-        throw new ForbiddenException('Moniepoint webhook secret not configured');
+        throw new ForbiddenException(
+          'Moniepoint webhook secret not configured',
+        );
       }
       if (!this.verifyMoniepointSignature(req, payload, signature, secret)) {
         throw new ForbiddenException('Invalid Moniepoint signature');
@@ -433,10 +451,10 @@ export class PaymentController {
     });
   }
 
-/** Test mode: a dev-only header that bypasses provider signature
- *  verification so the sandbox "Simulate Payment" works before real
- *  keys are configured. Shared by both webhook paths.
- *  Hard-disabled in production regardless of headers. */
+  /** Test mode: a dev-only header that bypasses provider signature
+   *  verification so the sandbox "Simulate Payment" works before real
+   *  keys are configured. Shared by both webhook paths.
+   *  Hard-disabled in production regardless of headers. */
   private isTestSimulation(req: Request): boolean {
     if (process.env.NODE_ENV === 'production') {
       return false;
@@ -457,15 +475,8 @@ export class PaymentController {
     terminalId?: string;
     idempotencyKey: string;
   }): Promise<{ received: boolean; error?: string; status?: string }> {
-    const {
-      bill,
-      tab,
-      reference,
-      amount,
-      method,
-      terminalId,
-      idempotencyKey,
-    } = params;
+    const { bill, tab, reference, amount, method, terminalId, idempotencyKey } =
+      params;
 
     const dto: ProcessPaymentDto = {
       method,

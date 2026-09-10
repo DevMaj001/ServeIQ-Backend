@@ -297,7 +297,9 @@ export class CustomerService {
 
     const rating = Number(body?.rating);
     if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-      throw new BadRequestException('rating must be an integer between 1 and 5');
+      throw new BadRequestException(
+        'rating must be an integer between 1 and 5',
+      );
     }
 
     const branch = await this.branchRepo.findOne({
@@ -347,7 +349,9 @@ export class CustomerService {
       order: { created_at: 'ASC' },
     });
 
-    const menuItemIds = [...new Set(orders.map((o) => o.menu_item_id).filter(Boolean))];
+    const menuItemIds = [
+      ...new Set(orders.map((o) => o.menu_item_id).filter(Boolean)),
+    ];
     const menuItems = menuItemIds.length
       ? await this.menuItemRepo.find({ where: { id: In(menuItemIds) } })
       : [];
@@ -367,9 +371,7 @@ export class CustomerService {
           where: { id: tabBranch.business_id },
         })
       : null;
-    const serviceChargePercent = Number(
-      business?.service_charge_percent ?? 10,
-    );
+    const serviceChargePercent = Number(business?.service_charge_percent ?? 10);
     const serviceChargeKobo = Math.round(
       subtotalKobo * (serviceChargePercent / 100),
     );
@@ -387,6 +389,7 @@ export class CustomerService {
       tracking_code: tab.tracking_code,
       tracking_generated_at: tab.tracking_generated_at,
       opened_at: tab.opened_at,
+      currency: business?.currency ?? 'NGN',
       total_kobo: totalKobo,
       subtotal_kobo: subtotalKobo,
       service_charge_kobo: serviceChargeKobo,
@@ -417,7 +420,11 @@ export class CustomerService {
     // bogus total (e.g. an earlier ₦37,835) next to a now-smaller order.
     if (tab.tab_type !== 'takeaway') {
       const splits = await this.billRepo.find({
-        where: { tab_id: tabId, split_group: Not(IsNull()), voided_at: IsNull() },
+        where: {
+          tab_id: tabId,
+          split_group: Not(IsNull()),
+          voided_at: IsNull(),
+        },
         order: { sequence: 'ASC' },
       });
       if (splits.length > 0) {
@@ -427,7 +434,10 @@ export class CustomerService {
         const off = Math.abs(sumKobo - orderTotal);
         if (off <= 1 || sumKobo === 0) {
           const paid = splits.filter((b) => b.paid_at);
-          const paidKobo = paid.reduce((s, b) => s + (b.payment_amount_kobo ?? b.total_kobo ?? 0), 0);
+          const paidKobo = paid.reduce(
+            (s, b) => s + (b.payment_amount_kobo ?? b.total_kobo ?? 0),
+            0,
+          );
           return {
             ...base,
             split_payment: {

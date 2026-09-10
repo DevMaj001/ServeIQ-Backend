@@ -1,7 +1,19 @@
-import { Controller, Get, Param, Query, NotFoundException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Query,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { Branch } from '../branch/entities/branch.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Advertisement } from '../advertisement/entities/advertisement.entity';
@@ -57,6 +69,7 @@ export class PublicMenuController {
       logo_url: branch.business.logo_url || null,
       brand_primary_color: branch.business.brand_primary_color || null,
       brand_accent_color: branch.business.brand_accent_color || null,
+      currency: branch.business.currency ?? 'NGN',
       tax_rate: Number(branch.business.tax_rate ?? 7.5),
       service_charge_percent: Number(
         branch.business.service_charge_percent ?? 10,
@@ -102,10 +115,15 @@ export class PublicMenuController {
 
   @Get('tables/:branchId/resolve')
   @ApiOperation({
-    summary: 'Resolve a table number/label to its UUID within a branch (public)',
+    summary:
+      'Resolve a table number/label to its UUID within a branch (public)',
   })
   @ApiParam({ name: 'branchId', description: 'Branch UUID' })
-  @ApiQuery({ name: 'number', required: true, description: 'Table number or label (e.g. "5", "A1", "Table 5")' })
+  @ApiQuery({
+    name: 'number',
+    required: true,
+    description: 'Table number or label (e.g. "5", "A1", "Table 5")',
+  })
   @ApiResponse({ status: 200, description: 'Table found.' })
   @ApiResponse({ status: 404, description: 'Table not found.' })
   async resolveTable(
