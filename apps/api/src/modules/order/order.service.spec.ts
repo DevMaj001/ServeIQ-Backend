@@ -110,8 +110,7 @@ describe('OrderService', () => {
     const notificationService =
       overrides.notificationService ?? mockNotificationService();
     const realtimeService = overrides.realtimeService ?? mockRealtimeService();
-    const billRepository =
-      overrides.billRepository ?? mockBillRepository();
+    const billRepository = overrides.billRepository ?? mockBillRepository();
 
     return new OrderService(
       orderRepo,
@@ -739,7 +738,7 @@ describe('OrderService', () => {
       expect(result.order_status).toBe(OrderStatus.APPROVED);
       expect(result.approved_by).toBe('user-1');
       expect(auditService.log).toHaveBeenCalled();
-        expect(notificationService.create).toHaveBeenCalledWith(
+      expect(notificationService.create).toHaveBeenCalledWith(
         expect.objectContaining({
           message: expect.stringContaining('Tracking: SVQ-ABCD-123'),
         }),
@@ -896,53 +895,63 @@ describe('OrderService', () => {
 
   describe('bump', () => {
     it('bumps a preparing order to ready for pickup and notifies', async () => {
-      const orderRepo = mockOrderRepository();
-      orderRepo.findOne.mockResolvedValue({ id: 'o1', tab_id: 'tab-1' });
+      jest.useFakeTimers();
+      try {
+        const orderRepo = mockOrderRepository();
+        orderRepo.findOne.mockResolvedValue({ id: 'o1', tab_id: 'tab-1' });
 
-      const tabRepo = mockTabRepository();
-      tabRepo.findOne.mockResolvedValue({
-        id: 'tab-1',
-        branch_id: 'branch-1',
-        status: 'open',
-        waiter_id: 'waiter-1',
-        tracking_code: 'SVQ-ABCD-123',
-      });
+        const tabRepo = mockTabRepository();
+        tabRepo.findOne.mockResolvedValue({
+          id: 'tab-1',
+          branch_id: 'branch-1',
+          status: 'open',
+          waiter_id: 'waiter-1',
+          tracking_code: 'SVQ-ABCD-123',
+        });
 
-      const notificationService = mockNotificationService();
+        const notificationService = mockNotificationService();
 
-      const dataSource: any = {
-        transaction: jest.fn(async (cb) => {
-          const m = {
-            getRepository: jest.fn().mockReturnValue({
-              findOne: jest.fn().mockResolvedValue({
-                id: 'o1',
-                tab_id: 'tab-1',
-                order_status: OrderStatus.PREPARING,
+        const dataSource: any = {
+          transaction: jest.fn(async (cb) => {
+            const m = {
+              getRepository: jest.fn().mockReturnValue({
+                findOne: jest.fn().mockResolvedValue({
+                  id: 'o1',
+                  tab_id: 'tab-1',
+                  order_status: OrderStatus.PREPARING,
+                }),
+                save: jest.fn(async (order) => order),
               }),
-              save: jest.fn(async (order) => order),
-            }),
-          };
-          return cb(m);
-        }),
-      };
+            };
+            return cb(m);
+          }),
+        };
 
-      const service = buildService({
-        orderRepository: orderRepo,
-        tabRepository: tabRepo,
-        dataSource,
-        notificationService,
-      });
+        const service = buildService({
+          orderRepository: orderRepo,
+          tabRepository: tabRepo,
+          dataSource,
+          notificationService,
+        });
 
-      const result = await service.bump('o1', 'user-1');
+        const result = await service.bump('o1', 'user-1');
 
-      expect(result.order_status).toBe(OrderStatus.READY_FOR_PICKUP);
-      expect(result.actual_ready_time).toBeInstanceOf(Date);
-      expect(notificationService.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          user_id: 'waiter-1',
-          type: 'order_ready',
-        }),
-      );
+        expect(result.order_status).toBe(OrderStatus.READY_FOR_PICKUP);
+        expect(result.actual_ready_time).toBeInstanceOf(Date);
+
+        await jest.advanceTimersByTimeAsync(5000);
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(notificationService.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            user_id: 'waiter-1',
+            type: 'order_ready',
+          }),
+        );
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('throws when order is already terminal', async () => {
@@ -983,7 +992,6 @@ describe('OrderService', () => {
       );
     });
   });
-
 
   describe('decline', () => {
     it('declines a pending order', async () => {
@@ -1043,7 +1051,11 @@ describe('OrderService', () => {
       };
       const billRepository = {
         find: jest.fn().mockResolvedValue([
-          { tab_id: 'tab-1', payment_status: 'pending_cash', voided_at: null },
+          {
+            tab_id: 'tab-1',
+            payment_status: 'pending_cash',
+            voided_at: null,
+          },
         ]),
       };
 
@@ -1063,9 +1075,9 @@ describe('OrderService', () => {
 
     it('returns empty when a takeaway order is held without a cash choice', async () => {
       const dataSource = {
-        query: jest.fn().mockResolvedValue([
-          { tabId: 'tab-1', totalKobo: 5000, items: [] },
-        ]),
+        query: jest
+          .fn()
+          .mockResolvedValue([{ tabId: 'tab-1', totalKobo: 5000, items: [] }]),
       };
       // Customer placed the order but has NOT committed to cash -> no cash bill.
       const billRepository = {
