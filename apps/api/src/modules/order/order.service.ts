@@ -56,10 +56,16 @@ export class OrderService {
     private realtimeService: RealtimeService,
   ) {
     // In-memory buffer for batching order_ready notifications per tab
-    this.orderReadyBuffer = new Map<string, { orders: Order[]; timeout: NodeJS.Timeout }>();
+    this.orderReadyBuffer = new Map<
+      string,
+      { orders: Order[]; timeout: NodeJS.Timeout }
+    >();
   }
 
-  private orderReadyBuffer: Map<string, { orders: Order[]; timeout: NodeJS.Timeout }>;
+  private orderReadyBuffer: Map<
+    string,
+    { orders: Order[]; timeout: NodeJS.Timeout }
+  >;
 
   private flushOrderReadyBuffer(tabId: string) {
     const entry = this.orderReadyBuffer.get(tabId);
@@ -76,32 +82,35 @@ export class OrderService {
   private sendOrderReadyBatch(orders: Order[]) {
     if (orders.length === 0) return;
     const firstOrder = orders[0];
-    this.tabRepository.findOne({ where: { id: firstOrder.tab_id } }).then((tab) => {
-      if (!tab) return;
-      const orderIds = orders.map(o => o.id);
-      const count = orders.length;
-      this.notificationService.create({
-        branch_id: tab.branch_id,
-        user_id: tab.waiter_id ?? null,
-        type: NotificationType.ORDER_READY,
-        title: 'Orders Ready',
-        message: count === 1
-          ? `Order ${firstOrder.id.slice(0, 8)}… is ready for pickup.`
-          : `${count} orders ready for pickup (${orderIds.map(id => id.slice(0, 8)).join(', ')}).`,
-        data: {
-          order_ids: orderIds,
-          tab_id: firstOrder.tab_id,
-          tracking_code: tab.tracking_code,
+    this.tabRepository
+      .findOne({ where: { id: firstOrder.tab_id } })
+      .then((tab) => {
+        if (!tab) return;
+        const orderIds = orders.map((o) => o.id);
+        const count = orders.length;
+        this.notificationService.create({
+          branch_id: tab.branch_id,
+          user_id: tab.waiter_id ?? null,
+          type: NotificationType.ORDER_READY,
+          title: 'Orders Ready',
+          message:
+            count === 1
+              ? `Order ${firstOrder.id.slice(0, 8)}… is ready for pickup.`
+              : `${count} orders ready for pickup (${orderIds.map((id) => id.slice(0, 8)).join(', ')}).`,
+          data: {
+            order_ids: orderIds,
+            tab_id: firstOrder.tab_id,
+            tracking_code: tab.tracking_code,
+            count,
+          },
+        });
+        this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+          type: 'order_ready_batch',
+          orders: orderIds,
           count,
-        },
+          tab_id: firstOrder.tab_id,
+        });
       });
-      this.realtimeService.emitDashboardUpdate(tab.branch_id, {
-        type: 'order_ready_batch',
-        orders: orderIds,
-        count,
-        tab_id: firstOrder.tab_id,
-      });
-    });
   }
 
   async addOrderItems(
@@ -196,9 +205,7 @@ export class OrderService {
                   .getRepository(Business)
                   .findOne({ where: { id: tabBranch.business_id } })
               : null;
-            const vipPercent = Number(
-              tabBusiness?.vip_surcharge_percent ?? 0,
-            );
+            const vipPercent = Number(tabBusiness?.vip_surcharge_percent ?? 0);
             vipMultiplier = 1 + vipPercent / 100;
           }
         }
@@ -454,8 +461,10 @@ export class OrderService {
           where: { id: tab.branch_id },
         });
         const kdsEnabled =
-          (branch?.settings?.feature_flags as Record<string, boolean> | undefined)
-            ?.kds_enabled === true;
+          (
+            branch?.settings?.feature_flags as
+              Record<string, boolean> | undefined
+          )?.kds_enabled === true;
         order.order_status = kdsEnabled
           ? OrderStatus.ASSIGNED_TO_DEPARTMENT
           : OrderStatus.APPROVED;
@@ -572,12 +581,7 @@ export class OrderService {
       });
   }
 
-  async cancel(
-    id: string,
-    userId: string,
-    reason: string,
-    branchId?: string,
-  ) {
+  async cancel(id: string, userId: string, reason: string, branchId?: string) {
     const { tab } = await this.getTabForOrder(id, branchId);
     const alphaIds = [id].sort();
     return this.dataSource
@@ -846,6 +850,7 @@ export class OrderService {
         const tab = await this.tabRepository.findOne({
           where: { id: savedOrder.tab_id },
         });
+        if (!tab) return savedOrder;
 
         // Emit realtime events immediately
         this.realtimeService.emitOrderUpdated(tab.branch_id, savedOrder.id, {

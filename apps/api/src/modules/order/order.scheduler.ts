@@ -60,19 +60,20 @@ export class OrderScheduler {
       const tab = tabById.get(tabId);
       if (!tab) continue;
 
-      const orderIds = orders.map(o => o.id);
+      const orderIds = orders.map((o) => o.id);
       const count = orders.length;
       await this.notificationService.create({
         branch_id: tab.branch_id,
         user_id: tab.waiter_id ?? null,
         type: NotificationType.ORDER_READY,
         title: 'Orders Ready for Pickup',
-        message: count === 1
-          ? `Order ${orders[0].id.slice(0, 8)}… is ready`
-          : `${count} orders ready (${orderIds.map(id => id.slice(0, 8)).join(', ')})`,
+        message:
+          count === 1
+            ? `Order ${orders[0].id.slice(0, 8)}… is ready`
+            : `${count} orders ready (${orderIds.map((id) => id.slice(0, 8)).join(', ')})`,
         data: {
           order_ids: orderIds,
-          tab_id,
+          tab_id: tabId,
           count,
         },
       });
