@@ -22,10 +22,16 @@ export class NormalizeShiftTemplateDaysOfWeek1819900000000 implements MigrationI
     if (isJson) return;
 
     await queryRunner.query(
+      `ALTER TABLE "shift_templates" ALTER COLUMN "days_of_week" DROP DEFAULT`,
+    );
+    await queryRunner.query(
       `ALTER TABLE "shift_templates"
          ALTER COLUMN "days_of_week" TYPE jsonb
-         USING to_jsonb("days_of_week"),
-       ALTER COLUMN "days_of_week" SET DEFAULT '[]'::jsonb`,
+         USING to_jsonb("days_of_week")`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "shift_templates"
+         ALTER COLUMN "days_of_week" SET DEFAULT '[]'::jsonb`,
     );
   }
 
