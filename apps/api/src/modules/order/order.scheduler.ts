@@ -75,7 +75,7 @@ export class OrderScheduler {
           tab_id,
           count,
         },
-      );
+      });
 
       this.logger.log(
         `Tab ${tabId}: ${count} orders timer expired → ready_for_pickup`,
