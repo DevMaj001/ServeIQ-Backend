@@ -55,7 +55,7 @@ export class SubscriptionService {
     return repo.save(subscription);
   }
 
-  async initialize(branchId: string, planId: string) {
+  async initialize(branchId: string, planId: string, callbackUrl?: string) {
     const paystack = this.paystack;
     if (!paystack) {
       throw new BadRequestException(
@@ -147,6 +147,7 @@ export class SubscriptionService {
         amount: plan.price,
         email: customerEmail,
         plan: paystackPlanCode,
+        ...(callbackUrl ? { callback_url: callbackUrl } : {}),
         channels: [
           'card',
           'bank',
@@ -189,6 +190,79 @@ export class SubscriptionService {
       access_code: initializeResp.data.access_code,
       reference: initializeResp.data.reference,
     };
+  }
+
+  async verifyByReference(branchId: string, reference: string) {
+    const paystack = this.paystack;
+    if (!paystack) {
+      throw new BadRequestException(
+        'Payment gateway (Paystack) is not configured',
+      );
+    }
+
+    let verifyResp;
+    try {
+      verifyResp = await paystack.verifyTransaction(reference);
+    } catch (e) {
+      throw new BadRequestException(
+        `Unable to verify transaction: ${e.message}`,
+      );
+    }
+
+    if (!verifyResp?.status || verifyResp.data?.status !== 'success') {
+      throw new BadRequestException(
+        verifyResp?.data?.status === 'abandoned'
+          ? 'Payment was not completed'
+          : 'Transaction could not be verified as successful',
+      );
+    }
+
+    const data = verifyResp.data;
+    const customerEmail = data.customer?.email;
+    if (!customerEmail) {
+      throw new BadRequestException('Transaction has no customer email');
+    }
+
+    const business = await this.businessRepo.findOne({
+      where: { email: customerEmail },
+    });
+    if (!business) {
+      throw new NotFoundException('No business found for this payment');
+    }
+
+    const branch = await this.branchRepo.findOne({
+      where: { business_id: business.id },
+    });
+    if (!branch) {
+      throw new NotFoundException('No branch found for this payment');
+    }
+
+    let subscription = await this.subscriptionRepo.findOne({
+      where: { branch_id: branch.id },
+    });
+    if (!subscription) {
+      subscription = this.subscriptionRepo.create({
+        branch_id: branch.id,
+        status: SubscriptionStatus.TRIALING,
+      });
+    }
+
+    subscription.status = SubscriptionStatus.ACTIVE;
+    subscription.current_period_start = new Date(
+      this.toDateFromPaystack(data.created_at) ?? Date.now(),
+    );
+    subscription.current_period_end = new Date(
+      this.toDateFromPaystack(data.subscription?.next_payment_date) ??
+        Date.now() + 30 * 24 * 60 * 60 * 1000,
+    );
+    subscription.paystack_customer_code =
+      data.customer?.customer_code || subscription.paystack_customer_code;
+    subscription.paystack_subscription_code =
+      data.subscription?.subscription_code ||
+      subscription.paystack_subscription_code;
+    subscription.trial_ends_at = null;
+
+    return this.subscriptionRepo.save(subscription);
   }
 
   async handleChargeSuccess(data: any) {

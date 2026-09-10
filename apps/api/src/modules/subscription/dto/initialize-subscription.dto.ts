@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional, IsUrl } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class InitializeSubscriptionDto {
@@ -10,4 +10,13 @@ export class InitializeSubscriptionDto {
   @IsNotEmpty()
   @IsString()
   plan_id: string;
+
+  @ApiProperty({
+    example: 'https://app.example.com/payment-success',
+    description: 'URL Paystack redirects to after successful payment',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  callback_url?: string;
 }

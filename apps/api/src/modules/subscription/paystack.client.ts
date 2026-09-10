@@ -21,6 +21,30 @@ interface SubscriptionResponse {
   subscription_code: string;
 }
 
+interface VerifyTransactionResponse {
+  amount: number;
+  status: string;
+  reference: string;
+  paid_at: string;
+  created_at: string;
+  channel: string;
+  currency: string;
+  customer: {
+    customer_code: string;
+    email: string;
+  };
+  plan?: {
+    id: number;
+    name: string;
+    plan_code: string;
+  };
+  subscription?: {
+    subscription_code: string;
+    email_token: string;
+    next_payment_date: string;
+  };
+}
+
 export class PaystackClient {
   constructor(private readonly secretKey: string) {}
 
@@ -75,12 +99,22 @@ export class PaystackClient {
     amount: number;
     email: string;
     plan: string;
+    callback_url?: string;
     channels: string[];
   }): Promise<PaystackResponse<InitializeTransactionResponse>> {
+    const body: Record<string, unknown> = {
+      amount: params.amount,
+      email: params.email,
+      plan: params.plan,
+      channels: params.channels,
+    };
+    if (params.callback_url) {
+      body.callback_url = params.callback_url;
+    }
     return this.request<InitializeTransactionResponse>(
       'post',
       '/transaction/initialize',
-      params,
+      body,
     );
   }
 
@@ -90,6 +124,15 @@ export class PaystackClient {
     return this.request<SubscriptionResponse>(
       'get',
       `/subscription/${encodeURIComponent(codeOrId)}`,
+    );
+  }
+
+  async verifyTransaction(
+    reference: string,
+  ): Promise<PaystackResponse<VerifyTransactionResponse>> {
+    return this.request<VerifyTransactionResponse>(
+      'get',
+      `/transaction/verify/${encodeURIComponent(reference)}`,
     );
   }
 
