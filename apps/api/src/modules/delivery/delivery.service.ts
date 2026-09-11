@@ -64,6 +64,7 @@ export class DeliveryService {
     DeliveryStatus.PENDING,
     DeliveryStatus.ACCEPTED,
     DeliveryStatus.OUT_FOR_DELIVERY,
+    DeliveryStatus.HANDED_OVER,
   ];
 
   /**
@@ -218,7 +219,10 @@ export class DeliveryService {
     return view;
   }
 
-  /** Rider confirms the order was handed over to the customer. */
+  /** Rider hands the order over to the customer. This does NOT immediately mark
+   *  it DELIVERED — it moves to HANDED_OVER (awaiting confirmation). The final
+   *  DELIVERED transition happens in DeliveryService.confirmCustomerDelivery()
+   *  once the customer confirms receipt on their tracking page. */
   async complete(deliveryId: string, rider: Rider) {
     const delivery = await this.deliveryRepo.findOne({
       where: { id: deliveryId },
@@ -232,6 +236,45 @@ export class DeliveryService {
     ) {
       throw new BadRequestException(
         'Delivery cannot be completed in this state',
+      );
+    }
+
+    await this.deliveryRepo.update(deliveryId, {
+      status: DeliveryStatus.HANDED_OVER,
+    });
+
+    // Orders stay OUT_FOR_DELIVERY until the customer confirms receipt; only
+    // then are they finalised to DELIVERED.
+    const updated = await this.deliveryRepo.findOne({
+      where: { id: deliveryId },
+    });
+    if (!updated) throw new NotFoundException('Delivery not found');
+    const view = await this.toView(updated);
+    this.realtimeService.emitDeliveryUpdated(delivery.branch_id, view);
+    const tab = await this.tabRepo.findOne({ where: { id: delivery.tab_id } });
+    if (tab) {
+      this.realtimeService.emitTabUpdate(tab.branch_id, tab.id, {
+        delivery: { id: updated.id, status: updated.status },
+      });
+      getPublicServer()?.to(`tab:${tab.id}`).emit('delivery:status', {
+        tabId: tab.id,
+        delivery_id: updated.id,
+        status: updated.status,
+      });
+    }
+    return view;
+  }
+
+  /** The customer confirms receipt on the tracking page. This is the final step
+   *  that marks the delivery + its orders DELIVERED, completing the dispatch. */
+  async confirmCustomerDelivery(deliveryId: string) {
+    const delivery = await this.deliveryRepo.findOne({
+      where: { id: deliveryId },
+    });
+    if (!delivery) throw new NotFoundException('Delivery not found');
+    if (delivery.status !== DeliveryStatus.HANDED_OVER) {
+      throw new BadRequestException(
+        'Delivery is not awaiting customer confirmation',
       );
     }
 

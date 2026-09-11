@@ -20,6 +20,7 @@ import { Rider } from '../riders/entities/rider.entity';
 import { User } from '../user/entities/user.entity';
 import { TrackingService } from '../tracking/tracking.service';
 import { RealtimeService } from '../gateway/realtime.service';
+import { DeliveryService } from '../delivery/delivery.service';
 import { getDeliveryConfig } from '../delivery/delivery-config';
 import {
   TabType,
@@ -60,6 +61,7 @@ export class CustomerService {
     private dataSource: DataSource,
     private trackingService: TrackingService,
     private realtimeService: RealtimeService,
+    private deliveryService: DeliveryService,
   ) {}
 
   async openTab(dto: {
@@ -340,6 +342,37 @@ export class CustomerService {
       });
     }
 
+    return this.getTabResponse(tabId);
+  }
+
+  /** Dispatch: the customer confirms they received the order from the rider.
+   *  The rider's "mark handed over" only moves the delivery to HANDED_OVER
+   *  (awaiting confirmation); this is the final step that marks it DELIVERED. */
+  async confirmDelivery(tabId: string, trackingCode: string, deliveryId: string) {
+    const tab = await this.tabRepo.findOne({ where: { id: tabId } });
+    if (!tab) throw new NotFoundException('Tab not found');
+    if (tab.tracking_code !== trackingCode)
+      throw new ForbiddenException('Invalid tracking code');
+    if (tab.status !== 'open' && tab.status !== 'paid')
+      throw new BadRequestException('Tab is not open');
+    if (tab.pickup_mode !== PickupMode.DISPATCH)
+      throw new BadRequestException('This tab is not a dispatch delivery');
+
+    if (!deliveryId) {
+      throw new BadRequestException('delivery_id is required');
+    }
+    const delivery = await this.deliveryRepo.findOne({
+      where: { id: deliveryId },
+    });
+    if (!delivery || delivery.tab_id !== tabId)
+      throw new NotFoundException('Delivery not found');
+    if (delivery.status !== DeliveryStatus.HANDED_OVER) {
+      throw new BadRequestException(
+        'Delivery is not awaiting your confirmation',
+      );
+    }
+
+    await this.deliveryService.confirmCustomerDelivery(deliveryId);
     return this.getTabResponse(tabId);
   }
 

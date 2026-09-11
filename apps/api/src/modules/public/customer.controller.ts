@@ -191,6 +191,39 @@ export class CustomerController {
     return this.customerService.confirmReceived(tabId, trackingCode);
   }
 
+  @Post('tabs/:tabId/confirm-delivery')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({
+    summary:
+      'Dispatch: customer confirms they received the delivery -> marks the delivery + orders DELIVERED',
+  })
+  @ApiParam({ name: 'tabId', description: 'Tab UUID' })
+  @ApiHeader({
+    name: 'x-tracking-code',
+    required: true,
+    description: 'Tracking code for the tab',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['delivery_id'],
+      properties: { delivery_id: { type: 'string' } },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Delivery confirmed by the customer.',
+  })
+  async confirmDelivery(
+    @Param('tabId') tabId: string,
+    @Headers('x-tracking-code') trackingCode: string,
+    @Body() body: { delivery_id: string },
+  ) {
+    if (!trackingCode)
+      throw new BadRequestException('x-tracking-code header is required');
+    return this.customerService.confirmDelivery(tabId, trackingCode, body?.delivery_id);
+  }
+
   @Post('tabs/:tabId/review')
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({

@@ -17,6 +17,7 @@ import { Delivery } from '../delivery/entities/delivery.entity';
 import { Rider } from '../riders/entities/rider.entity';
 import { User } from '../user/entities/user.entity';
 import { TrackingModule } from '../tracking/tracking.module';
+import { DeliveryModule } from '../delivery/delivery.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { TrackingModule } from '../tracking/tracking.module';
       User,
     ]),
     TrackingModule,
+    DeliveryModule,
   ],
   controllers: [
     PublicMenuController,
