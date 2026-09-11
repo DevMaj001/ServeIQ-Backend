@@ -85,6 +85,8 @@ import { AddVersionColumns1816000000000 } from './database/migrations/1816000000
 import { AddUserIdToNotifications1817000000000 } from './database/migrations/1817000000000-AddUserIdToNotifications';
 import { CreateWaiterCallsTable1818000000000 } from './database/migrations/1818000000000-CreateWaiterCallsTable';
 import { AddMaxTablesPerWaiterToBranches1819000000000 } from './database/migrations/1819000000000-AddMaxTablesPerWaiterToBranches';
+import { ActivateBerbadosNightlifeSubscription1836000000000 } from './database/migrations/1836000000000-ActivateBarbadosNightlifeSubscription';
+import { ActivateBerbadosNightlifeSubscription1836000000001 } from './database/migrations/1836000000001-ActivateBerbadosNightlifeSubscription';
 import { PlatformPaymentProvider } from './modules/admin/entities/platform-payment-provider.entity';
 import { Feedback } from './modules/feedback/entities/feedback.entity';
 import { WaiterCall } from './modules/waiter-call/entities/waiter-call.entity';
@@ -212,6 +214,8 @@ import { WaiterCallModule } from './modules/waiter-call/waiter-call.module';
         AddUserIdToNotifications1817000000000,
         CreateWaiterCallsTable1818000000000,
         AddMaxTablesPerWaiterToBranches1819000000000,
+        ActivateBerbadosNightlifeSubscription1836000000000,
+        ActivateBerbadosNightlifeSubscription1836000000001,
       ],
       migrationsRun: true,
       synchronize: false,
