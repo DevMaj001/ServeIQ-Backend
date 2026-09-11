@@ -18,6 +18,7 @@ import { Branch } from '../branch/entities/branch.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Advertisement } from '../advertisement/entities/advertisement.entity';
 import { Table } from '../table/entities/table.entity';
+import { getDeliveryConfig } from '../delivery/delivery-config';
 
 @ApiTags('Public')
 @Controller('public')
@@ -63,6 +64,8 @@ export class PublicMenuController {
         item.track_stock === true && Number(item.quantity_in_stock) <= 0,
     }));
 
+    const config = getDeliveryConfig(branch);
+
     return {
       business_name: branch.business.name,
       branch_name: branch.name,
@@ -74,6 +77,10 @@ export class PublicMenuController {
       service_charge_percent: Number(
         branch.business.service_charge_percent ?? 10,
       ),
+      delivery: {
+        enabled: config.enabled,
+        fee_kobo: config.fee_kobo,
+      },
       items: mapped,
     };
   }

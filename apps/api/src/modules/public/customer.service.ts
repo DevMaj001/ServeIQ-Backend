@@ -15,12 +15,19 @@ import { Branch } from '../branch/entities/branch.entity';
 import { Business } from '../business/entities/business.entity';
 import { Review } from '../review/entities/review.entity';
 import { Bill } from '../bill/entities/bill.entity';
+import { Delivery } from '../delivery/entities/delivery.entity';
+import { Rider } from '../riders/entities/rider.entity';
+import { User } from '../user/entities/user.entity';
 import { TrackingService } from '../tracking/tracking.service';
 import { RealtimeService } from '../gateway/realtime.service';
+import { getDeliveryConfig } from '../delivery/delivery-config';
 import {
   TabType,
   FulfillmentType,
   OrderStatus,
+  PickupMode,
+  DeliveryStatus,
+  DeliveryDetails,
   isBillable,
 } from '../../common/shared';
 
@@ -43,6 +50,12 @@ export class CustomerService {
     private reviewRepo: Repository<Review>,
     @InjectRepository(Bill)
     private billRepo: Repository<Bill>,
+    @InjectRepository(Delivery)
+    private deliveryRepo: Repository<Delivery>,
+    @InjectRepository(Rider)
+    private riderRepo: Repository<Rider>,
+    @InjectRepository(User)
+    private userRepo: Repository<User>,
     @Inject(DataSource)
     private dataSource: DataSource,
     private trackingService: TrackingService,
@@ -55,6 +68,8 @@ export class CustomerService {
     customer_name?: string;
     party_size?: number;
     tab_type?: string;
+    pickup_mode?: string;
+    delivery_details?: Partial<DeliveryDetails>;
   }) {
     const tabType = dto.tab_type || TabType.DINE_IN;
 
@@ -109,6 +124,46 @@ export class CustomerService {
       );
     }
 
+    const pickupMode = dto.pickup_mode || PickupMode.SELF;
+    let deliveryDetails: DeliveryDetails | null = null;
+    let deliveryFeeKobo = 0;
+
+    if (pickupMode === PickupMode.DISPATCH) {
+      const branch = await this.branchRepo.findOne({
+        where: { id: dto.branch_id },
+      });
+      const config = getDeliveryConfig(branch);
+      if (!config.enabled) {
+        throw new BadRequestException(
+          'Dispatch delivery is not enabled at this branch',
+        );
+      }
+      const address = dto.delivery_details?.address?.trim();
+      const phone = dto.delivery_details?.phone?.trim();
+      if (!address || !phone) {
+        throw new BadRequestException(
+          'delivery_details.address and delivery_details.phone are required for dispatch',
+        );
+      }
+      const settings = branch?.settings;
+      const policy =
+        settings && typeof settings === 'object'
+          ? settings.takeaway_payment_policy
+          : undefined;
+      if (policy === 'pay_on_pickup') {
+        throw new BadRequestException(
+          'Dispatch delivery requires prepayment — pay_on_pickup is not supported',
+        );
+      }
+      deliveryFeeKobo = config.fee_kobo;
+      deliveryDetails = {
+        full_name: dto.delivery_details?.full_name?.trim() || undefined,
+        phone,
+        address,
+        notes: dto.delivery_details?.notes?.trim() || undefined,
+      };
+    }
+
     const newTab = this.tabRepo.create({
       branch_id: dto.branch_id,
       table_id: virtualTable.id,
@@ -121,6 +176,9 @@ export class CustomerService {
       tab_number: `TA-${Date.now()}`,
       tracking_code: await this.trackingService.generateUniqueCode(),
       tracking_generated_at: new Date(),
+      pickup_mode: pickupMode,
+      delivery_details: deliveryDetails,
+      delivery_fee_kobo: deliveryFeeKobo,
     });
 
     const savedTab = await this.tabRepo.save(newTab);
@@ -238,6 +296,10 @@ export class CustomerService {
       throw new BadRequestException('Tab is not open');
     if (tab.waiter_id !== null)
       throw new BadRequestException('This tab is managed by a waiter');
+    if (tab.pickup_mode === PickupMode.DISPATCH)
+      throw new BadRequestException(
+        'Dispatch orders are confirmed by the delivery rider',
+      );
 
     const orders = await this.orderRepo.find({
       where: {
@@ -377,7 +439,12 @@ export class CustomerService {
     );
     const taxRatePercent = Number(business?.tax_rate ?? 7.5);
     const taxKobo = Math.round(subtotalKobo * (taxRatePercent / 100));
-    const totalKobo = subtotalKobo + serviceChargeKobo + taxKobo;
+    const deliveryFeeKobo =
+      tab.pickup_mode === PickupMode.DISPATCH
+        ? Number(tab.delivery_fee_kobo || 0)
+        : 0;
+    const totalKobo =
+      subtotalKobo + serviceChargeKobo + taxKobo + deliveryFeeKobo;
 
     const base = {
       id: tab.id,
@@ -386,6 +453,9 @@ export class CustomerService {
       customer_name: tab.customer_name,
       party_size: tab.party_size,
       tab_type: tab.tab_type,
+      pickup_mode: tab.pickup_mode || PickupMode.SELF,
+      delivery_details: tab.delivery_details ?? null,
+      delivery_fee_kobo: deliveryFeeKobo,
       tracking_code: tab.tracking_code,
       tracking_generated_at: tab.tracking_generated_at,
       opened_at: tab.opened_at,
@@ -394,6 +464,10 @@ export class CustomerService {
       subtotal_kobo: subtotalKobo,
       service_charge_kobo: serviceChargeKobo,
       tax_kobo: taxKobo,
+      delivery_fee: {
+        self: 0,
+        dispatch: deliveryFeeKobo,
+      },
       service_charge_percent: serviceChargePercent,
       tax_rate_percent: taxRatePercent,
       orders: orders.map((o) => ({
@@ -408,6 +482,43 @@ export class CustomerService {
         created_at: o.created_at,
       })),
     };
+
+    // Dispatch: surface the live delivery so the customer sees rider assignment
+    // and status on the tracking page.
+    if (tab.pickup_mode === PickupMode.DISPATCH) {
+      const active = await this.deliveryRepo.findOne({
+        where: {
+          tab_id: tabId,
+          status: Not(DeliveryStatus.CANCELLED),
+        },
+        order: { created_at: 'DESC' },
+      });
+      if (active) {
+        let riderName: string | null = null;
+        let riderPhone: string | null = null;
+        if (active.rider_id) {
+          const rider = await this.riderRepo.findOne({
+            where: { id: active.rider_id },
+          });
+          if (rider) {
+            const user = await this.userRepo.findOne({
+              where: { id: rider.user_id },
+            });
+            riderName = user?.full_name ?? null;
+            riderPhone = user?.phone ?? null;
+          }
+        }
+        (base as any).delivery = {
+          id: active.id,
+          status: active.status,
+          fee_kobo: active.fee_kobo,
+          rider_name: riderName,
+          rider_phone: riderPhone,
+          accepted_at: active.accepted_at,
+          delivered_at: active.delivered_at,
+        };
+      }
+    }
 
     // Include split payment progress so a self-service dine-in customer can see
     // how much of the bill has been settled across guests. Takeaway never

@@ -36,12 +36,7 @@ export class BillController {
 
   @Post('tab/:tabId/generate')
   @UseGuards(RolesGuard)
-  @Roles(
-    UserRole.WAITER,
-    UserRole.SUPERVISOR,
-    UserRole.MANAGER,
-    UserRole.OWNER,
-  )
+  @Roles(UserRole.WAITER, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.OWNER)
   @ApiOperation({ summary: 'Generate a bill for an open tab' })
   @ApiParam({
     name: 'tabId',
@@ -126,10 +121,7 @@ export class BillController {
   @ApiParam({ name: 'tabId', description: 'Tab UUID' })
   @ApiResponse({ status: 200, description: 'Cash confirmed, order released.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async confirmCash(
-    @Param('tabId') tabId: string,
-    @Request() req: any,
-  ) {
+  async confirmCash(@Param('tabId') tabId: string, @Request() req: any) {
     return this.billService.confirmCashPayment(
       tabId,
       req.user.branchId,
@@ -146,13 +138,13 @@ export class BillController {
       'Supervisor removes/clears a pending-cash request (customer abandoned or spammed), voids the awaiting-cash bill and releases held orders back to pending.',
   })
   @ApiParam({ name: 'tabId', description: 'Tab UUID' })
-  @ApiResponse({ status: 200, description: 'Cash request removed, orders released.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Cash request removed, orders released.',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   @ApiResponse({ status: 400, description: 'Tab already paid.' })
-  async removeCashRequest(
-    @Param('tabId') tabId: string,
-    @Request() req: any,
-  ) {
+  async removeCashRequest(@Param('tabId') tabId: string, @Request() req: any) {
     return this.billService.removeCashRequest(
       tabId,
       req.user.branchId,

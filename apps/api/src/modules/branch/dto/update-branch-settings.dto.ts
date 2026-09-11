@@ -34,10 +34,42 @@ export class BranchPaymentSettingsDto {
   takeaway_payment_policy?: string;
 }
 
+export class BranchDeliverySettingsDto {
+  @ApiProperty({
+    example: true,
+    description: 'Enable dispatch delivery',
+    required: false,
+  })
+  @IsOptional()
+  enabled?: boolean;
+
+  @ApiProperty({
+    example: 120000,
+    description: 'Flat fee charged to the customer in kobo',
+    required: false,
+  })
+  @IsOptional()
+  fee_kobo?: number;
+
+  @ApiProperty({
+    example: 100000,
+    description: 'Flat payout per drop to the rider in kobo',
+    required: false,
+  })
+  @IsOptional()
+  rider_payout_kobo?: number;
+}
+
 export class UpdateBranchSettingsDto {
   @ApiProperty({ type: BranchPaymentSettingsDto, required: false })
   @IsOptional()
   @ValidateNested()
   @Type(() => BranchPaymentSettingsDto)
   settings?: BranchPaymentSettingsDto;
+
+  @ApiProperty({ type: BranchDeliverySettingsDto, required: false })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BranchDeliverySettingsDto)
+  delivery?: BranchDeliverySettingsDto;
 }

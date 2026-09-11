@@ -12,7 +12,12 @@ import { Server, Socket } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
 import { JwtService } from '@nestjs/jwt';
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { GATEWAY_SERVER } from './gateway.constants';
 
 interface AuthenticatedSocket extends Socket {
@@ -135,6 +140,9 @@ export class GatewayGateway
       ) {
         client.join(`managers:${client.branchId}`);
       }
+      if (client.role === 'rider') {
+        client.join(`riders:${client.branchId}`);
+      }
 
       this.logger.log(
         `Client ${client.id} (user: ${client.userId}, branch: ${client.branchId}) connected`,
@@ -180,9 +188,9 @@ export class GatewayGateway
       });
     }
 
-    delete (globalThis as unknown as Record<typeof GATEWAY_SERVER, Server | undefined>)[
-      GATEWAY_SERVER
-    ];
+    delete (
+      globalThis as unknown as Record<typeof GATEWAY_SERVER, Server | undefined>
+    )[GATEWAY_SERVER];
   }
 
   @SubscribeMessage('subscribe:tables')

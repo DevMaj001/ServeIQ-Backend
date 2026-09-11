@@ -16,7 +16,12 @@ import { MenuItem } from '../menu/entities/menu-item.entity';
 import { User } from '../user/entities/user.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { Business } from '../business/entities/business.entity';
-import { OrderStatus, PaymentMethod, isBillable, statusBlocksPayment } from '../../common/shared';
+import {
+  OrderStatus,
+  PaymentMethod,
+  isBillable,
+  statusBlocksPayment,
+} from '../../common/shared';
 import { IsNull, Not } from 'typeorm';
 import { GenerateBillDto } from './dto/generate-bill.dto';
 import { ProcessPaymentDto } from './dto/process-payment.dto';
@@ -86,7 +91,7 @@ export class BillService {
     }
 
     // The "running" bill to recompute is the newest live, non-voided row.
-    let existing = await this.billRepository.findOne({
+    const existing = await this.billRepository.findOne({
       where: { tab_id: tabId, voided_at: IsNull() },
       order: { created_at: 'DESC' },
     });
@@ -122,7 +127,10 @@ export class BillService {
       generateBillDto?.tax_rate_percent ?? Number(business?.tax_rate ?? 7.5);
     const tax = Math.round(subtotal * (effectiveTaxRate / 100));
 
-    let total = subtotal + serviceCharge + tax - discount;
+    const deliveryFee =
+      tab.pickup_mode === 'dispatch' ? Number(tab.delivery_fee_kobo || 0) : 0;
+
+    let total = subtotal + serviceCharge + tax + deliveryFee - discount;
     if (total < 0) total = 0;
 
     if (existing) {
@@ -131,9 +139,14 @@ export class BillService {
       existing.subtotal_kobo = subtotal;
       existing.service_charge_kobo = serviceCharge;
       existing.tax_kobo = tax;
+      existing.delivery_fee_kobo = deliveryFee;
       existing.total_kobo = Math.max(
         0,
-        subtotal + serviceCharge + tax - (existing.discount_kobo ?? 0),
+        subtotal +
+          serviceCharge +
+          tax +
+          deliveryFee -
+          (existing.discount_kobo ?? 0),
       );
       const updated = await this.billRepository.save(existing);
 
@@ -150,6 +163,7 @@ export class BillService {
       service_charge_kobo: serviceCharge,
       tax_kobo: tax,
       discount_kobo: discount,
+      delivery_fee_kobo: deliveryFee,
       total_kobo: total,
       issued_by: userId,
     });
@@ -217,7 +231,8 @@ export class BillService {
     bill.total_kobo =
       bill.subtotal_kobo +
       bill.service_charge_kobo +
-      bill.tax_kobo -
+      bill.tax_kobo +
+      (bill.delivery_fee_kobo ?? 0) -
       bill.discount_kobo;
     if (bill.total_kobo < 0) bill.total_kobo = 0;
 
@@ -235,10 +250,12 @@ export class BillService {
       ZAR: 'R',
       XOF: 'CFA',
     };
-    return `${symbolMap[currency] ?? currency}${((kobo ?? 0) / 100).toLocaleString(
-      'en-US',
-      { minimumFractionDigits: 2, maximumFractionDigits: 2 },
-    )}`;
+    return `${symbolMap[currency] ?? currency}${(
+      (kobo ?? 0) / 100
+    ).toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
   }
 
   async processPayment(
@@ -274,7 +291,9 @@ export class BillService {
     // billable orders. Declined/cancelled items are excluded, and prepaid-takeaway
     // orders HELD in PENDING_PAYMENT_APPROVAL are exempt (they are paid up front and
     // released to the kitchen at processPayment).
-    const orders = await this.orderRepository.find({ where: { tab_id: tabId } });
+    const orders = await this.orderRepository.find({
+      where: { tab_id: tabId },
+    });
     const blockingOrders = orders.filter((o) =>
       statusBlocksPayment(o.order_status),
     );
@@ -484,11 +503,7 @@ export class BillService {
    * leaving the tab open so the customer can re-pay another way. Idempotent: a
    * second call for an already-voided/paid request is a safe no-op.
    */
-  async removeCashRequest(
-    tabId: string,
-    branchId: string,
-    userId: string,
-  ) {
+  async removeCashRequest(tabId: string, branchId: string, userId: string) {
     const tab = await this.tabRepository.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
     if (tab.branch_id !== branchId)
@@ -539,10 +554,11 @@ export class BillService {
     const tab = await this.tabRepository.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
 
-    const allBills = (await this.billRepository.find({
-      where: { tab_id: tabId },
-      order: { created_at: 'ASC' },
-    })) ?? [];
+    const allBills =
+      (await this.billRepository.find({
+        where: { tab_id: tabId },
+        order: { created_at: 'ASC' },
+      })) ?? [];
 
     // The receipt reflects the single full-tab bill. Prefer the most recently
     // paid bill so a settled tab shows the bill actually paid (method and amount),

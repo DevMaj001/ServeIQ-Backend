@@ -6,6 +6,27 @@ export enum UserRole {
   CHEF = 'chef',
   CASHIER = 'cashier',
   SUPERVISOR = 'supervisor',
+  RIDER = 'rider',
+}
+
+export enum PickupMode {
+  SELF = 'self',
+  DISPATCH = 'dispatch',
+}
+
+export enum DeliveryStatus {
+  PENDING = 'pending',
+  ACCEPTED = 'accepted',
+  OUT_FOR_DELIVERY = 'out_for_delivery',
+  DELIVERED = 'delivered',
+  CANCELLED = 'cancelled',
+}
+
+export interface DeliveryDetails {
+  full_name?: string;
+  phone: string;
+  address: string;
+  notes?: string;
 }
 
 export enum OrderStatus {

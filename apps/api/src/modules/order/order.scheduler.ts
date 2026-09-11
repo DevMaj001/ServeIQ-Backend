@@ -7,6 +7,7 @@ import { Tab } from '../tab/entities/tab.entity';
 import { OrderStatus } from '../../common/shared';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationType } from '../notification/entities/notification.entity';
+import { DeliveryService } from '../delivery/delivery.service';
 
 @Injectable()
 export class OrderScheduler {
@@ -18,6 +19,7 @@ export class OrderScheduler {
     @InjectRepository(Tab)
     private tabRepo: Repository<Tab>,
     private notificationService: NotificationService,
+    private deliveryService: DeliveryService,
   ) {}
 
   @Cron(CronExpression.EVERY_30_SECONDS)
@@ -77,6 +79,10 @@ export class OrderScheduler {
           count,
         },
       });
+
+      // Dispatch: if this is a dispatch tab, create/broadcast the delivery
+      // to online riders for the branch.
+      await this.deliveryService.ensureOnOrdersReady(tabId, orderIds);
 
       this.logger.log(
         `Tab ${tabId}: ${count} orders timer expired → ready_for_pickup`,

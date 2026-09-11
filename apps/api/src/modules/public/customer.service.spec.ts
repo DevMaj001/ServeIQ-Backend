@@ -17,6 +17,9 @@ import { Bill } from '../bill/entities/bill.entity';
 import { TrackingService } from '../tracking/tracking.service';
 import { RealtimeService } from '../gateway/realtime.service';
 import { DataSource } from 'typeorm';
+import { Delivery } from '../delivery/entities/delivery.entity';
+import { Rider } from '../riders/entities/rider.entity';
+import { User } from '../user/entities/user.entity';
 
 describe('CustomerService.submitReview', () => {
   let service: CustomerService;
@@ -42,7 +45,10 @@ describe('CustomerService.submitReview', () => {
       providers: [
         CustomerService,
         { provide: getRepositoryToken(Tab), useValue: tabRepo },
-        { provide: getRepositoryToken(Table), useValue: { findOne: jest.fn() } },
+        {
+          provide: getRepositoryToken(Table),
+          useValue: { findOne: jest.fn() },
+        },
         {
           provide: getRepositoryToken(MenuItem),
           useValue: { find: jest.fn() },
@@ -55,8 +61,14 @@ describe('CustomerService.submitReview', () => {
         },
         { provide: getRepositoryToken(Review), useValue: reviewRepo },
         { provide: getRepositoryToken(Bill), useValue: { find: jest.fn() } },
+        { provide: getRepositoryToken(Delivery), useValue: { find: jest.fn(), findOne: jest.fn(), create: jest.fn(), save: jest.fn() } },
+        { provide: getRepositoryToken(Rider), useValue: { find: jest.fn() } },
+        { provide: getRepositoryToken(User), useValue: { find: jest.fn() } },
         { provide: DataSource, useValue: {} },
-        { provide: TrackingService, useValue: { generateUniqueCode: jest.fn() } },
+        {
+          provide: TrackingService,
+          useValue: { generateUniqueCode: jest.fn() },
+        },
         { provide: RealtimeService, useValue: {} },
       ],
     }).compile();
@@ -150,7 +162,11 @@ describe('CustomerService.submitReview', () => {
       comment: 'old',
     } as any;
     reviewRepo.findOne.mockResolvedValue(existing);
-    reviewRepo.save.mockResolvedValue({ ...existing, rating: 4, comment: 'new' });
+    reviewRepo.save.mockResolvedValue({
+      ...existing,
+      rating: 4,
+      comment: 'new',
+    });
 
     await service.submitReview('tab-1', 'TRACK-1', {
       rating: 4,

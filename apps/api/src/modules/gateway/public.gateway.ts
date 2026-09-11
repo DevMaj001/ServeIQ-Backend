@@ -44,13 +44,15 @@ export class PublicGateway
 
   afterInit(server: Server) {
     if (server) {
-      (globalThis as unknown as Record<string, any>)[PUBLIC_GATEWAY_SERVER] = server;
+      (globalThis as unknown as Record<string, any>)[PUBLIC_GATEWAY_SERVER] =
+        server;
     }
   }
 
   onModuleInit() {
     if (this.server) {
-      (globalThis as unknown as Record<string, any>)[PUBLIC_GATEWAY_SERVER] = this.server;
+      (globalThis as unknown as Record<string, any>)[PUBLIC_GATEWAY_SERVER] =
+        this.server;
     }
   }
 

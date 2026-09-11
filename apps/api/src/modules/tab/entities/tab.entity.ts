@@ -83,4 +83,13 @@ export class Tab {
 
   @VersionColumn()
   version: number;
+
+  @Column({ type: 'varchar', length: 20, default: 'self' })
+  pickup_mode: string;
+
+  @Column({ type: 'jsonb', nullable: true })
+  delivery_details: any;
+
+  @Column({ type: 'integer', default: 0 })
+  delivery_fee_kobo: number;
 }

@@ -5,7 +5,6 @@ import {
   Body,
   Param,
   Headers,
-  NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
 import {
@@ -44,6 +43,20 @@ export class CustomerController {
         },
         customer_name: { type: 'string', example: 'John Doe' },
         party_size: { type: 'number', example: 2 },
+        pickup_mode: {
+          type: 'string',
+          enum: ['self', 'dispatch'],
+          example: 'self',
+        },
+        delivery_details: {
+          type: 'object',
+          properties: {
+            full_name: { type: 'string' },
+            phone: { type: 'string', example: '+2348012345678' },
+            address: { type: 'string' },
+            notes: { type: 'string' },
+          },
+        },
       },
     },
   })
@@ -61,6 +74,13 @@ export class CustomerController {
       customer_name?: string;
       party_size?: number;
       tab_type?: string;
+      pickup_mode?: string;
+      delivery_details?: {
+        full_name?: string;
+        phone?: string;
+        address?: string;
+        notes?: string;
+      };
     },
   ) {
     if (!body.branch_id) {
@@ -174,7 +194,8 @@ export class CustomerController {
   @Post('tabs/:tabId/review')
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({
-    summary: 'Self-service: submit a customer review (rating 1-5) after payment',
+    summary:
+      'Self-service: submit a customer review (rating 1-5) after payment',
   })
   @ApiParam({ name: 'tabId', description: 'Tab UUID' })
   @ApiHeader({

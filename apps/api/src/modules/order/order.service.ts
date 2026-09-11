@@ -28,6 +28,7 @@ import { DeclineOrderDto } from './dto/decline-order.dto';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationType } from '../notification/entities/notification.entity';
 import { RealtimeService } from '../gateway/realtime.service';
+import { DeliveryService } from '../delivery/delivery.service';
 
 @Injectable()
 export class OrderService {
@@ -54,6 +55,7 @@ export class OrderService {
     private auditService: AuditService,
     private notificationService: NotificationService,
     private realtimeService: RealtimeService,
+    private deliveryService: DeliveryService,
   ) {
     // In-memory buffer for batching order_ready notifications per tab
     this.orderReadyBuffer = new Map<
@@ -862,6 +864,9 @@ export class OrderService {
           savedOrder.order_status,
           savedOrder.tab_id,
         );
+
+        // Dispatch: if this tab is a dispatch tab, create/broadcast the delivery
+        await this.deliveryService.ensureOnOrdersReady(tab.id, [savedOrder.id]);
 
         // Buffer notification per tab (flush after 5s)
         const tabId = savedOrder.tab_id;

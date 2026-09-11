@@ -383,6 +383,38 @@ const ALL_PERMISSIONS: PermissionDef[] = [
     category: 'Customers',
   },
 
+  // Deliveries / Riders
+  {
+    code: PERMISSIONS.MANAGE_RIDERS,
+    name: 'Manage Riders',
+    description: 'Create, edit and remove delivery riders',
+    category: 'Deliveries',
+  },
+  {
+    code: PERMISSIONS.VIEW_RIDERS,
+    name: 'View Riders',
+    description: 'View the rider list',
+    category: 'Deliveries',
+  },
+  {
+    code: PERMISSIONS.ACCEPT_DELIVERY,
+    name: 'Accept Delivery',
+    description: 'Accept an available dispatch delivery',
+    category: 'Deliveries',
+  },
+  {
+    code: PERMISSIONS.COMPLETE_DELIVERY,
+    name: 'Complete Delivery',
+    description: 'Mark a delivery as handed to the customer',
+    category: 'Deliveries',
+  },
+  {
+    code: PERMISSIONS.VIEW_DELIVERIES,
+    name: 'View Deliveries',
+    description: 'View delivery dispatch history',
+    category: 'Deliveries',
+  },
+
   // System
   {
     code: PERMISSIONS.MANAGE_SUBSCRIPTION,
@@ -475,12 +507,15 @@ const DEFAULT_ROLES: RoleDef[] = [
       PERMISSIONS.VIEW_ANALYTICS,
       PERMISSIONS.VIEW_BRANCH_ANALYTICS,
       PERMISSIONS.VIEW_REPORTS,
-PERMISSIONS.VIEW_SHIFTS,
-PERMISSIONS.MANAGE_SHIFTS,
+      PERMISSIONS.VIEW_SHIFTS,
+      PERMISSIONS.MANAGE_SHIFTS,
       PERMISSIONS.MANAGE_DEVICES,
       PERMISSIONS.VIEW_POS,
       PERMISSIONS.VIEW_PULSE,
       PERMISSIONS.VIEW_PREMIUM_DASHBOARD,
+      PERMISSIONS.MANAGE_RIDERS,
+      PERMISSIONS.VIEW_RIDERS,
+      PERMISSIONS.VIEW_DELIVERIES,
       PERMISSIONS.VIEW_INVENTORY,
       PERMISSIONS.UPDATE_INVENTORY,
       PERMISSIONS.ADJUST_STOCK,
@@ -545,6 +580,17 @@ PERMISSIONS.MANAGE_SHIFTS,
       PERMISSIONS.VOID_PAYMENT,
       PERMISSIONS.DISCOUNT_BILL,
       PERMISSIONS.REOPEN_INVOICE,
+    ],
+  },
+  {
+    name: 'Rider',
+    description: 'Delivers dispatch takeaway orders',
+    isSystem: true,
+    permissions: [
+      PERMISSIONS.ACCEPT_DELIVERY,
+      PERMISSIONS.COMPLETE_DELIVERY,
+      PERMISSIONS.VIEW_DELIVERIES,
+      PERMISSIONS.VIEW_TRACKING,
     ],
   },
 ];

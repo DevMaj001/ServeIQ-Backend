@@ -17,14 +17,26 @@ import { IngredientModule } from '../ingredient/ingredient.module';
 import { NotificationModule } from '../notification/notification.module';
 import { TrackingModule } from '../tracking/tracking.module';
 import { GatewayModule } from '../gateway/gateway.module';
+import { DeliveryModule } from '../delivery/delivery.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Order, MenuItem, Tab, Table, Branch, Business, Department, AuditLog, Bill]),
+    TypeOrmModule.forFeature([
+      Order,
+      MenuItem,
+      Tab,
+      Table,
+      Branch,
+      Business,
+      Department,
+      AuditLog,
+      Bill,
+    ]),
     IngredientModule,
     NotificationModule,
     TrackingModule,
     GatewayModule,
+    DeliveryModule,
   ],
   providers: [OrderService, OrderScheduler, AuditService],
   controllers: [OrderController],

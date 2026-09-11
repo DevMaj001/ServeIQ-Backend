@@ -199,6 +199,12 @@ export class BranchController {
     if (!branch) throw new NotFoundException('Branch not found');
     const currentSettings = branch.settings || {};
     const newSettings = { ...currentSettings, ...dto.settings };
+    if (dto.delivery) {
+      newSettings.delivery = {
+        ...(currentSettings.delivery || {}),
+        ...dto.delivery,
+      };
+    }
     branch.settings = newSettings;
     return this.branchRepository.save(branch);
   }

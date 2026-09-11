@@ -136,7 +136,10 @@ describe('BillService â€” Billing Calculation Accuracy (50 scenarios)', () 
         { provide: ReceiptService, useValue: mockReceiptService },
         { provide: CloudinaryService, useValue: mockCloudinaryService },
         { provide: RealtimeService, useValue: mockRealtimeService },
-        { provide: OrderService, useValue: { approve: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: OrderService,
+          useValue: { approve: jest.fn().mockResolvedValue(undefined) },
+        },
       ],
     }).compile();
 
@@ -828,7 +831,10 @@ describe('BillService â€” Tab State Machine Transitions', () => {
           },
         },
         { provide: RealtimeService, useValue: mockRealtimeService() },
-        { provide: OrderService, useValue: { approve: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: OrderService,
+          useValue: { approve: jest.fn().mockResolvedValue(undefined) },
+        },
       ],
     }).compile();
 

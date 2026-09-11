@@ -10,6 +10,10 @@ const mockRealtimeService = () => ({
   emitDashboardUpdate: jest.fn(),
 });
 
+const mockDeliveryService = () => ({
+  ensureOnOrdersReady: jest.fn().mockResolvedValue(undefined),
+});
+
 describe('OrderService', () => {
   const mockOrderRepository = () => ({
     create: jest.fn(),
@@ -111,6 +115,7 @@ describe('OrderService', () => {
       overrides.notificationService ?? mockNotificationService();
     const realtimeService = overrides.realtimeService ?? mockRealtimeService();
     const billRepository = overrides.billRepository ?? mockBillRepository();
+    const deliveryService = overrides.deliveryService ?? mockDeliveryService();
 
     return new OrderService(
       orderRepo,
@@ -126,6 +131,7 @@ describe('OrderService', () => {
       auditService,
       notificationService,
       realtimeService,
+      deliveryService,
     );
   };
 

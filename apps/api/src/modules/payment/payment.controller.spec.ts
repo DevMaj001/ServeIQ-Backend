@@ -30,8 +30,11 @@ const mockRepo = () => ({
   createQueryBuilder: jest.fn().mockReturnThis(),
 });
 
-  const mockReq = { rawBody: undefined, headers: {} } as any;
-  const mockSimReq = { rawBody: undefined, headers: { 'x-simulate': '1' } } as any;
+const mockReq = { rawBody: undefined, headers: {} } as any;
+const mockSimReq = {
+  rawBody: undefined,
+  headers: { 'x-simulate': '1' },
+} as any;
 
 describe('PaymentController', () => {
   let controller: PaymentController;
@@ -333,7 +336,12 @@ describe('PaymentController', () => {
   describe('opayWebhook real RSA signature verification', () => {
     let keys: crypto.KeyPairSyncResult<string, string>;
     const payload = {
-      data: { reference: 'ref-1', amount: 50000, status: 'SUCCESS', transactionType: 'TRANSFER' },
+      data: {
+        reference: 'ref-1',
+        amount: 50000,
+        status: 'SUCCESS',
+        transactionType: 'TRANSFER',
+      },
     };
     const rawBody = JSON.stringify(payload);
 
@@ -369,7 +377,9 @@ describe('PaymentController', () => {
     });
 
     const sign = (body: string) =>
-      crypto.sign('RSA-SHA256', Buffer.from(body), keys.privateKey).toString('base64');
+      crypto
+        .sign('RSA-SHA256', Buffer.from(body), keys.privateKey)
+        .toString('base64');
 
     it('should process a webhook carrying a valid RSA signature', async () => {
       const req = { rawBody, headers: {} } as any;
@@ -486,7 +496,12 @@ describe('PaymentController', () => {
   describe('monniepointWebhook raw-body HMAC-SHA512 signature', () => {
     const secret = 'whsec_test';
     const payload = {
-      data: { reference: 'ref-1', amount: 50000, status: 'SUCCESSFUL', terminalId: 'term-1' },
+      data: {
+        reference: 'ref-1',
+        amount: 50000,
+        status: 'SUCCESSFUL',
+        terminalId: 'term-1',
+      },
     };
     const rawBody = JSON.stringify(payload);
     const signBody = (body: string) =>
@@ -586,19 +601,15 @@ describe('PaymentController', () => {
       });
       billService.processPayment.mockResolvedValue({});
 
-      const result = await controller.opayWebhook(
-        mockSimReq,
-        'sig',
-        {
-          data: {
-            reference: 'provider-ref-xyz',
-            amount: 500,
-            status: 'SUCCESS',
-            transactionType: 'TRANSFER',
-            account_number: '0123456789',
-          },
+      const result = await controller.opayWebhook(mockSimReq, 'sig', {
+        data: {
+          reference: 'provider-ref-xyz',
+          amount: 500,
+          status: 'SUCCESS',
+          transactionType: 'TRANSFER',
+          account_number: '0123456789',
         },
-      );
+      });
       expect(result.status).toBe('processed');
       expect(billService.processPayment).toHaveBeenCalledWith(
         'tab-fb',

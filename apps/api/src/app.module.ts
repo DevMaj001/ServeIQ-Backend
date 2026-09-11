@@ -87,9 +87,12 @@ import { CreateWaiterCallsTable1818000000000 } from './database/migrations/18180
 import { AddMaxTablesPerWaiterToBranches1819000000000 } from './database/migrations/1819000000000-AddMaxTablesPerWaiterToBranches';
 import { ActivateBerbadosNightlifeSubscription1836000000000 } from './database/migrations/1836000000000-ActivateBarbadosNightlifeSubscription';
 import { ActivateBerbadosNightlifeSubscription1836000000001 } from './database/migrations/1836000000001-ActivateBerbadosNightlifeSubscription';
+import { AddDispatchDelivery1840000000000 } from './database/migrations/1840000000000-AddDispatchDelivery';
 import { PlatformPaymentProvider } from './modules/admin/entities/platform-payment-provider.entity';
 import { Feedback } from './modules/feedback/entities/feedback.entity';
 import { WaiterCall } from './modules/waiter-call/entities/waiter-call.entity';
+import { Rider } from './modules/riders/entities/rider.entity';
+import { Delivery } from './modules/delivery/entities/delivery.entity';
 
 import { AuthModule } from './modules/auth/auth.module';
 import { BusinessModule } from './modules/business/business.module';
@@ -125,6 +128,8 @@ import { ReviewModule } from './modules/review/review.module';
 import { GatewayModule } from './modules/gateway/gateway.module';
 import { DeviceModule } from './modules/device/device.module';
 import { WaiterCallModule } from './modules/waiter-call/waiter-call.module';
+import { RiderModule } from './modules/riders/rider.module';
+import { DeliveryModule } from './modules/delivery/delivery.module';
 
 @Module({
   imports: [
@@ -169,6 +174,8 @@ import { WaiterCallModule } from './modules/waiter-call/waiter-call.module';
         PlatformPaymentProvider,
         Feedback,
         WaiterCall,
+        Rider,
+        Delivery,
       ],
       migrations: [
         BackfillUserRoleId1752892800000,
@@ -216,6 +223,7 @@ import { WaiterCallModule } from './modules/waiter-call/waiter-call.module';
         AddMaxTablesPerWaiterToBranches1819000000000,
         ActivateBerbadosNightlifeSubscription1836000000000,
         ActivateBerbadosNightlifeSubscription1836000000001,
+        AddDispatchDelivery1840000000000,
       ],
       migrationsRun: true,
       synchronize: false,
@@ -279,6 +287,8 @@ import { WaiterCallModule } from './modules/waiter-call/waiter-call.module';
     GatewayModule,
     DeviceModule,
     WaiterCallModule,
+    RiderModule,
+    DeliveryModule,
   ],
   controllers: [AppController],
   providers: [

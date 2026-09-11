@@ -124,13 +124,41 @@ export class RealtimeService {
 
   emitWaiterCall(branchId: string, event: string, payload: any) {
     this.emitTo(
-      [
-        `branch:${branchId}`,
-        `managers:${branchId}`,
-        `tables:${branchId}`,
-      ],
+      [`branch:${branchId}`, `managers:${branchId}`, `tables:${branchId}`],
       event,
       payload,
+    );
+  }
+
+  emitDeliveryAvailable(branchId: string, delivery: any) {
+    this.emitTo(
+      [`riders:${branchId}`, `managers:${branchId}`],
+      'delivery:available',
+      delivery,
+    );
+  }
+
+  emitDeliveryUpdated(branchId: string, delivery: any) {
+    this.emitTo(
+      [`riders:${branchId}`, `managers:${branchId}`, `branch:${branchId}`],
+      'delivery:updated',
+      delivery,
+    );
+  }
+
+  emitDeliveryStatusChange(branchId: string, delivery: any, tabId: string) {
+    this.emitTo(
+      [`riders:${branchId}`, `managers:${branchId}`, `branch:${branchId}`],
+      'delivery:status',
+      { tabId, delivery },
+    );
+  }
+
+  emitRiderOnlineChanged(branchId: string, rider: any) {
+    this.emitTo(
+      [`managers:${branchId}`, `branch:${branchId}`],
+      'rider:online-changed',
+      rider,
     );
   }
 }

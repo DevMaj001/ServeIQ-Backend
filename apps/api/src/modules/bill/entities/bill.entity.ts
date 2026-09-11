@@ -55,6 +55,9 @@ export class Bill {
   @Column({ type: 'integer', default: 0 })
   tax_kobo: number;
 
+  @Column({ type: 'integer', default: 0 })
+  delivery_fee_kobo: number;
+
   @Column({ type: 'integer' })
   total_kobo: number;
 

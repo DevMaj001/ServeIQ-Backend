@@ -131,7 +131,10 @@ async function buildService(overrides: {
       { provide: ReceiptService, useValue: receiptService },
       { provide: CloudinaryService, useValue: cloudinaryService },
       { provide: RealtimeService, useValue: mockRealtimeService() },
-      { provide: OrderService, useValue: { approve: jest.fn().mockResolvedValue(undefined) } },
+      {
+        provide: OrderService,
+        useValue: { approve: jest.fn().mockResolvedValue(undefined) },
+      },
     ],
   }).compile();
 
@@ -165,20 +168,35 @@ describe('BillService — security / data isolation', () => {
 
     it('allows a manager to bill any waiter tab', async () => {
       const { service } = await buildService({ tab: otherWaiterTab });
-      const bill = await service.generateBill('tab-1', 'branch-A', 'manager-1', 'manager');
+      const bill = await service.generateBill(
+        'tab-1',
+        'branch-A',
+        'manager-1',
+        'manager',
+      );
       expect(bill).toBeDefined();
       expect(bill.tab_id).toBe('tab-1');
     });
 
     it('allows an owner to bill any waiter tab', async () => {
       const { service } = await buildService({ tab: otherWaiterTab });
-      const bill = await service.generateBill('tab-1', 'branch-A', 'owner-1', 'owner');
+      const bill = await service.generateBill(
+        'tab-1',
+        'branch-A',
+        'owner-1',
+        'owner',
+      );
       expect(bill).toBeDefined();
     });
 
     it('allows a cashier to bill any waiter tab', async () => {
       const { service } = await buildService({ tab: otherWaiterTab });
-      const bill = await service.generateBill('tab-1', 'branch-A', 'cashier-1', 'cashier');
+      const bill = await service.generateBill(
+        'tab-1',
+        'branch-A',
+        'cashier-1',
+        'cashier',
+      );
       expect(bill).toBeDefined();
     });
 

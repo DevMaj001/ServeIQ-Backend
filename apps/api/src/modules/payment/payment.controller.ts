@@ -119,6 +119,8 @@ export class PaymentController {
     const serviceChargeKobo = Math.round(
       subtotalKobo * (serviceChargePercent / 100),
     );
+    const deliveryFeeKobo =
+      tab.pickup_mode === 'dispatch' ? Number(tab.delivery_fee_kobo || 0) : 0;
 
     let bill = await this.billRepo.findOne({
       where: { tab_id: tab.id, payment_status: 'pending' },
@@ -131,7 +133,8 @@ export class PaymentController {
         service_charge_kobo: serviceChargeKobo,
         tax_kobo: 0,
         discount_kobo: 0,
-        total_kobo: subtotalKobo + serviceChargeKobo,
+        delivery_fee_kobo: deliveryFeeKobo,
+        total_kobo: subtotalKobo + serviceChargeKobo + deliveryFeeKobo,
         payment_status: 'pending',
         issued_by: 'self-service',
         payment_reference: paymentReference,
@@ -214,6 +217,8 @@ export class PaymentController {
     const serviceChargeKobo = Math.round(
       subtotalKobo * (serviceChargePercent / 100),
     );
+    const deliveryFeeKobo =
+      tab.pickup_mode === 'dispatch' ? Number(tab.delivery_fee_kobo || 0) : 0;
 
     const existingBill = await this.billRepo.findOne({
       where: { tab_id: tab.id },
@@ -256,7 +261,8 @@ export class PaymentController {
         service_charge_kobo: serviceChargeKobo,
         tax_kobo: 0,
         discount_kobo: 0,
-        total_kobo: subtotalKobo + serviceChargeKobo,
+        delivery_fee_kobo: deliveryFeeKobo,
+        total_kobo: subtotalKobo + serviceChargeKobo + deliveryFeeKobo,
         payment_status: 'pending_cash',
         payment_method: PaymentMethod.CASH,
         issued_by: 'self-service',
@@ -265,6 +271,12 @@ export class PaymentController {
     } else {
       bill.payment_method = PaymentMethod.CASH;
       bill.payment_status = 'pending_cash';
+      bill.delivery_fee_kobo = deliveryFeeKobo;
+      bill.total_kobo =
+        bill.subtotal_kobo +
+        bill.service_charge_kobo -
+        (bill.discount_kobo ?? 0) +
+        deliveryFeeKobo;
     }
     bill = await this.billRepo.save(bill);
 

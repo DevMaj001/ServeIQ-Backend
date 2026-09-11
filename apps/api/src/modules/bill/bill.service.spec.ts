@@ -105,7 +105,10 @@ describe('BillService', () => {
         { provide: ReceiptService, useValue: receiptService },
         { provide: CloudinaryService, useValue: cloudinaryService },
         { provide: RealtimeService, useValue: mockRealtimeService() },
-        { provide: OrderService, useValue: { approve: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: OrderService,
+          useValue: { approve: jest.fn().mockResolvedValue(undefined) },
+        },
       ],
     }).compile();
 
