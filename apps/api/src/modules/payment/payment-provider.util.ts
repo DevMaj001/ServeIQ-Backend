@@ -113,7 +113,7 @@ export function buildPaymentMethods(
     });
   }
 
-  methods.push({ type: 'cash', requires_counter_confirmation: true });
+  methods.push({ type: 'cash', label: 'Cash', requires_counter_confirmation: true });
   return methods;
 }
 
