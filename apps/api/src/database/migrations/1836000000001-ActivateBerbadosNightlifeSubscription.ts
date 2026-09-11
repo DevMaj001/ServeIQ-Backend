@@ -1,18 +1,14 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-const MATCH = `(bu.email ILIKE 'berbadosnightlife@gmail.com'
-    OR bu.name ILIKE 'Berbados%Night%'
-    OR bu.name ILIKE 'Barbados%Night%')`;
-
-export class ActivateBerbadosNightlifeSubscription1836000000000
+export class ActivateBerbadosNightlifeSubscription1836000000001
   implements MigrationInterface
 {
-  name = 'ActivateBerbadosNightlifeSubscription1836000000000';
+  name = 'ActivateBerbadosNightlifeSubscription1836000000001';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // Activate the subscription for Berbados Nightlife & Lounge Kubwa that
-    // got stuck in trialing because callback_url was never sent to Paystack
-    // before the payment fix.
+    // Idempotent: activate the subscription for Berbados Nightlife & Lounge
+    // Kubwa (berbadosnightlife@gmail.com) that remains in 'trialing' after
+    // paying before the callback_url fix. Only affects trialing rows.
     await queryRunner.query(`
       UPDATE subscriptions s
       SET status = 'active',
@@ -26,7 +22,10 @@ export class ActivateBerbadosNightlifeSubscription1836000000000
       FROM branches b
       JOIN businesses bu ON bu.id = b.business_id
       WHERE s.branch_id = b.id
-        AND ${MATCH}
+        AND s.status = 'trialing'
+        AND (bu.email ILIKE 'berbadosnightlife@gmail.com'
+             OR bu.name ILIKE 'Berbados%Night%'
+             OR bu.name ILIKE 'Barbados%Night%')
     `);
   }
 
@@ -41,7 +40,9 @@ export class ActivateBerbadosNightlifeSubscription1836000000000
       FROM branches b
       JOIN businesses bu ON bu.id = b.business_id
       WHERE s.branch_id = b.id
-        AND ${MATCH}
+        AND (bu.email ILIKE 'berbadosnightlife@gmail.com'
+             OR bu.name ILIKE 'Berbados%Night%'
+             OR bu.name ILIKE 'Barbados%Night%')
     `);
   }
 }
