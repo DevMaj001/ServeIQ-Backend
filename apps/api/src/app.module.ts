@@ -227,7 +227,7 @@ import { DeliveryModule } from './modules/delivery/delivery.module';
         AddDispatchDelivery1840000000000,
         CleanRiderVehicleData1841000000000,
       ],
-      migrationsRun: false,
+      migrationsRun: true,
       synchronize: false,
       invalidWhereValuesBehavior: { undefined: 'ignore', null: 'sql-null' },
       logging: false,
