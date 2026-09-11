@@ -14,6 +14,7 @@ const CREATABLE_ROLES = [
   UserRole.MANAGER,
   UserRole.CHEF,
   UserRole.CASHIER,
+  UserRole.RIDER,
 ] as const;
 
 export class CreateWaiterDto {
@@ -63,7 +64,7 @@ export class CreateWaiterDto {
   })
   @IsOptional()
   @IsIn(CREATABLE_ROLES, {
-    message: 'Role must be one of: waiter, supervisor, manager, chef',
+    message: 'Role must be one of: waiter, supervisor, manager, chef, rider',
   })
   role?: string;
 }

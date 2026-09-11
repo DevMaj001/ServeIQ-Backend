@@ -6,9 +6,10 @@ import { User } from './entities/user.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { AuditLog } from '../../entities/audit-log.entity';
 import { AuditService } from '../../common/services/audit.service';
+import { Rider } from '../riders/entities/rider.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, Branch, AuditLog])],
+  imports: [TypeOrmModule.forFeature([User, Branch, AuditLog, Rider])],
   providers: [UserService, AuditService],
   controllers: [UserController],
   exports: [UserService],

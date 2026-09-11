@@ -14,6 +14,7 @@ import { Role } from '../role/entities/role.entity';
 import { UserRole } from '../../common/shared';
 import { CreateWaiterDto } from './dto/create-waiter.dto';
 import { AuditService } from '../../common/services/audit.service';
+import { Rider } from '../riders/entities/rider.entity';
 
 @Injectable()
 export class UserService {
@@ -24,6 +25,8 @@ export class UserService {
     private branchRepository: Repository<Branch>,
     @InjectRepository(Role)
     private roleRepository: Repository<Role>,
+    @InjectRepository(Rider)
+    private riderRepository: Repository<Rider>,
     private auditService: AuditService,
   ) {}
 
@@ -134,6 +137,19 @@ export class UserService {
 
       const savedUser = await this.userRepository.save(user);
 
+      // When creating a Rider, also insert a rider row so the delivery
+      // board can find them by user_id (riderService.findByUserId).
+      if (targetRole === UserRole.RIDER) {
+        const riderRow = this.riderRepository.create({
+          user_id: savedUser.id,
+          business_id: businessId,
+          branch_id: dto.branchId,
+          is_online: false,
+          vehicle: dto.avatar_url ?? null, // no separate vehicle field in DTO yet
+        });
+        await this.riderRepository.save(riderRow);
+      }
+
       const auditAction =
         targetRole === UserRole.SUPERVISOR
           ? 'SUPERVISOR_CREATED'
@@ -143,7 +159,9 @@ export class UserService {
               ? 'CHEF_CREATED'
               : targetRole === UserRole.CASHIER
                 ? 'CASHIER_CREATED'
-                : 'WAITER_CREATED';
+                : targetRole === UserRole.RIDER
+                  ? 'RIDER_CREATED'
+                  : 'WAITER_CREATED';
       await this.auditService.log({
         branchId: dto.branchId,
         userId: savedUser.id,

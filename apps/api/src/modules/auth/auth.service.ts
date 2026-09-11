@@ -265,6 +265,7 @@ export class AuthService {
       UserRole.MANAGER,
       UserRole.CHEF,
       UserRole.CASHIER,
+      UserRole.RIDER,
     ]);
 
     const findMatchingUser = async (
