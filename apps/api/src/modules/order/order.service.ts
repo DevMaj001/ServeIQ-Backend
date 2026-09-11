@@ -449,10 +449,6 @@ export class OrderService {
         order.assigned_department = departmentId;
         order.estimated_preparation_time_seconds =
           dto.estimated_preparation_time_seconds;
-        order.timer_started_at = now;
-        order.timer_ends_at = new Date(
-          now.getTime() + dto.estimated_preparation_time_seconds * 1000,
-        );
 
         // Default status after approval. The KDS layer is optional: for branches with
         // kitchen-display infrastructure enabled (kds_enabled), approval auto-dispatches
@@ -470,10 +466,24 @@ export class OrderService {
         order.order_status = kdsEnabled
           ? OrderStatus.ASSIGNED_TO_DEPARTMENT
           : OrderStatus.APPROVED;
-        // preparing_at is set to the approval timestamp only when the branch has no KDS
-        // (no chef-confirmed "cooking started" signal). Once the KDS chef accepts, the
-        // accept() transition overwrites preparing_at with the real start time.
-        order.preparing_at = kdsEnabled ? null : now;
+
+        if (kdsEnabled) {
+          // KDS: the prep countdown must not burn time while the order sits
+          // waiting for a chef to accept. The timer starts in accept().
+          order.timer_started_at = null;
+          order.timer_ends_at = null;
+          order.preparing_at = null;
+        } else {
+          // Legacy: approval starts the countdown immediately.
+          order.timer_started_at = now;
+          order.timer_ends_at = new Date(
+            now.getTime() + dto.estimated_preparation_time_seconds * 1000,
+          );
+          // preparing_at is set to the approval timestamp only when the branch has no KDS
+          // (no chef-confirmed "cooking started" signal). Once the KDS chef accepts, the
+          // accept() transition overwrites preparing_at with the real start time.
+          order.preparing_at = now;
+        }
 
         await manager.getRepository(Order).save(order);
 
@@ -777,7 +787,14 @@ export class OrderService {
         }
 
         order.order_status = OrderStatus.PREPARING;
-        order.preparing_at = new Date();
+        const acceptedAt = new Date();
+        order.preparing_at = acceptedAt;
+        // KDS: the prep countdown starts when the chef accepts, not at approval.
+        order.timer_started_at = acceptedAt;
+        order.timer_ends_at = new Date(
+          acceptedAt.getTime() +
+            (order.estimated_preparation_time_seconds ?? 0) * 1000,
+        );
 
         await manager.getRepository(Order).save(order);
 
