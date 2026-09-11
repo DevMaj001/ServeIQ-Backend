@@ -5,14 +5,15 @@ export class AddDispatchDelivery1840000000000 implements MigrationInterface {
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // 1. Ensure the 'rider' value exists in the users role enum (if column is
-    //    still a PG enum). If the column is already varchar this is a harmless
-    //    no-op wrapped in try/catch.
-    try {
+    //    still a PG enum). If the type doesn't exist, skip entirely — attempting
+    //    ALTER TYPE on a non-existent type aborts the entire PG transaction.
+    const [typeExists] = await queryRunner.query(
+      `SELECT 1 FROM pg_type WHERE typname = 'users_role_enum'`,
+    );
+    if (typeExists) {
       await queryRunner.query(
         `ALTER TYPE "users_role_enum" ADD VALUE IF NOT EXISTS 'rider'`,
       );
-    } catch {
-      // column might already be varchar — safe to ignore
     }
 
     // 2. Riders table – one row per rider-user.
