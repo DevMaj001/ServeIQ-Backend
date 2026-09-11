@@ -179,7 +179,8 @@ export class UserService {
           business_id: businessId,
           branch_id: dto.branchId,
           is_online: false,
-          vehicle: dto.avatar_url ?? null, // no separate vehicle field in DTO yet
+          // no separate vehicle field on the staff-create DTO yet.
+          vehicle: dto.vehicle ?? null,
         });
         await this.riderRepository.save(riderRow);
       }

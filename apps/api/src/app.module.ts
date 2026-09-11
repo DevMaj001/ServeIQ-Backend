@@ -88,6 +88,7 @@ import { AddMaxTablesPerWaiterToBranches1819000000000 } from './database/migrati
 import { ActivateBerbadosNightlifeSubscription1836000000000 } from './database/migrations/1836000000000-ActivateBarbadosNightlifeSubscription';
 import { ActivateBerbadosNightlifeSubscription1836000000001 } from './database/migrations/1836000000001-ActivateBerbadosNightlifeSubscription';
 import { AddDispatchDelivery1840000000000 } from './database/migrations/1840000000000-AddDispatchDelivery';
+import { CleanRiderVehicleData1841000000000 } from './database/migrations/1841000000000-CleanRiderVehicleData';
 import { PlatformPaymentProvider } from './modules/admin/entities/platform-payment-provider.entity';
 import { Feedback } from './modules/feedback/entities/feedback.entity';
 import { WaiterCall } from './modules/waiter-call/entities/waiter-call.entity';
@@ -224,8 +225,9 @@ import { DeliveryModule } from './modules/delivery/delivery.module';
         ActivateBerbadosNightlifeSubscription1836000000000,
         ActivateBerbadosNightlifeSubscription1836000000001,
         AddDispatchDelivery1840000000000,
+        CleanRiderVehicleData1841000000000,
       ],
-      migrationsRun: true,
+      migrationsRun: false,
       synchronize: false,
       invalidWhereValuesBehavior: { undefined: 'ignore', null: 'sql-null' },
       logging: false,

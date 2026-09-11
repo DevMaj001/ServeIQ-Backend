@@ -59,6 +59,14 @@ export class CreateWaiterDto {
   avatar_url?: string;
 
   @ApiPropertyOptional({
+    example: 'Motorcycle',
+    description: 'Rider vehicle description (only used when role is rider)',
+  })
+  @IsOptional()
+  @IsString()
+  vehicle?: string;
+
+  @ApiPropertyOptional({
     example: 'waiter',
     description: 'Role to assign. Defaults to waiter.',
   })

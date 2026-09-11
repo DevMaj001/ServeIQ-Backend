@@ -23,6 +23,7 @@ export interface RiderUserView {
   business_id: string;
   is_online: boolean;
   vehicle: string | null;
+  avatar_url: string | null;
   full_name: string | null;
   email: string | null;
   phone: string | null;
@@ -230,6 +231,7 @@ export class RiderService {
       business_id: rider.business_id,
       is_online: rider.is_online,
       vehicle: rider.vehicle,
+      avatar_url: user?.avatar_url ?? null,
       full_name: user?.full_name ?? null,
       email: user?.email ?? null,
       phone: user?.phone ?? null,
