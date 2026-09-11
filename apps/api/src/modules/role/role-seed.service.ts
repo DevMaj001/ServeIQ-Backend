@@ -609,26 +609,41 @@ export class RoleSeedService implements OnApplicationBootstrap {
   }
 
   async seed() {
-    const existing = await this.permissionRepo.count();
-    if (existing > 0) return;
+    // Idempotent: upsert missing permissions, then ensure every default role
+    // exists with its permissions. Previously this bailed out entirely when
+    // any permission row existed, which meant new roles (e.g. Rider) were
+    // never created on already-seeded production databases.
+    const existingPerms = await this.permissionRepo.find();
+    const existingCodes = new Set(existingPerms.map((p) => p.code));
 
-    // Seed permissions
-    const permissionEntities = this.permissionRepo.create(
-      ALL_PERMISSIONS.map((p) => ({
-        code: p.code,
-        name: p.name,
-        description: p.description,
-        category: p.category,
-      })),
+    const missingPermissions = ALL_PERMISSIONS.filter(
+      (p) => !existingCodes.has(p.code),
     );
-    await this.permissionRepo.save(permissionEntities);
+    if (missingPermissions.length > 0) {
+      await this.permissionRepo.save(
+        this.permissionRepo.create(
+          missingPermissions.map((p) => ({
+            code: p.code,
+            name: p.name,
+            description: p.description,
+            category: p.category,
+          })),
+        ),
+      );
+    }
 
+    const allPermissions = await this.permissionRepo.find();
     const codeToPermission = new Map(
-      permissionEntities.map((p) => [p.code, p]),
+      allPermissions.map((p) => [p.code, p]),
     );
 
-    // Seed roles
+    // Ensure every default role exists; leave pre-existing roles untouched.
     for (const def of DEFAULT_ROLES) {
+      const existingRole = await this.roleRepo.findOne({
+        where: { name: def.name },
+      });
+      if (existingRole) continue;
+
       const role = this.roleRepo.create({
         name: def.name,
         description: def.description,
@@ -640,6 +655,6 @@ export class RoleSeedService implements OnApplicationBootstrap {
       await this.roleRepo.save(role);
     }
 
-    console.log('[Seed] Permissions and default roles seeded successfully');
+    console.log('[Seed] Permissions and default roles are up to date');
   }
 }
