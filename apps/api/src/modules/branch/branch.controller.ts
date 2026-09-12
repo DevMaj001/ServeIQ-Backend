@@ -205,6 +205,12 @@ export class BranchController {
         ...dto.delivery,
       };
     }
+    if (dto.reservation) {
+      newSettings.reservation = {
+        ...(currentSettings.reservation || {}),
+        ...dto.reservation,
+      };
+    }
     branch.settings = newSettings;
     return this.branchRepository.save(branch);
   }
