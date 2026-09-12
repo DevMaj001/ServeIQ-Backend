@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Delivery } from './entities/delivery.entity';
+import { RiderLedger, PayoutBatch } from './entities/rider-payout.entity';
 import { Tab } from '../tab/entities/tab.entity';
 import { Order } from '../order/entities/order.entity';
 import { Rider } from '../riders/entities/rider.entity';
@@ -13,7 +14,7 @@ import { NotificationModule } from '../notification/notification.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Delivery, Tab, Order, Rider, Branch, User]),
+    TypeOrmModule.forFeature([Delivery, Tab, Order, Rider, Branch, User, RiderLedger, PayoutBatch]),
     RiderModule,
     NotificationModule,
   ],
