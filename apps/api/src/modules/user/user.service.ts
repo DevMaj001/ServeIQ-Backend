@@ -281,6 +281,7 @@ export class UserService {
         UserRole.MANAGER,
         UserRole.CHEF,
         UserRole.CASHIER,
+        UserRole.RIDER,
       ]);
     } else {
       where.role = UserRole.WAITER;
