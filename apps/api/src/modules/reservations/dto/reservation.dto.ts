@@ -10,6 +10,7 @@ import {
   IsIn,
   ValidateIf,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ReservationStatus, ReservationSource } from '../entities/reservation.entity';
 
@@ -143,6 +144,7 @@ export class ReservationQueryDto {
 
   @ApiPropertyOptional({ default: 50, description: 'Page size' })
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(200)
@@ -150,6 +152,7 @@ export class ReservationQueryDto {
 
   @ApiPropertyOptional({ default: 0, description: 'Offset for pagination' })
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(0)
   offset?: number;
