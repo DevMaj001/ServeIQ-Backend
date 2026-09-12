@@ -90,12 +90,14 @@ import { ActivateBerbadosNightlifeSubscription1836000000001 } from './database/m
 import { AddDispatchDelivery1840000000000 } from './database/migrations/1840000000000-AddDispatchDelivery';
 import { CleanRiderVehicleData1841000000000 } from './database/migrations/1841000000000-CleanRiderVehicleData';
 import { AddRiderPayoutTables1842000000000 } from './database/migrations/1842000000000-AddRiderPayoutTables';
+import { AddTableReservations1843000000000 } from './database/migrations/1843000000000-AddTableReservations';
 import { PlatformPaymentProvider } from './modules/admin/entities/platform-payment-provider.entity';
 import { Feedback } from './modules/feedback/entities/feedback.entity';
 import { WaiterCall } from './modules/waiter-call/entities/waiter-call.entity';
 import { Rider } from './modules/riders/entities/rider.entity';
 import { Delivery } from './modules/delivery/entities/delivery.entity';
 import { RiderLedger, PayoutBatch } from './modules/delivery/entities/rider-payout.entity';
+import { Reservation } from './modules/reservations/entities/reservation.entity';
 
 import { AuthModule } from './modules/auth/auth.module';
 import { BusinessModule } from './modules/business/business.module';
@@ -133,6 +135,7 @@ import { DeviceModule } from './modules/device/device.module';
 import { WaiterCallModule } from './modules/waiter-call/waiter-call.module';
 import { RiderModule } from './modules/riders/rider.module';
 import { DeliveryModule } from './modules/delivery/delivery.module';
+import { ReservationsModule } from './modules/reservations/reservations.module';
 
 @Module({
   imports: [
@@ -181,6 +184,7 @@ import { DeliveryModule } from './modules/delivery/delivery.module';
         Delivery,
         RiderLedger,
         PayoutBatch,
+        Reservation,
       ],
       migrations: [
         BackfillUserRoleId1752892800000,
@@ -231,6 +235,7 @@ import { DeliveryModule } from './modules/delivery/delivery.module';
         AddDispatchDelivery1840000000000,
         CleanRiderVehicleData1841000000000,
         AddRiderPayoutTables1842000000000,
+        AddTableReservations1843000000000,
       ],
       migrationsRun: true,
       synchronize: false,
@@ -296,6 +301,7 @@ import { DeliveryModule } from './modules/delivery/delivery.module';
     WaiterCallModule,
     RiderModule,
     DeliveryModule,
+    ReservationsModule,
   ],
   controllers: [AppController],
   providers: [

@@ -161,4 +161,12 @@ export class RealtimeService {
       rider,
     );
   }
+
+  emitReservationUpdate(branchId: string, reservation: any) {
+    this.emitTo(
+      [`branch:${branchId}`, `managers:${branchId}`],
+      'reservation:updated',
+      reservation,
+    );
+  }
 }

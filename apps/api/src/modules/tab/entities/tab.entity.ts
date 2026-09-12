@@ -28,7 +28,7 @@ export class Tab {
   waiter_id: string | null;
 
   @Column({ type: 'uuid', nullable: true })
-  shift_id: string;
+  shift_id: string | null;
 
   @Column({ nullable: true })
   cashier_id: string;
@@ -83,6 +83,9 @@ export class Tab {
 
   @VersionColumn()
   version: number;
+
+  @Column({ type: 'uuid', nullable: true })
+  reservation_id: string | null;
 
   @Column({ type: 'varchar', length: 20, default: 'self' })
   pickup_mode: string;

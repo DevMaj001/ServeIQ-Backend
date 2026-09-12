@@ -18,6 +18,7 @@ export enum NotificationType {
   DELIVERY_ACCEPTED = 'delivery_accepted',
   DELIVERY_OUT_FOR_DELIVERY = 'delivery_out_for_delivery',
   DELIVERY_COMPLETED = 'delivery_completed',
+  RESERVATION_REMINDER = 'reservation_reminder',
 }
 
 @Entity('notifications')
