@@ -16,6 +16,7 @@ import { Review } from '../review/entities/review.entity';
 import { Bill } from '../bill/entities/bill.entity';
 import { TrackingService } from '../tracking/tracking.service';
 import { RealtimeService } from '../gateway/realtime.service';
+import { DeliveryService } from '../delivery/delivery.service';
 import { DataSource } from 'typeorm';
 import { Delivery } from '../delivery/entities/delivery.entity';
 import { Rider } from '../riders/entities/rider.entity';
@@ -70,6 +71,7 @@ describe('CustomerService.submitReview', () => {
           useValue: { generateUniqueCode: jest.fn() },
         },
         { provide: RealtimeService, useValue: {} },
+        { provide: DeliveryService, useValue: { confirmCustomerDelivery: jest.fn().mockResolvedValue({}) } },
       ],
     }).compile();
 
