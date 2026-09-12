@@ -154,7 +154,11 @@ export class PaymentController {
     ]);
 
     const settings = branch?.settings || {};
-    const paymentMethods = buildPaymentMethods(activeTerminals, settings);
+    const paymentMethods = buildPaymentMethods(
+      activeTerminals,
+      settings,
+      tab.tab_type !== TabType.TAKEAWAY,
+    );
 
     const currency = business?.currency ?? 'NGN';
     const symbolMap: Record<string, string> = {
@@ -200,6 +204,10 @@ export class PaymentController {
       throw new ForbiddenException('Invalid tracking code');
     if (tab.status !== 'open' && tab.status !== 'billed')
       throw new BadRequestException('Tab is not payable');
+    if (tab.tab_type === TabType.TAKEAWAY)
+      throw new BadRequestException(
+        'Cash payment is not available for takeaway orders. Please pay with transfer or card.',
+      );
 
     const orders = await this.orderRepo.find({ where: { tab_id: tab.id } });
     if (orders.length === 0) throw new BadRequestException('Tab has no orders');

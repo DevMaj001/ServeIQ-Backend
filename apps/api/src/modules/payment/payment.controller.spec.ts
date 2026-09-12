@@ -624,4 +624,94 @@ describe('PaymentController', () => {
       );
     });
   });
+
+  describe('initializePayment cash exclusion for takeaway', () => {
+    it('omits cash from payment methods for a takeaway tab', async () => {
+      billRepo.findOne.mockResolvedValue({
+        id: 'bill-1',
+        tab_id: 'tab-1',
+        total_kobo: 10000,
+        payment_status: 'pending',
+        payment_reference: 'PAY-REF',
+      });
+      billRepo.create.mockReturnValue({
+        payment_reference: 'PAY-REF-2',
+        payment_status: 'pending',
+      });
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        tab_type: 'takeaway',
+        tracking_code: 'SVQ-CODE',
+        status: 'open',
+      });
+      orderRepo.find.mockResolvedValue([{ subtotal_kobo: 9000 }]);
+      posTerminalRepo.find.mockResolvedValue([]);
+      branchRepo.findOne.mockResolvedValue({
+        id: 'branch-1',
+        settings: {},
+      });
+
+      const result = await controller.initializePayment({
+        tab_id: 'tab-1',
+        tracking_code: 'SVQ-CODE',
+      });
+
+      expect(
+        result.payment_methods.some((m) => (m as any).type === 'cash'),
+      ).toBe(false);
+    });
+
+    it('includes cash for a dine-in tab', async () => {
+      billRepo.findOne.mockResolvedValue(null);
+      billRepo.create.mockReturnValue({
+        payment_reference: 'PAY-REF-3',
+        payment_status: 'pending',
+      });
+      billRepo.save.mockResolvedValue({ id: 'bill-1' });
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        tab_type: 'dine_in',
+        tracking_code: 'SVQ-CODE',
+        status: 'open',
+      });
+      orderRepo.find.mockResolvedValue([{ subtotal_kobo: 9000 }]);
+      posTerminalRepo.find.mockResolvedValue([]);
+      branchRepo.findOne.mockResolvedValue({
+        id: 'branch-1',
+        settings: {},
+      });
+
+      const result = await controller.initializePayment({
+        tab_id: 'tab-1',
+        tracking_code: 'SVQ-CODE',
+      });
+
+      expect(
+        result.payment_methods.some((m) => (m as any).type === 'cash'),
+      ).toBe(true);
+    });
+  });
+
+  describe('submitCashIntent', () => {
+    it('rejects cash intent on a takeaway tab', async () => {
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        tab_type: 'takeaway',
+        tracking_code: 'SVQ-CODE',
+        status: 'open',
+      });
+
+      await expect(
+        controller.submitCashIntent({
+          tab_id: 'tab-1',
+          tracking_code: 'SVQ-CODE',
+        }),
+      ).rejects.toThrow(
+        'Cash payment is not available for takeaway orders. Please pay with transfer or card.',
+      );
+    });
+  });
 });

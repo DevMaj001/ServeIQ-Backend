@@ -127,4 +127,15 @@ export class CreateMenuItemDto {
   @IsIn(['instant', 'cook'])
   @IsOptional()
   prep_type?: string;
+
+  @ApiProperty({
+    example: 900,
+    description:
+      "Estimated preparation time in seconds for 'cook' items. Shown on the menu and used as the default prep countdown when orders hit the kitchen (KDS).",
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  prep_time_seconds?: number;
 }

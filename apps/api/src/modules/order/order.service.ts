@@ -190,6 +190,19 @@ export class OrderService {
             ? FulfillmentType.PACK
             : FulfillmentType.SERVE;
 
+        // KDS-enabled branches route cook items straight to the kitchen,
+        // bypassing supervisor approval. departmentRepo and the branch default
+        // give the item a target station; without either it lands "Unassigned".
+        const tabBranch = await manager
+          .getRepository(Branch)
+          .findOne({ where: { id: tab.branch_id } });
+        const tabSettings = tabBranch?.settings || {};
+        const kdsEnabled =
+          (tabSettings?.feature_flags as Record<string, boolean> | undefined)
+            ?.kds_enabled === true;
+        const kdsDefaultDepartment =
+          (tabSettings?.kds_default_department_id as string) || null;
+
         // VIP pricing: when the tab sits on a VIP table, every item's unit price
         // is raised by the business-configured percentage. Admin controls the
         // percentage (settings > vip_surcharge_percent); 0 (default) = no change.
@@ -232,7 +245,24 @@ export class OrderService {
           const orderStatus =
             menuItem.prep_type === 'instant'
               ? OrderStatus.READY_FOR_PICKUP
-              : OrderStatus.PENDING_SUPERVISOR_APPROVAL;
+              : kdsEnabled
+                ? OrderStatus.ASSIGNED_TO_DEPARTMENT
+                : OrderStatus.PENDING_SUPERVISOR_APPROVAL;
+
+          // When KDS is enabled the waiter has already punched the department +
+          // prep time at order time (industry-standard flow), so no supervisor is
+          // needed. Fall back to the branch default department, then Unassigned.
+          // Estimated prep time falls back to the menu item default when the item
+          // carries one.
+          const assignedDepartment = kdsEnabled
+            ? item.department || kdsDefaultDepartment || null
+            : null;
+          const estimatedPrepSeconds = kdsEnabled
+            ? (item.estimated_preparation_time_seconds ??
+              menuItem.prep_time_seconds ??
+              null)
+            : null;
+
           const order = manager.getRepository(Order).create({
             tab_id: tabId,
             menu_item_id: item.menu_item_id,
@@ -245,6 +275,8 @@ export class OrderService {
             modifiers: item.modifiers || null,
             fulfillment_type: item.fulfillment_type || tabDefault,
             order_status: orderStatus,
+            assigned_department: assignedDepartment,
+            estimated_preparation_time_seconds: estimatedPrepSeconds,
           });
           orders.push(await manager.getRepository(Order).save(order));
         }

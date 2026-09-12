@@ -22,7 +22,7 @@ import {
   isBillable,
   statusBlocksPayment,
 } from '../../common/shared';
-import { IsNull, Not } from 'typeorm';
+import { IsNull, Not, In } from 'typeorm';
 import { GenerateBillDto } from './dto/generate-bill.dto';
 import { ProcessPaymentDto } from './dto/process-payment.dto';
 import { ApplyDiscountDto } from './dto/apply-discount.dto';
@@ -270,6 +270,17 @@ export class BillService {
     if (tab.branch_id !== branchId)
       throw new ForbiddenException('Tab does not belong to your branch');
 
+    // Takeaway / self-service orders are prepaid online — cash is not accepted
+    // for them. Dine-in keeps the cash-at-counter flow.
+    if (
+      tab.tab_type === 'takeaway' &&
+      paymentDto.method === PaymentMethod.CASH
+    ) {
+      throw new BadRequestException(
+        'Cash payment is not available for takeaway orders. Please use transfer or a card terminal.',
+      );
+    }
+
     if (
       tab.waiter_id &&
       userId &&
@@ -381,17 +392,53 @@ export class BillService {
       });
 
       // Release prepaid takeaway orders (held on payment approval) to the kitchen now
-      // that payment is confirmed.
-      await manager
-        .getRepository(Order)
-        .createQueryBuilder()
-        .update(Order)
-        .set({ order_status: OrderStatus.PENDING_SUPERVISOR_APPROVAL })
-        .where('tab_id = :tabId', { tabId })
-        .andWhere('order_status = :held', {
-          held: OrderStatus.PENDING_PAYMENT_APPROVAL,
-        })
-        .execute();
+      // that payment is confirmed. KDS-enabled branches send them straight to the
+      // kitchen queue (bypassing supervisor approval); other branches keep the legacy
+      // supervisor pipeline.
+      const heldOrders = await manager.getRepository(Order).find({
+        where: {
+          tab_id: tabId,
+          order_status: OrderStatus.PENDING_PAYMENT_APPROVAL,
+        },
+      });
+      if (heldOrders.length > 0) {
+        const releaseBranch = await manager
+          .getRepository(Branch)
+          .findOne({ where: { id: tab.branch_id } });
+        const releaseKdsEnabled =
+          (
+            releaseBranch?.settings?.feature_flags as
+              Record<string, boolean> | undefined
+          )?.kds_enabled === true;
+        const kdsDefaultDepartment = releaseKdsEnabled
+          ? (releaseBranch?.settings?.kds_default_department_id as string) ||
+            null
+          : null;
+
+        // Self-service orders carry no waiter-selected department/prep time, so fill
+        // them from the branch default + each item's own prep time default.
+        const releaseMenuItems = await manager.getRepository(MenuItem).find({
+          where: {
+            id: In(heldOrders.map((o) => o.menu_item_id)),
+          },
+        });
+        const releaseMenuMap = new Map(releaseMenuItems.map((m) => [m.id, m]));
+
+        for (const heldOrder of heldOrders) {
+          await manager.getRepository(Order).update(heldOrder.id, {
+            order_status: releaseKdsEnabled
+              ? OrderStatus.ASSIGNED_TO_DEPARTMENT
+              : OrderStatus.PENDING_SUPERVISOR_APPROVAL,
+            assigned_department: releaseKdsEnabled
+              ? heldOrder.assigned_department || kdsDefaultDepartment
+              : heldOrder.assigned_department,
+            estimated_preparation_time_seconds:
+              heldOrder.estimated_preparation_time_seconds ??
+              releaseMenuMap.get(heldOrder.menu_item_id)?.prep_time_seconds ??
+              heldOrder.estimated_preparation_time_seconds,
+          });
+        }
+      }
 
       // Virtual tables never participate in occupancy logic — they are system records, not seatable tables.
       const payTable = await manager

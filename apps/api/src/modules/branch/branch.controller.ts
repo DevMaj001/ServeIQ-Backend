@@ -211,6 +211,9 @@ export class BranchController {
         ...dto.reservation,
       };
     }
+    if (dto.kds_default_department_id !== undefined) {
+      newSettings.kds_default_department_id = dto.kds_default_department_id;
+    }
     branch.settings = newSettings;
     return this.branchRepository.save(branch);
   }

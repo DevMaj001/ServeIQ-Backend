@@ -553,6 +553,205 @@ describe('OrderService', () => {
         OrderStatus.PENDING_SUPERVISOR_APPROVAL,
       );
     });
+
+    it('bypasses supervisor and dispatches to the department when branch kds_enabled', async () => {
+      const tabRepo = mockTabRepository();
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        status: 'open',
+      });
+
+      const menuRepo = mockMenuRepository();
+      menuRepo.find.mockResolvedValue([
+        {
+          id: 'menu-1',
+          name: 'Jollof Rice',
+          price_kobo: 5000,
+          track_stock: false,
+          prep_type: 'cook',
+          prep_time_seconds: 900,
+        },
+      ]);
+
+      const kdsManager: any = {
+        getRepository: jest.fn().mockReturnValue({
+          create: jest.fn((dto) => dto),
+          save: jest.fn(async (order) => ({ ...order, id: 'order-1' })),
+          findOne: jest.fn(({ where }: any) =>
+            where.id === 'branch-1'
+              ? Promise.resolve({
+                  id: 'branch-1',
+                  settings: {
+                    feature_flags: { kds_enabled: true },
+                    kds_default_department_id: 'dept-default',
+                  },
+                })
+              : Promise.resolve({ status: 'open' }),
+          ),
+          createQueryBuilder: jest.fn(() => ({
+            update: jest.fn().mockReturnThis(),
+            set: jest.fn().mockReturnThis(),
+            where: jest.fn().mockReturnThis(),
+            andWhere: jest.fn().mockReturnThis(),
+            execute: jest.fn().mockResolvedValue(undefined),
+          })),
+        }),
+      };
+
+      const service = buildService({
+        tabRepository: tabRepo,
+        menuRepository: menuRepo,
+        dataSource: {
+          transaction: jest.fn(async (cb) => cb(kdsManager)),
+          query: jest.fn(),
+        },
+      });
+
+      const result = await service.addOrderItems(
+        'tab-1',
+        [
+          {
+            menu_item_id: 'menu-1',
+            quantity: 1,
+            department: 'dept-1',
+            estimated_preparation_time_seconds: 600,
+          },
+        ],
+        'user-1',
+      );
+
+      expect(result[0].order_status).toBe(OrderStatus.ASSIGNED_TO_DEPARTMENT);
+      expect(result[0].assigned_department).toBe('dept-1');
+      expect(result[0].estimated_preparation_time_seconds).toBe(600);
+    });
+
+    it('falls back to the branch default department and menu prep time', async () => {
+      const tabRepo = mockTabRepository();
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        status: 'open',
+      });
+
+      const menuRepo = mockMenuRepository();
+      menuRepo.find.mockResolvedValue([
+        {
+          id: 'menu-1',
+          name: 'Jollof Rice',
+          price_kobo: 5000,
+          track_stock: false,
+          prep_type: 'cook',
+          prep_time_seconds: 900,
+        },
+      ]);
+
+      const kdsManager: any = {
+        getRepository: jest.fn().mockReturnValue({
+          create: jest.fn((dto) => dto),
+          save: jest.fn(async (order) => ({ ...order, id: 'order-1' })),
+          findOne: jest.fn(({ where }: any) =>
+            where.id === 'branch-1'
+              ? Promise.resolve({
+                  id: 'branch-1',
+                  settings: {
+                    feature_flags: { kds_enabled: true },
+                    kds_default_department_id: 'dept-default',
+                  },
+                })
+              : Promise.resolve({ status: 'open' }),
+          ),
+          createQueryBuilder: jest.fn(() => ({
+            update: jest.fn().mockReturnThis(),
+            set: jest.fn().mockReturnThis(),
+            where: jest.fn().mockReturnThis(),
+            andWhere: jest.fn().mockReturnThis(),
+            execute: jest.fn().mockResolvedValue(undefined),
+          })),
+        }),
+      };
+
+      const service = buildService({
+        tabRepository: tabRepo,
+        menuRepository: menuRepo,
+        dataSource: {
+          transaction: jest.fn(async (cb) => cb(kdsManager)),
+          query: jest.fn(),
+        },
+      });
+
+      const result = await service.addOrderItems(
+        'tab-1',
+        [{ menu_item_id: 'menu-1', quantity: 1 }],
+        'user-1',
+      );
+
+      expect(result[0].order_status).toBe(OrderStatus.ASSIGNED_TO_DEPARTMENT);
+      expect(result[0].assigned_department).toBe('dept-default');
+      expect(result[0].estimated_preparation_time_seconds).toBe(900);
+    });
+
+    it('keeps the supervisor flow when kds_enabled is false', async () => {
+      const tabRepo = mockTabRepository();
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        status: 'open',
+      });
+
+      const menuRepo = mockMenuRepository();
+      menuRepo.find.mockResolvedValue([
+        {
+          id: 'menu-1',
+          name: 'Jollof Rice',
+          price_kobo: 5000,
+          track_stock: false,
+          prep_type: 'cook',
+        },
+      ]);
+
+      const nonKdsManager: any = {
+        getRepository: jest.fn().mockReturnValue({
+          create: jest.fn((dto) => dto),
+          save: jest.fn(async (order) => ({ ...order, id: 'order-1' })),
+          findOne: jest.fn(({ where }: any) =>
+            where.id === 'branch-1'
+              ? Promise.resolve({
+                  id: 'branch-1',
+                  settings: { feature_flags: { kds_enabled: false } },
+                })
+              : Promise.resolve({ status: 'open' }),
+          ),
+          createQueryBuilder: jest.fn(() => ({
+            update: jest.fn().mockReturnThis(),
+            set: jest.fn().mockReturnThis(),
+            where: jest.fn().mockReturnThis(),
+            andWhere: jest.fn().mockReturnThis(),
+            execute: jest.fn().mockResolvedValue(undefined),
+          })),
+        }),
+      };
+
+      const service = buildService({
+        tabRepository: tabRepo,
+        menuRepository: menuRepo,
+        dataSource: {
+          transaction: jest.fn(async (cb) => cb(nonKdsManager)),
+          query: jest.fn(),
+        },
+      });
+
+      const result = await service.addOrderItems(
+        'tab-1',
+        [{ menu_item_id: 'menu-1', quantity: 1 }],
+        'user-1',
+      );
+
+      expect(result[0].order_status).toBe(
+        OrderStatus.PENDING_SUPERVISOR_APPROVAL,
+      );
+      expect(result[0].assigned_department).toBeNull();
+    });
   });
 
   describe('findByTab', () => {

@@ -73,6 +73,7 @@ export function providerTransferAccount(
 export function buildPaymentMethods(
   activeTerminals: PosTerminal[],
   settings: any,
+  allowCash: boolean = true,
 ): CustomerPaymentMethod[] {
   const enabledProviders = getEnabledProviders(settings);
   const terminalProvider =
@@ -113,7 +114,15 @@ export function buildPaymentMethods(
     });
   }
 
-  methods.push({ type: 'cash', label: 'Cash', requires_counter_confirmation: true });
+  // Dine-in can settle with cash at the counter. Takeaway / self-service orders
+  // are prepaid online, so cash is not offered there.
+  if (allowCash) {
+    methods.push({
+      type: 'cash',
+      label: 'Cash',
+      requires_counter_confirmation: true,
+    });
+  }
   return methods;
 }
 

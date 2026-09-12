@@ -415,5 +415,169 @@ describe('BillService', () => {
 
       expect(result).toEqual(existing);
     });
+
+    it('rejects cash payments for takeaway tabs', async () => {
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        tab_type: 'takeaway',
+        waiter_id: null,
+      });
+
+      await expect(
+        service.processPayment('tab-1', 'branch-1', 'user-1', 'owner', {
+          amount: 5000,
+          method: 'cash' as any,
+        }),
+      ).rejects.toThrow('Cash payment is not available for takeaway orders');
+    });
+
+    it('releases held prepaid orders to the kitchen queue when branch kds_enabled', async () => {
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        table_id: null,
+        tab_type: 'takeaway',
+        waiter_id: null,
+      });
+      billRepo.findOne.mockResolvedValue({
+        id: 'bill-1',
+        tab_id: 'tab-1',
+        total_kobo: 5000,
+      });
+      orderRepo.find.mockResolvedValue([
+        { menu_item_id: 'mi-1', order_status: 'delivered' },
+      ]);
+      let releaseUpdate: any;
+      dataSource.transaction = jest.fn(async (cb) =>
+        cb({
+          getRepository: jest.fn((entity) => {
+            if (entity === Order) {
+              return {
+                find: jest.fn(async () => [
+                  {
+                    id: 'held-1',
+                    menu_item_id: 'mi-1',
+                    order_status: 'pending_payment_approval',
+                    assigned_department: null,
+                    estimated_preparation_time_seconds: null,
+                  },
+                ]),
+                update: jest.fn((id, patch) => {
+                  releaseUpdate = patch;
+                  return Promise.resolve(undefined);
+                }),
+              };
+            }
+            if (entity === Branch) {
+              return {
+                findOne: jest.fn().mockResolvedValue({
+                  id: 'branch-1',
+                  settings: {
+                    feature_flags: { kds_enabled: true },
+                    kds_default_department_id: 'dept-default',
+                  },
+                }),
+              };
+            }
+            if (entity === MenuItem) {
+              return {
+                find: jest.fn().mockResolvedValue([
+                  {
+                    id: 'mi-1',
+                    prep_time_seconds: 900,
+                  },
+                ]),
+              };
+            }
+            return {
+              findOne: jest.fn(),
+              find: jest.fn().mockResolvedValue([]),
+              update: jest.fn(),
+              save: jest.fn(async (e) => e),
+            };
+          }),
+        }),
+      );
+
+      const result = await service.processPayment(
+        'tab-1',
+        'branch-1',
+        'user-1',
+        'owner',
+        { amount: 5000, method: 'card' as any, terminal_id: 'term-1' },
+      );
+
+      expect(releaseUpdate.order_status).toBe('assigned_to_department');
+      expect(releaseUpdate.assigned_department).toBe('dept-default');
+      expect(releaseUpdate.estimated_preparation_time_seconds).toBe(900);
+      expect(result.payment_method).toBe('card');
+    });
+
+    it('keeps held prepaid orders on the supervisor pipeline when kds_enabled is off', async () => {
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        table_id: null,
+        tab_type: 'takeaway',
+        waiter_id: null,
+      });
+      billRepo.findOne.mockResolvedValue({
+        id: 'bill-1',
+        tab_id: 'tab-1',
+        total_kobo: 5000,
+      });
+      orderRepo.find.mockResolvedValue([
+        { menu_item_id: 'mi-1', order_status: 'delivered' },
+      ]);
+
+      let releaseUpdate: any;
+      dataSource.transaction = jest.fn(async (cb) =>
+        cb({
+          getRepository: jest.fn((entity) => {
+            if (entity === Order) {
+              return {
+                find: jest.fn(async () => [
+                  {
+                    id: 'held-1',
+                    menu_item_id: 'mi-1',
+                    order_status: 'pending_payment_approval',
+                    assigned_department: null,
+                    estimated_preparation_time_seconds: 600,
+                  },
+                ]),
+                update: jest.fn((id, patch) => {
+                  releaseUpdate = patch;
+                  return Promise.resolve(undefined);
+                }),
+              };
+            }
+            if (entity === Branch) {
+              return {
+                findOne: jest.fn().mockResolvedValue({
+                  id: 'branch-1',
+                  settings: { feature_flags: { kds_enabled: false } },
+                }),
+              };
+            }
+            return {
+              findOne: jest.fn(),
+              find: jest.fn().mockResolvedValue([]),
+              update: jest.fn(),
+              save: jest.fn(async (e) => e),
+            };
+          }),
+        }),
+      );
+
+      await service.processPayment('tab-1', 'branch-1', 'user-1', 'owner', {
+        amount: 5000,
+        method: 'card' as any,
+        terminal_id: 'term-1',
+      });
+
+      expect(releaseUpdate.order_status).toBe('pending_supervisor_approval');
+      expect(releaseUpdate.estimated_preparation_time_seconds).toBe(600);
+    });
   });
 });

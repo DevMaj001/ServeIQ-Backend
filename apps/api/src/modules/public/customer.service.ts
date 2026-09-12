@@ -222,12 +222,31 @@ export class CustomerService {
     const orders = await this.dataSource.transaction(async (manager) => {
       const savedOrders: Order[] = [];
       const held = await this.isTakeawayPrepaid(tab);
+
+      // KDS-enabled branches send cook items straight to the kitchen queue, even for
+      // self-service orders (no waiter to punch them). Held prepaid orders stay held
+      // until payment, then release straight to the kitchen in processPayment.
+      const branch = await manager.getRepository(Branch).findOne({
+        where: { id: tab.branch_id },
+      });
+      const kdsEnabled =
+        (branch?.settings?.feature_flags as Record<string, boolean> | undefined)
+          ?.kds_enabled === true;
+      const kdsDefaultDepartment = kdsEnabled
+        ? (branch?.settings?.kds_default_department_id as string) || null
+        : null;
+
       for (const item of items) {
         const menuItem = menuMap.get(item.menu_item_id)!;
         const modifierTotal = (item.modifiers || []).reduce(
           (sum: number, m: any) => sum + m.price_kobo * m.qty,
           0,
         );
+        const cookStatus = held
+          ? OrderStatus.PENDING_PAYMENT_APPROVAL
+          : kdsEnabled
+            ? OrderStatus.ASSIGNED_TO_DEPARTMENT
+            : OrderStatus.PENDING_SUPERVISOR_APPROVAL;
         const order = manager.getRepository(Order).create({
           tab_id: tabId,
           menu_item_id: item.menu_item_id,
@@ -242,9 +261,15 @@ export class CustomerService {
             tab.tab_type === TabType.TAKEAWAY
               ? FulfillmentType.PACK
               : FulfillmentType.SERVE,
-          order_status: held
-            ? OrderStatus.PENDING_PAYMENT_APPROVAL
-            : OrderStatus.PENDING_SUPERVISOR_APPROVAL,
+          order_status: cookStatus,
+          assigned_department:
+            cookStatus === OrderStatus.ASSIGNED_TO_DEPARTMENT
+              ? kdsDefaultDepartment
+              : null,
+          estimated_preparation_time_seconds:
+            cookStatus === OrderStatus.ASSIGNED_TO_DEPARTMENT
+              ? (menuItem.prep_time_seconds ?? null)
+              : null,
         });
         savedOrders.push(await manager.getRepository(Order).save(order));
       }
@@ -348,7 +373,11 @@ export class CustomerService {
   /** Dispatch: the customer confirms they received the order from the rider.
    *  The rider's "mark handed over" only moves the delivery to HANDED_OVER
    *  (awaiting confirmation); this is the final step that marks it DELIVERED. */
-  async confirmDelivery(tabId: string, trackingCode: string, deliveryId: string) {
+  async confirmDelivery(
+    tabId: string,
+    trackingCode: string,
+    deliveryId: string,
+  ) {
     const tab = await this.tabRepo.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
     if (tab.tracking_code !== trackingCode)
