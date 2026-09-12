@@ -45,6 +45,12 @@ export class Delivery {
   @Column({ type: 'timestamp', nullable: true })
   cancelled_at: Date | null;
 
+  @Column({ type: 'varchar', length: 20, default: 'pending' })
+  payout_status: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  paid_at: Date | null;
+
   @CreateDateColumn()
   created_at: Date;
 

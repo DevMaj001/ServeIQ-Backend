@@ -89,11 +89,13 @@ import { ActivateBerbadosNightlifeSubscription1836000000000 } from './database/m
 import { ActivateBerbadosNightlifeSubscription1836000000001 } from './database/migrations/1836000000001-ActivateBerbadosNightlifeSubscription';
 import { AddDispatchDelivery1840000000000 } from './database/migrations/1840000000000-AddDispatchDelivery';
 import { CleanRiderVehicleData1841000000000 } from './database/migrations/1841000000000-CleanRiderVehicleData';
+import { AddRiderPayoutTables1842000000000 } from './database/migrations/1842000000000-AddRiderPayoutTables';
 import { PlatformPaymentProvider } from './modules/admin/entities/platform-payment-provider.entity';
 import { Feedback } from './modules/feedback/entities/feedback.entity';
 import { WaiterCall } from './modules/waiter-call/entities/waiter-call.entity';
 import { Rider } from './modules/riders/entities/rider.entity';
 import { Delivery } from './modules/delivery/entities/delivery.entity';
+import { RiderLedger, PayoutBatch } from './modules/delivery/entities/rider-payout.entity';
 
 import { AuthModule } from './modules/auth/auth.module';
 import { BusinessModule } from './modules/business/business.module';
@@ -177,6 +179,8 @@ import { DeliveryModule } from './modules/delivery/delivery.module';
         WaiterCall,
         Rider,
         Delivery,
+        RiderLedger,
+        PayoutBatch,
       ],
       migrations: [
         BackfillUserRoleId1752892800000,
@@ -226,6 +230,7 @@ import { DeliveryModule } from './modules/delivery/delivery.module';
         ActivateBerbadosNightlifeSubscription1836000000001,
         AddDispatchDelivery1840000000000,
         CleanRiderVehicleData1841000000000,
+        AddRiderPayoutTables1842000000000,
       ],
       migrationsRun: true,
       synchronize: false,

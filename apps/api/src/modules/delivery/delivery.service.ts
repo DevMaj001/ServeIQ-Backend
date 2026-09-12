@@ -5,13 +5,14 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Not, IsNull } from 'typeorm';
+import { Repository, Not, IsNull, In } from 'typeorm';
 import { Delivery } from './entities/delivery.entity';
 import { Tab } from '../tab/entities/tab.entity';
 import { Order } from '../order/entities/order.entity';
 import { Rider } from '../riders/entities/rider.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { User } from '../user/entities/user.entity';
+import { RiderLedger, LedgerType, LedgerRefType, PayoutBatch, PayoutBatchStatus, PayoutProvider } from './entities/rider-payout.entity';
 import {
   PickupMode,
   DeliveryStatus,
@@ -56,6 +57,10 @@ export class DeliveryService {
     private branchRepo: Repository<Branch>,
     @InjectRepository(User)
     private userRepo: Repository<User>,
+    @InjectRepository(RiderLedger)
+    private ledgerRepo: Repository<RiderLedger>,
+    @InjectRepository(PayoutBatch)
+    private payoutBatchRepo: Repository<PayoutBatch>,
     private realtimeService: RealtimeService,
     private notificationService: NotificationService,
   ) {}
@@ -497,5 +502,190 @@ export class DeliveryService {
       rider_name: riderName,
       rider_phone: riderPhone,
     };
+  }
+
+  /** Get all unpaid (pending payout) deliveries for a rider */
+  async getPendingPayouts(riderId: string): Promise<{
+    deliveries: Delivery[];
+    totalPayoutKobo: number;
+  }> {
+    const deliveries = await this.deliveryRepo.find({
+      where: {
+        rider_id: riderId,
+        status: DeliveryStatus.DELIVERED,
+        payout_status: 'pending',
+      },
+      order: { delivered_at: 'ASC' },
+    });
+    const totalPayoutKobo = deliveries.reduce((sum, d) => sum + (d.payout_kobo || 0), 0);
+    return { deliveries, totalPayoutKobo };
+  }
+
+  /** Get pending payout summary for all riders in a branch */
+  async getPendingPayoutsByBranch(branchId: string): Promise<Array<{
+    riderId: string;
+    riderName: string;
+    pendingDeliveries: number;
+    totalPayoutKobo: number;
+  }>> {
+    const pendingDeliveries = await this.deliveryRepo
+      .createQueryBuilder('d')
+      .select('d.rider_id', 'riderId')
+      .addSelect('COUNT(*)', 'pendingDeliveries')
+      .addSelect('SUM(d.payout_kobo)', 'totalPayoutKobo')
+      .where('d.branch_id = :branchId', { branchId })
+      .andWhere('d.status = :status', { status: DeliveryStatus.DELIVERED })
+      .andWhere('d.payout_status = :payoutStatus', { payoutStatus: 'pending' })
+      .groupBy('d.rider_id')
+      .getRawMany();
+
+    const riderIds = pendingDeliveries.map((r) => r.riderId);
+    const riders = riderIds.length
+      ? await this.riderRepo.find({ where: { id: In(riderIds) } })
+      : [];
+    const riderMap = new Map(riders.map((r) => [r.id, r]));
+    const userIds = riders.map((r) => r.user_id);
+    const users = userIds.length
+      ? await this.userRepo.find({ where: { id: In(userIds) } })
+      : [];
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
+    return pendingDeliveries.map((r) => {
+      const rider = riderMap.get(r.riderId);
+      return {
+        riderId: r.riderId,
+        riderName: rider ? userMap.get(rider.user_id)?.full_name ?? 'Unknown' : 'Unknown',
+        pendingDeliveries: Number(r.pendingDeliveries),
+        totalPayoutKobo: Number(r.totalPayoutKobo || 0),
+      };
+    });
+  }
+
+  /**
+   * Process payout for a rider: marks pending deliveries as paid,
+   * creates ledger entries, and creates a payout batch record.
+   * Does NOT execute the actual bank transfer — that's done separately
+   * via Paystack/Flutterwave integration using the payout_batch record.
+   */
+  async processRiderPayout(
+    riderId: string,
+    businessId: string,
+    adminUserId: string,
+    provider: PayoutProvider = PayoutProvider.MANUAL,
+    providerBatchId?: string,
+  ): Promise<{
+    batch: PayoutBatch;
+    deliveriesPaid: number;
+    totalKobo: number;
+  }> {
+    const rider = await this.riderRepo.findOne({ where: { id: riderId, business_id: businessId } });
+    if (!rider) throw new NotFoundException('Rider not found');
+
+    const { deliveries, totalPayoutKobo } = await this.getPendingPayouts(riderId);
+    if (deliveries.length === 0) {
+      throw new BadRequestException('No pending payouts for this rider');
+    }
+
+    // Create payout batch record
+    const batch = this.payoutBatchRepo.create({
+      business_id: businessId,
+      rider_id: riderId,
+      provider,
+      provider_batch_id: providerBatchId ?? null,
+      total_kobo: totalPayoutKobo,
+      status: PayoutBatchStatus.PENDING,
+      created_by: adminUserId,
+    });
+    await this.payoutBatchRepo.save(batch);
+
+    // Create ledger entries for each delivery earning
+    for (const delivery of deliveries) {
+      await this.ledgerRepo.save(
+        this.ledgerRepo.create({
+          rider_id: riderId,
+          business_id: businessId,
+          type: LedgerType.DELIVERY_EARNING,
+          amount_kobo: delivery.payout_kobo,
+          ref_type: LedgerRefType.DELIVERY,
+          ref_id: delivery.id,
+          description: `Delivery ${delivery.id.slice(0, 8)} earnings`,
+        }),
+      );
+    }
+
+    // Create ledger entry for the payout (negative = debit to rider)
+    await this.ledgerRepo.save(
+      this.ledgerRepo.create({
+        rider_id: riderId,
+        business_id: businessId,
+        type: LedgerType.PAYOUT,
+        amount_kobo: -totalPayoutKobo,
+        ref_type: LedgerRefType.BATCH_PAYOUT,
+        ref_id: batch.id,
+        description: `Payout batch ${batch.id.slice(0, 8)}`,
+      }),
+    );
+
+    // Mark deliveries as paid
+    const deliveryIds = deliveries.map((d) => d.id);
+    await this.deliveryRepo
+      .createQueryBuilder()
+      .update(Delivery)
+      .set({ payout_status: 'paid', paid_at: new Date() })
+      .where('id IN (:...ids)', { ids: deliveryIds })
+      .execute();
+
+    return { batch, deliveriesPaid: deliveries.length, totalKobo: totalPayoutKobo };
+  }
+
+  /** Mark a payout batch as completed (after successful bank transfer) */
+  async completePayoutBatch(batchId: string, providerBatchId: string): Promise<PayoutBatch> {
+    const batch = await this.payoutBatchRepo.findOne({ where: { id: batchId } });
+    if (!batch) throw new NotFoundException('Payout batch not found');
+    if (batch.status !== PayoutBatchStatus.PENDING) {
+      throw new BadRequestException(`Batch is already ${batch.status}`);
+    }
+    batch.status = PayoutBatchStatus.COMPLETED;
+    batch.provider_batch_id = providerBatchId;
+    batch.completed_at = new Date();
+    await this.payoutBatchRepo.save(batch);
+    return batch;
+  }
+
+  /** Mark a payout batch as failed */
+  async failPayoutBatch(batchId: string, reason: string): Promise<PayoutBatch> {
+    const batch = await this.payoutBatchRepo.findOne({ where: { id: batchId } });
+    if (!batch) throw new NotFoundException('Payout batch not found');
+    batch.status = PayoutBatchStatus.FAILED;
+    batch.failure_reason = reason;
+    await this.payoutBatchRepo.save(batch);
+    return batch;
+  }
+
+  /** Get ledger entries for a rider */
+  async getRiderLedger(riderId: string, limit = 100): Promise<RiderLedger[]> {
+    return this.ledgerRepo.find({
+      where: { rider_id: riderId },
+      order: { created_at: 'DESC' },
+      take: limit,
+    });
+  }
+
+  /** Get payout batches for a rider */
+  async getRiderPayoutBatches(riderId: string, limit = 50): Promise<PayoutBatch[]> {
+    return this.payoutBatchRepo.find({
+      where: { rider_id: riderId },
+      order: { created_at: 'DESC' },
+      take: limit,
+    });
+  }
+
+  /** Get payout batches for a business (admin view) */
+  async getBusinessPayoutBatches(businessId: string, limit = 100): Promise<PayoutBatch[]> {
+    return this.payoutBatchRepo.find({
+      where: { business_id: businessId },
+      order: { created_at: 'DESC' },
+      take: limit,
+    });
   }
 }
