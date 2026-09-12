@@ -6,7 +6,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, In } from 'typeorm';
+import { Repository, DataSource, In, LessThan } from 'typeorm';
 import { Tab } from './entities/tab.entity';
 import { Table, TableStatus } from '../table/entities/table.entity';
 import { User } from '../user/entities/user.entity';
@@ -15,6 +15,7 @@ import { StockMovement } from '../ingredient/entities/stock-movement.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Shift } from '../shift/entities/shift.entity';
 import { Bill } from '../bill/entities/bill.entity';
+import { Reservation, ReservationStatus } from '../reservations/entities/reservation.entity';
 import { StockMovementType, TabType, isBillable } from '../../common/shared';
 import { TrackingService } from '../tracking/tracking.service';
 import { RealtimeService } from '../gateway/realtime.service';
@@ -38,6 +39,8 @@ export class TabService {
     private billRepository: Repository<Bill>,
     @InjectRepository(Shift)
     private shiftRepo: Repository<Shift>,
+    @InjectRepository(Reservation)
+    private reservationRepo: Repository<Reservation>,
     @Inject(DataSource)
     private dataSource: DataSource,
     private trackingService: TrackingService,
@@ -396,6 +399,25 @@ export class TabService {
     }
     if (targetTable.status !== TableStatus.AVAILABLE) {
       throw new BadRequestException('Target table is not available');
+    }
+
+    // Block moves onto a table that is actively reserved (or due within the hold window)
+    const holdMs = 15 * 60 * 1000;
+    const now = Date.now();
+    const upcoming = await this.reservationRepo.find({
+      where: {
+        table_id: targetTableId,
+        status: In([ReservationStatus.PENDING, ReservationStatus.CONFIRMED]),
+        reservation_time: LessThan(new Date(now + 15 * 60 * 1000)),
+      },
+    });
+    const reservedNow = upcoming.some((r) => {
+      const start = new Date(r.reservation_time).getTime();
+      const end = start + r.duration_minutes * 60 * 1000;
+      return now >= start - holdMs && now <= end;
+    });
+    if (reservedNow) {
+      throw new BadRequestException('Target table is reserved for an upcoming booking');
     }
 
     const queryRunner = this.dataSource.createQueryRunner();
