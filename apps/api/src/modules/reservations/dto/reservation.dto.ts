@@ -166,6 +166,7 @@ export class AvailabilityQueryDto {
 
   @ApiProperty({ example: 4, description: 'Party size' })
   @IsNotEmpty()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(20)
