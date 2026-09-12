@@ -70,11 +70,16 @@ export class ReservationsService {
     return code;
   }
 
-  private async validateBranchConfig(branchId: string): Promise<{ branch: Branch; config: ReservationConfig }> {
+  private async validateBranchConfig(
+    branchId: string,
+    options?: { requireEnabled?: boolean },
+  ): Promise<{ branch: Branch; config: ReservationConfig }> {
     const branch = await this.branchRepo.findOne({ where: { id: branchId } });
     if (!branch) throw new NotFoundException('Branch not found');
     const config = getReservationConfig(branch);
-    if (!config.enabled) throw new BadRequestException('Reservations are not enabled for this branch');
+    if ((options?.requireEnabled ?? true) && !config.enabled) {
+      throw new BadRequestException('Reservations are not enabled for this branch');
+    }
     return { branch, config };
   }
 
@@ -243,7 +248,7 @@ export class ReservationsService {
   }
 
   async createWalkin(dto: WalkinReservationDto, branchId: string, userId: string): Promise<ReservationView> {
-    const { config } = await this.validateBranchConfig(branchId);
+    const { config } = await this.validateBranchConfig(branchId, { requireEnabled: false });
 
     const now = new Date();
     const duration = dto.duration_minutes ?? config.default_duration_minutes;
