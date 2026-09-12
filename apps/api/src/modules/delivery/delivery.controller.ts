@@ -25,6 +25,11 @@ import { UserRole } from '../../common/shared';
 import { DeliveryService } from './delivery.service';
 import { RiderService } from '../riders/rider.service';
 import { PayoutProvider } from './entities/rider-payout.entity';
+import {
+  ProcessRiderPayoutDto,
+  CompletePayoutBatchDto,
+  FailPayoutBatchDto,
+} from './dto/delivery.dto';
 
 @ApiTags('Deliveries')
 @ApiBearerAuth('access-token')
@@ -181,13 +186,13 @@ export class DeliveryController {
   async processRiderPayout(
     @Param('riderId') riderId: string,
     @Request() req: any,
-    @Body() body: { provider?: string; providerBatchId?: string },
+    @Body() body: ProcessRiderPayoutDto,
   ) {
     return this.deliveryService.processRiderPayout(
       riderId,
       req.user.businessId,
       req.user.userId,
-      (body.provider as PayoutProvider) || PayoutProvider.MANUAL,
+      body.provider ?? PayoutProvider.MANUAL,
       body.providerBatchId,
     );
   }
@@ -197,7 +202,7 @@ export class DeliveryController {
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERADMIN)
   @RequirePermissions(PERMISSIONS.MANAGE_RIDERS)
   @ApiOperation({ summary: 'Mark a payout batch as completed (after bank transfer succeeds)' })
-  async completePayoutBatch(@Param('batchId') batchId: string, @Body() body: { providerBatchId: string }) {
+  async completePayoutBatch(@Param('batchId') batchId: string, @Body() body: CompletePayoutBatchDto) {
     return this.deliveryService.completePayoutBatch(batchId, body.providerBatchId);
   }
 
@@ -206,7 +211,7 @@ export class DeliveryController {
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERADMIN)
   @RequirePermissions(PERMISSIONS.MANAGE_RIDERS)
   @ApiOperation({ summary: 'Mark a payout batch as failed' })
-  async failPayoutBatch(@Param('batchId') batchId: string, @Body() body: { reason: string }) {
+  async failPayoutBatch(@Param('batchId') batchId: string, @Body() body: FailPayoutBatchDto) {
     return this.deliveryService.failPayoutBatch(batchId, body.reason);
   }
 }

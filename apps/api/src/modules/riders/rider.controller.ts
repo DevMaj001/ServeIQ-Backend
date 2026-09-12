@@ -24,6 +24,7 @@ import { RequirePermissions } from '../../common/decorators/permissions.decorato
 import { PERMISSIONS } from '../role/permission-codes';
 import { UserRole } from '../../common/shared';
 import { RiderService } from './rider.service';
+import { CreateRiderDto, UpdateRiderDto } from './dto/rider.dto';
 
 @ApiTags('Riders')
 @ApiBearerAuth('access-token')
@@ -50,15 +51,7 @@ export class RiderController {
   })
   async create(
     @Request() req: any,
-    @Body()
-    body: {
-      full_name: string;
-      email: string;
-      password: string;
-      phone?: string;
-      vehicle?: string;
-      branch_id: string;
-    },
+    @Body() body: CreateRiderDto,
   ) {
     if (!body.full_name || !body.email || !body.password || !body.branch_id) {
       throw new ForbiddenException(
@@ -81,13 +74,7 @@ export class RiderController {
   async update(
     @Param('id') id: string,
     @Request() req: any,
-    @Body()
-    body: {
-      branch_id?: string;
-      is_online?: boolean;
-      vehicle?: string;
-      is_active?: boolean;
-    },
+    @Body() body: UpdateRiderDto,
   ) {
     return this.riderService.update(id, req.user.businessId, body);
   }

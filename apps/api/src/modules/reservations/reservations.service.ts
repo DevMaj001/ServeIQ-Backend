@@ -488,7 +488,7 @@ export class ReservationsService {
     return this.toView(saved, null);
   }
 
-  async cancelByCode(code: string, reason: string): Promise<ReservationView> {
+  async cancelByCode(code: string, reason: string | null): Promise<ReservationView> {
     const reservation = await this.reservationRepo.findOne({ where: { confirmation_code: code.toUpperCase() } });
     if (!reservation) throw new NotFoundException('Invalid confirmation code');
     if (['cancelled', 'completed', 'no_show'].includes(reservation.status)) {

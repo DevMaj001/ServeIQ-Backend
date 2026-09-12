@@ -31,6 +31,7 @@ import {
   AvailabilityQueryDto,
   WalkinReservationDto,
   ConfirmReservationDto,
+  CancelReservationDto,
 } from './dto/reservation.dto';
 
 @ApiTags('Reservations')
@@ -64,8 +65,8 @@ export class ReservationsController {
 
   @Post('cancel/:code')
   @ApiOperation({ summary: 'Cancel reservation by confirmation code (public)' })
-  async cancelByCode(@Param('code') code: string, @Body() body: { reason: string }) {
-    return this.reservationsService.cancelByCode(code, body.reason);
+  async cancelByCode(@Param('code') code: string, @Body() body: CancelReservationDto) {
+    return this.reservationsService.cancelByCode(code, body.reason ?? null);
   }
 
   @Get('lookup/:code')

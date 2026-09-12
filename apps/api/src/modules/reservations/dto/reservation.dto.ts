@@ -225,3 +225,10 @@ export class ConfirmReservationDto {
   @IsString()
   confirmation_code: string;
 }
+
+export class CancelReservationDto {
+  @ApiProperty({ example: 'Change of plans', description: 'Reason for cancellation (optional)' })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
