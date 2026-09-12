@@ -613,7 +613,7 @@ export class RoleSeedService implements OnApplicationBootstrap {
     // exists with its permissions. Previously this bailed out entirely when
     // any permission row existed, which meant new roles (e.g. Rider) were
     // never created on already-seeded production databases.
-    const existingPerms = await this.permissionRepo.find();
+    const existingPerms = (await this.permissionRepo.find()) ?? [];
     const existingCodes = new Set(existingPerms.map((p) => p.code));
 
     const missingPermissions = ALL_PERMISSIONS.filter(
@@ -632,7 +632,7 @@ export class RoleSeedService implements OnApplicationBootstrap {
       );
     }
 
-    const allPermissions = await this.permissionRepo.find();
+    const allPermissions = (await this.permissionRepo.find()) ?? [];
     const codeToPermission = new Map(
       allPermissions.map((p) => [p.code, p]),
     );
