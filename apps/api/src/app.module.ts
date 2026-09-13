@@ -91,6 +91,7 @@ import { AddDispatchDelivery1840000000000 } from './database/migrations/18400000
 import { CleanRiderVehicleData1841000000000 } from './database/migrations/1841000000000-CleanRiderVehicleData';
 import { AddRiderPayoutTables1842000000000 } from './database/migrations/1842000000000-AddRiderPayoutTables';
 import { AddTableReservations1843000000000 } from './database/migrations/1843000000000-AddTableReservations';
+import { AddPrepTimeToMenuItems1860000000000 } from './database/migrations/1860000000000-AddPrepTimeToMenuItems';
 import { PlatformPaymentProvider } from './modules/admin/entities/platform-payment-provider.entity';
 import { Feedback } from './modules/feedback/entities/feedback.entity';
 import { WaiterCall } from './modules/waiter-call/entities/waiter-call.entity';
@@ -236,6 +237,7 @@ import { ReservationsModule } from './modules/reservations/reservations.module';
         CleanRiderVehicleData1841000000000,
         AddRiderPayoutTables1842000000000,
         AddTableReservations1843000000000,
+        AddPrepTimeToMenuItems1860000000000,
       ],
       migrationsRun: true,
       synchronize: false,
