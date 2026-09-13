@@ -146,7 +146,7 @@ export class ReceiptService {
     doc.moveDown(0.1);
     doc
       .fontSize(6)
-      .text('Powered by ServeIQ — serveiq.io', { align: 'center' });
+      .text('Powered by ServeIQ — serveiqhq.com', { align: 'center' });
 
     doc.end();
 
