@@ -59,7 +59,7 @@ describe('PublicMenuController', () => {
   describe('getPublicMenu', () => {
     it('resolves the "default" fallback to the first branch', async () => {
       const b = branch();
-      branchRepo.findOne.mockResolvedValue(b);
+      branchRepo.find.mockResolvedValue([b]);
       menuItemRepo.find.mockResolvedValue([
         {
           id: 'item-1',
@@ -75,10 +75,11 @@ describe('PublicMenuController', () => {
 
       const result = await controller.getPublicMenu('default');
 
-      expect(branchRepo.findOne).toHaveBeenCalledWith(
+      expect(branchRepo.find).toHaveBeenCalledWith(
         expect.objectContaining({
           relations: { business: true },
           order: { created_at: 'ASC' },
+          take: 1,
         }),
       );
       expect(result.business_name).toBe('Acme Kitchen');
@@ -102,11 +103,12 @@ describe('PublicMenuController', () => {
       await expect(controller.getPublicMenu('not-a-uuid')).rejects.toThrow(
         NotFoundException,
       );
+      expect(branchRepo.find).not.toHaveBeenCalled();
       expect(branchRepo.findOne).not.toHaveBeenCalled();
     });
 
     it('returns 404 when "default" resolves to no branch', async () => {
-      branchRepo.findOne.mockResolvedValue(null);
+      branchRepo.find.mockResolvedValue([]);
 
       await expect(controller.getPublicMenu('default')).rejects.toThrow(
         NotFoundException,
@@ -114,9 +116,9 @@ describe('PublicMenuController', () => {
     });
 
     it('returns 404 when the branch has no linked business', async () => {
-      branchRepo.findOne.mockResolvedValue(
+      branchRepo.find.mockResolvedValue([
         branch({ business: undefined as unknown as Branch['business'] }),
-      );
+      ]);
 
       await expect(controller.getPublicMenu('default')).rejects.toThrow(
         NotFoundException,

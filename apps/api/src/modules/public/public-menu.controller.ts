@@ -45,10 +45,12 @@ export class PublicMenuController {
     // Resolve that to a real branch instead of erroring on the UUID cast.
     let branch: Branch | null;
     if (branchId === 'default') {
-      branch = await this.branchRepo.findOne({
-        relations: { business: true },
-        order: { created_at: 'ASC' },
-      });
+      branch =
+        (await this.branchRepo.find({
+          relations: { business: true },
+          order: { created_at: 'ASC' },
+          take: 1,
+        }))[0] ?? null;
     } else if (isUUID(branchId)) {
       branch = await this.branchRepo.findOne({
         where: { id: branchId },
