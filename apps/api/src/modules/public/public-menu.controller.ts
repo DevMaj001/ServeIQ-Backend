@@ -14,6 +14,7 @@ import {
   ApiParam,
   ApiQuery,
 } from '@nestjs/swagger';
+import { isUUID } from 'class-validator';
 import { Branch } from '../branch/entities/branch.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Advertisement } from '../advertisement/entities/advertisement.entity';
@@ -40,11 +41,23 @@ export class PublicMenuController {
   @ApiResponse({ status: 200, description: 'Public menu items.' })
   @ApiResponse({ status: 404, description: 'Branch not found.' })
   async getPublicMenu(@Param('branchId') branchId: string) {
-    const branch = await this.branchRepo.findOne({
-      where: { id: branchId },
-      relations: { business: true },
-    });
-    if (!branch) {
+    // The menu app redirects its bare root path to /public/menu/default.
+    // Resolve that to a real branch instead of erroring on the UUID cast.
+    let branch: Branch | null;
+    if (branchId === 'default') {
+      branch = await this.branchRepo.findOne({
+        relations: { business: true },
+        order: { created_at: 'ASC' },
+      });
+    } else if (isUUID(branchId)) {
+      branch = await this.branchRepo.findOne({
+        where: { id: branchId },
+        relations: { business: true },
+      });
+    } else {
+      branch = null;
+    }
+    if (!branch || !branch.business) {
       throw new NotFoundException('Branch not found');
     }
 
