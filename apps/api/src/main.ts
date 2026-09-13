@@ -83,8 +83,10 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
-  // Swagger / OpenAPI (disabled in production to reduce attack surface)
-  if ((process.env.NODE_ENV ?? 'development') !== 'production') {
+  // Swagger / OpenAPI (disabled in production unless SWAGGER_ENABLED=true)
+  const swaggerEnabled =
+    (process.env.NODE_ENV ?? 'development') !== 'production' || process.env.SWAGGER_ENABLED === 'true';
+  if (swaggerEnabled) {
     const config = new DocumentBuilder()
       .setTitle('ServeIQ API')
       .setDescription(
