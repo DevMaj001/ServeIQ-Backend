@@ -64,7 +64,7 @@ export class PublicMenuController {
     }
 
     const items = await this.menuItemRepo.find({
-      where: { branch_id: branchId, is_available: true },
+      where: { branch_id: branch.id, is_available: true },
       order: { category: 'ASC', name: 'ASC' },
     });
 
