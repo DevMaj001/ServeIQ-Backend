@@ -27,7 +27,7 @@ import { getPublicServer } from '../gateway/gateway.constants';
 
 export interface DeliveryView {
   id: string;
-  tab_id: string;
+  tab_id: string | null;
   branch_id: string;
   status: string;
   fee_kobo: number;
@@ -72,13 +72,165 @@ export class DeliveryService {
     DeliveryStatus.HANDED_OVER,
   ];
 
+  /** Resolve the scope of orders a delivery covers. Tabs scope by tab_id;
+   *  standalone (tabless) dispatch groups scope by their shared tracking_code.
+   *  Returns the group identity used for socket rooms and order updates. */
+  private async groupScope(
+    delivery: Delivery,
+  ): Promise<{
+    tab: Tab | null;
+    where: Record<string, string>;
+    branchId: string;
+    room: string;
+    groupId: string | null;
+  }> {
+    if (delivery.tab_id) {
+      const tab = await this.tabRepo.findOne({
+        where: { id: delivery.tab_id },
+      });
+      return {
+        tab,
+        where: { tab_id: delivery.tab_id },
+        branchId: tab?.branch_id ?? delivery.branch_id,
+        room: `tab:${delivery.tab_id}`,
+        groupId: delivery.tab_id,
+      };
+    }
+    if (delivery.tracking_code) {
+      return {
+        tab: null,
+        where: { tracking_code: delivery.tracking_code },
+        branchId: delivery.branch_id,
+        room: `tracking:${delivery.tracking_code}`,
+        groupId: delivery.tracking_code,
+      };
+    }
+    return {
+      tab: null,
+      where: {},
+      branchId: delivery.branch_id,
+      room: '',
+      groupId: null,
+    };
+  }
+
+  /** Flip the status of every order covered by a delivery (tab or standalone
+   *  tracking-code group) atomically in one UPDATE. */
+  private async setGroupOrderStatus(
+    scope: { where: Record<string, string> },
+    set: { order_status: OrderStatus; delivered_at?: Date },
+    from: OrderStatus[],
+  ) {
+    const qb = this.orderRepo
+      .createQueryBuilder()
+      .update(Order)
+      .set(set as any);
+    for (const key of Object.keys(scope.where)) {
+      qb.andWhere(`"${key}" = :val`, { val: scope.where[key] });
+    }
+    qb.andWhere('order_status IN (:...from)', { from });
+    await qb.execute();
+  }
+
   /**
    * Hook called whenever an order (or whole tab) reaches READY_FOR_PICKUP.
    * If the tab is a dispatch tab, ensures a pending delivery exists and
    * broadcasts it to online riders for that branch. Idempotent: re-broadcast
    * only when no active delivery exists for the tab.
    */
-  async ensureOnOrdersReady(tabId: string, orderIds: string[]) {
+  async ensureOnOrdersReady(
+    tabId: string | null,
+    orderIds: string[],
+    trackingCode?: string,
+  ) {
+    // Standalone online dispatch groups carry their fields on the orders.
+    if (!tabId || !trackingCode) {
+      if (!orderIds.length) return;
+      const first = await this.orderRepo.findOne({
+        where: trackingCode ? { tracking_code: trackingCode } : { id: orderIds[0] },
+      });
+      if (!first || first.pickup_mode !== PickupMode.DISPATCH) return;
+      const branchId = first.branch_id;
+      if (!branchId || !first.tracking_code) return;
+      trackingCode = first.tracking_code;
+
+      const branch = await this.branchRepo.findOne({
+        where: { id: branchId },
+      });
+      const config = getDeliveryConfig(branch);
+      if (!config.enabled || config.fee_kobo <= 0) return;
+
+      const active = await this.deliveryRepo.findOne({
+        where: {
+          tracking_code: trackingCode,
+          status: Not(DeliveryStatus.CANCELLED),
+        },
+        withDeleted: false,
+      });
+      let delivery: Delivery;
+      if (active) {
+        if (active.status !== DeliveryStatus.PENDING) return;
+        delivery = active;
+      } else {
+        try {
+          delivery = await this.deliveryRepo.save(
+            this.deliveryRepo.create({
+              tab_id: null,
+              tracking_code: trackingCode,
+              branch_id: branchId,
+              status: DeliveryStatus.PENDING,
+              fee_kobo: first.delivery_fee_kobo || config.fee_kobo,
+              payout_kobo: config.rider_payout_kobo,
+            }),
+          );
+        } catch (err: any) {
+          if (err?.code === '23505') {
+            const existing = await this.deliveryRepo.findOne({
+              where: {
+                tracking_code: trackingCode,
+                status: Not(DeliveryStatus.CANCELLED),
+              },
+              withDeleted: false,
+            });
+            if (!existing) return;
+            delivery = existing;
+          } else {
+            throw err;
+          }
+        }
+      }
+
+      const view = await this.toView(delivery);
+      this.realtimeService.emitDeliveryAvailable(branchId, {
+        ...view,
+        order_ids: orderIds,
+        pickup_mode: first.pickup_mode,
+      });
+      this.realtimeService.emitTabUpdate(branchId, trackingCode, {
+        delivery: { id: delivery.id, status: delivery.status },
+      });
+      getPublicServer()?.to(`tracking:${trackingCode}`).emit('delivery:status', {
+        tabId: trackingCode,
+        delivery_id: delivery.id,
+        status: delivery.status,
+      });
+
+      await this.notifyOnlineRiders(branchId, {
+        type: NotificationType.DELIVERY_AVAILABLE,
+        title: 'New delivery available',
+        message: `Order ${orderIds
+          .map((oid) => oid.slice(0, 8))
+          .join(', ')} is ready for dispatch`,
+        data: {
+          delivery_id: delivery.id,
+          tab_id: null,
+          tracking_code: trackingCode,
+          order_ids: orderIds,
+        },
+      });
+      return;
+    }
+
     const tab = await this.tabRepo.findOne({ where: { id: tabId } });
     if (!tab) return;
     if (tab.pickup_mode !== PickupMode.DISPATCH) return;
@@ -185,24 +337,21 @@ export class DeliveryService {
       );
     }
 
-    const tab = await this.tabRepo.findOne({ where: { id: delivery.tab_id } });
-    if (tab) {
-      await this.orderRepo
-        .createQueryBuilder()
-        .update(Order)
-        .set({ order_status: OrderStatus.OUT_FOR_DELIVERY })
-        .where('tab_id = :tabId', { tabId: tab.id })
-        .andWhere('order_status = :ready', {
-          ready: OrderStatus.READY_FOR_PICKUP,
-        })
-        .execute();
-      for (const order of await this.orderRepo.find({
-        where: { tab_id: tab.id, order_status: OrderStatus.OUT_FOR_DELIVERY },
-      })) {
-        this.realtimeService.emitOrderUpdated(tab.branch_id, order.id, {
-          order_status: order.order_status,
-        });
-      }
+    const scope = await this.groupScope(delivery);
+    await this.setGroupOrderStatus(
+      scope,
+      { order_status: OrderStatus.OUT_FOR_DELIVERY },
+      [OrderStatus.READY_FOR_PICKUP],
+    );
+    for (const order of await this.orderRepo.find({
+      where: {
+        ...scope.where,
+        order_status: OrderStatus.OUT_FOR_DELIVERY,
+      },
+    })) {
+      this.realtimeService.emitOrderUpdated(scope.branchId, order.id, {
+        order_status: order.order_status,
+      });
     }
 
     const updated = await this.deliveryRepo.findOne({
@@ -211,12 +360,12 @@ export class DeliveryService {
     if (!updated) throw new NotFoundException('Delivery not found');
     const view = await this.toView(updated);
     this.realtimeService.emitDeliveryUpdated(delivery.branch_id, view);
-    if (tab) {
-      this.realtimeService.emitTabUpdate(tab.branch_id, tab.id, {
+    if (scope.room) {
+      this.realtimeService.emitTabUpdate(scope.branchId, scope.groupId!, {
         delivery: { id: updated.id, status: updated.status },
       });
-      getPublicServer()?.to(`tab:${tab.id}`).emit('delivery:status', {
-        tabId: tab.id,
+      getPublicServer()?.to(scope.room).emit('delivery:status', {
+        tabId: scope.groupId,
         delivery_id: updated.id,
         status: updated.status,
       });
@@ -256,13 +405,13 @@ export class DeliveryService {
     if (!updated) throw new NotFoundException('Delivery not found');
     const view = await this.toView(updated);
     this.realtimeService.emitDeliveryUpdated(delivery.branch_id, view);
-    const tab = await this.tabRepo.findOne({ where: { id: delivery.tab_id } });
-    if (tab) {
-      this.realtimeService.emitTabUpdate(tab.branch_id, tab.id, {
+    const scope = await this.groupScope(delivery);
+    if (scope.room) {
+      this.realtimeService.emitTabUpdate(scope.branchId, scope.groupId!, {
         delivery: { id: updated.id, status: updated.status },
       });
-      getPublicServer()?.to(`tab:${tab.id}`).emit('delivery:status', {
-        tabId: tab.id,
+      getPublicServer()?.to(scope.room).emit('delivery:status', {
+        tabId: scope.groupId,
         delivery_id: updated.id,
         status: updated.status,
       });
@@ -288,28 +437,24 @@ export class DeliveryService {
       delivered_at: new Date(),
     });
 
-    const tab = await this.tabRepo.findOne({ where: { id: delivery.tab_id } });
-    if (tab) {
+    const scope = await this.groupScope(delivery);
+    if (Object.keys(scope.where).length > 0) {
       const now = new Date();
-      await this.orderRepo
-        .createQueryBuilder()
-        .update(Order)
-        .set({ order_status: OrderStatus.DELIVERED, delivered_at: now })
-        .where('tab_id = :tabId', { tabId: tab.id })
-        .andWhere('order_status IN (:...statuses)', {
-          statuses: [
-            OrderStatus.READY_FOR_PICKUP,
-            OrderStatus.OUT_FOR_DELIVERY,
-          ],
-        })
-        .execute();
+      await this.setGroupOrderStatus(
+        scope,
+        { order_status: OrderStatus.DELIVERED, delivered_at: now },
+        [OrderStatus.READY_FOR_PICKUP, OrderStatus.OUT_FOR_DELIVERY],
+      );
       for (const order of await this.orderRepo.find({
-        where: { tab_id: tab.id, order_status: OrderStatus.DELIVERED },
+        where: {
+          ...scope.where,
+          order_status: OrderStatus.DELIVERED,
+        },
       })) {
-        this.realtimeService.emitOrderUpdated(tab.branch_id, order.id, {
+        this.realtimeService.emitOrderUpdated(scope.branchId, order.id, {
           order_status: order.order_status,
         });
-        this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+        this.realtimeService.emitDashboardUpdate(scope.branchId, {
           type: 'order_delivered',
           order,
         });
@@ -322,12 +467,12 @@ export class DeliveryService {
     if (!updated) throw new NotFoundException('Delivery not found');
     const view = await this.toView(updated);
     this.realtimeService.emitDeliveryUpdated(delivery.branch_id, view);
-    if (tab) {
-      this.realtimeService.emitTabUpdate(tab.branch_id, tab.id, {
+    if (scope.room) {
+      this.realtimeService.emitTabUpdate(scope.branchId, scope.groupId!, {
         delivery: { id: updated.id, status: updated.status },
       });
-      getPublicServer()?.to(`tab:${tab.id}`).emit('delivery:status', {
-        tabId: tab.id,
+      getPublicServer()?.to(scope.room).emit('delivery:status', {
+        tabId: scope.groupId,
         delivery_id: updated.id,
         status: updated.status,
       });
@@ -353,8 +498,9 @@ export class DeliveryService {
       throw new BadRequestException('Delivery is already finished');
     }
 
-    const tab = await this.tabRepo.findOne({ where: { id: delivery.tab_id } });
-    if (!tab) throw new NotFoundException('Tab not found');
+    const scope = await this.groupScope(delivery);
+    if (!scope.tab && !scope.where.tracking_code)
+      throw new NotFoundException('Delivery has no resolvable order group');
 
     await this.deliveryRepo.update(deliveryId, {
       status: DeliveryStatus.CANCELLED,
@@ -362,33 +508,48 @@ export class DeliveryService {
     });
 
     const branch = await this.branchRepo.findOne({
-      where: { id: tab.branch_id },
+      where: { id: delivery.branch_id },
     });
     const config = getDeliveryConfig(branch);
+    const baseOrder = scope.tab
+      ? null
+      : await this.orderRepo.findOne({
+          where: { tracking_code: delivery.tracking_code as string },
+        });
     const next = await this.deliveryRepo.save(
       this.deliveryRepo.create({
-        tab_id: tab.id,
-        branch_id: tab.branch_id,
+        tab_id: scope.tab?.id ?? null,
+        tracking_code: scope.tab
+          ? null
+          : (delivery.tracking_code ?? null),
+        branch_id: delivery.branch_id,
         status: DeliveryStatus.PENDING,
-        fee_kobo: tab.delivery_fee_kobo || config.fee_kobo,
+        fee_kobo:
+          scope.tab?.delivery_fee_kobo ||
+          baseOrder?.delivery_fee_kobo ||
+          config.fee_kobo,
         payout_kobo: config.rider_payout_kobo,
       }),
     );
 
-    const orders = await this.orderRepo.find({ where: { tab_id: tab.id } });
+    const orders = await this.orderRepo.find({ where: scope.where });
     const readyIds = orders
       .filter((o) => o.order_status === OrderStatus.READY_FOR_PICKUP)
       .map((o) => o.id);
     const view = await this.toView(next);
-    this.realtimeService.emitDeliveryAvailable(tab.branch_id, {
+    this.realtimeService.emitDeliveryAvailable(delivery.branch_id, {
       ...view,
       order_ids: readyIds,
     });
-    await this.notifyOnlineRiders(tab.branch_id, {
+    await this.notifyOnlineRiders(delivery.branch_id, {
       type: NotificationType.DELIVERY_AVAILABLE,
       title: 'Delivery re-broadcast',
-      message: `Order ${tab.id.slice(0, 8)}… is ready for a new rider`,
-      data: { delivery_id: next.id, tab_id: tab.id },
+      message: `Order ${delivery.tracking_code || delivery.tab_id?.slice(0, 8)}… is ready for a new rider`,
+      data: {
+        delivery_id: next.id,
+        tab_id: scope.tab?.id ?? null,
+        tracking_code: delivery.tracking_code ?? null,
+      },
     });
     return view;
   }
@@ -469,7 +630,21 @@ export class DeliveryService {
   }
 
   private async toView(delivery: Delivery): Promise<DeliveryView> {
-    const tab = await this.tabRepo.findOne({ where: { id: delivery.tab_id } });
+    let tab: Tab | null = null;
+    if (delivery.tab_id) {
+      tab = await this.tabRepo.findOne({ where: { id: delivery.tab_id } });
+    }
+    // Standalone groups carry customer/pickup metadata on their orders.
+    let orderCustomerName: string | null = null;
+    let orderDeliveryDetails: DeliveryDetails | null = null;
+    if (!tab && delivery.tracking_code) {
+      const firstOrder = await this.orderRepo.findOne({
+        where: { tracking_code: delivery.tracking_code },
+        order: { created_at: 'ASC' },
+      });
+      orderCustomerName = firstOrder?.customer_name ?? null;
+      orderDeliveryDetails = firstOrder?.delivery_details ?? null;
+    }
     let riderName: string | null = null;
     let riderUserId: string | null = null;
     let riderPhone: string | null = null;
@@ -496,8 +671,8 @@ export class DeliveryService {
       created_at: delivery.created_at,
       accepted_at: delivery.accepted_at,
       delivered_at: delivery.delivered_at,
-      customer_name: tab?.customer_name ?? null,
-      delivery_details: tab?.delivery_details ?? null,
+      customer_name: tab?.customer_name ?? orderCustomerName,
+      delivery_details: tab?.delivery_details ?? orderDeliveryDetails,
       rider_user_id: riderUserId,
       rider_name: riderName,
       rider_phone: riderPhone,

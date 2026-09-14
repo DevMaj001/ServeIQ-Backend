@@ -84,6 +84,7 @@ export class OrderService {
   private sendOrderReadyBatch(orders: Order[]) {
     if (orders.length === 0) return;
     const firstOrder = orders[0];
+    if (!firstOrder.tab_id) return;
     this.tabRepository
       .findOne({ where: { id: firstOrder.tab_id } })
       .then((tab) => {
@@ -349,10 +350,14 @@ export class OrderService {
       throw new NotFoundException('Order item not found');
     }
     if (branchId) {
-      const tab = await this.tabRepository.findOne({
-        where: { id: order.tab_id, branch_id: branchId },
-      });
-      if (!tab) throw new NotFoundException('Order not found in this branch');
+      if (order.tab_id) {
+        const tab = await this.tabRepository.findOne({
+          where: { id: order.tab_id, branch_id: branchId },
+        });
+        if (!tab) throw new NotFoundException('Order not found in this branch');
+      } else if (order.branch_id && order.branch_id !== branchId) {
+        throw new NotFoundException('Order not found in this branch');
+      }
     }
     return order;
   }
@@ -380,7 +385,7 @@ export class OrderService {
       order.quantity * order.unit_price_kobo + modifierTotal;
 
     const saved = await this.orderRepository.save(order);
-    await this.invalidateSplitPlan(order.tab_id);
+    if (order.tab_id) await this.invalidateSplitPlan(order.tab_id);
     return saved;
   }
 
@@ -394,7 +399,7 @@ export class OrderService {
     }
 
     await this.orderRepository.remove(order);
-    await this.invalidateSplitPlan(order.tab_id);
+    if (order.tab_id) await this.invalidateSplitPlan(order.tab_id);
     return { message: 'Order item removed successfully' };
   }
 
@@ -422,16 +427,19 @@ export class OrderService {
   private async getTabForOrder(orderId: string, branchId?: string) {
     const order = await this.orderRepository.findOne({
       where: { id: orderId },
-      select: { id: true, tab_id: true },
+      select: { id: true, tab_id: true, branch_id: true },
     });
     if (!order) throw new NotFoundException('Order not found');
-    const tab = await this.tabRepository.findOne({
-      where: { id: order.tab_id },
-    });
-    if (!tab) throw new NotFoundException('Tab not found');
-    if (branchId && tab.branch_id !== branchId)
+    const tab = order.tab_id
+      ? await this.tabRepository.findOne({ where: { id: order.tab_id } })
+      : null;
+    // Standalone orders (tabless self-service/takeaway) carry their own branch.
+    const resolvedBranch = tab?.branch_id ?? order.branch_id;
+    if (!resolvedBranch)
+      throw new NotFoundException('Order has no resolvable branch');
+    if (branchId && resolvedBranch !== branchId)
       throw new NotFoundException('Order not found in this branch');
-    return { order, tab };
+    return { order, tab, branchId: resolvedBranch };
   }
 
   private async verifyBranchAccess(
@@ -440,13 +448,17 @@ export class OrderService {
   ): Promise<void> {
     const order = await this.orderRepository.findOne({
       where: { id: orderId },
-      select: { id: true, tab_id: true },
+      select: { id: true, tab_id: true, branch_id: true },
     });
     if (!order) throw new NotFoundException('Order not found');
-    const tab = await this.tabRepository.findOne({
-      where: { id: order.tab_id, branch_id: branchId },
-    });
-    if (!tab) throw new NotFoundException('Order not found in this branch');
+    const tab = order.tab_id
+      ? await this.tabRepository.findOne({
+          where: { id: order.tab_id, branch_id: branchId },
+        })
+      : null;
+    if (tab) return;
+    if (order.branch_id === branchId) return;
+    throw new NotFoundException('Order not found in this branch');
   }
 
   async approve(
@@ -455,8 +467,9 @@ export class OrderService {
     dto: ApproveOrderDto,
     branchId?: string,
   ) {
-    const { tab } = await this.getTabForOrder(id, branchId);
+const { tab, branchId: ctxBranchId } = await this.getTabForOrder(id, branchId);
     const alphaIds = [id].sort();
+
     return this.dataSource
       .transaction(async (manager) => {
         const order = await manager.getRepository(Order).findOne({
@@ -470,7 +483,7 @@ export class OrderService {
 
         const departmentId = dto.department;
         const dept = await this.departmentRepo.findOne({
-          where: { id: departmentId, branch_id: tab.branch_id },
+          where: { id: departmentId, branch_id: ctxBranchId },
         });
         if (!dept)
           throw new NotFoundException('Department not found in this branch');
@@ -488,7 +501,7 @@ export class OrderService {
         // For all other branches the legacy behaviour is preserved: the order stays
         // APPROVED and the timer cron moves it to READY_FOR_PICKUP.
         const branch = await manager.getRepository(Branch).findOne({
-          where: { id: tab.branch_id },
+          where: { id: ctxBranchId },
         });
         const kdsEnabled =
           (
@@ -520,7 +533,7 @@ export class OrderService {
         await manager.getRepository(Order).save(order);
 
         await this.auditService.log({
-          branchId: tab.branch_id,
+          branchId: ctxBranchId,
           userId,
           action: 'order.approve',
           entityId: id,
@@ -534,33 +547,35 @@ export class OrderService {
         return order;
       })
       .then(async (savedOrder) => {
-        const orderTab = await this.tabRepository.findOne({
-          where: { id: savedOrder.tab_id },
-        });
+        const orderTab = savedOrder.tab_id
+          ? await this.tabRepository.findOne({
+              where: { id: savedOrder.tab_id },
+            })
+          : null;
         await this.notificationService.create({
-          branch_id: tab.branch_id,
+          branch_id: ctxBranchId,
           user_id: orderTab?.waiter_id ?? null,
           type: NotificationType.ORDER_APPROVED,
           title: 'Order Approved',
-          message: `Order ${savedOrder.id.slice(0, 8)}… approved. Tracking: ${orderTab?.tracking_code || 'N/A'}`,
+          message: `Order ${savedOrder.id.slice(0, 8)}… approved. Tracking: ${orderTab?.tracking_code || savedOrder.tracking_code || 'N/A'}`,
           data: {
             order_id: savedOrder.id,
-            tab_id: savedOrder.tab_id,
-            tracking_code: orderTab?.tracking_code,
+            tab_id: savedOrder.tab_id ?? undefined,
+            tracking_code: orderTab?.tracking_code ?? savedOrder.tracking_code,
           },
         });
 
         // Emit real-time events
-        this.realtimeService.emitOrderUpdated(tab.branch_id, savedOrder.id, {
+        this.realtimeService.emitOrderUpdated(ctxBranchId, savedOrder.id, {
           order_status: savedOrder.order_status,
         });
         this.realtimeService.emitOrderStatusChange(
-          tab.branch_id,
+          ctxBranchId,
           savedOrder.id,
           savedOrder.order_status,
           savedOrder.tab_id,
         );
-        this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+        this.realtimeService.emitDashboardUpdate(ctxBranchId, {
           type: 'order_approved',
           order: savedOrder,
         });
@@ -568,14 +583,13 @@ export class OrderService {
         return savedOrder;
       });
   }
-
   async decline(
     id: string,
     userId: string,
     dto: DeclineOrderDto,
     branchId?: string,
   ) {
-    const { tab } = await this.getTabForOrder(id, branchId);
+    const { branchId: ctxBranch } = await this.getTabForOrder(id, branchId);
     const alphaIds = [id].sort();
     return this.dataSource
       .transaction(async (manager) => {
@@ -596,7 +610,7 @@ export class OrderService {
         await manager.getRepository(Order).save(order);
 
         await this.auditService.log({
-          branchId: tab.branch_id,
+          branchId: ctxBranch,
           userId,
           action: 'order.decline',
           entityId: id,
@@ -608,16 +622,16 @@ export class OrderService {
       })
       .then((savedOrder) => {
         // Emit real-time events
-        this.realtimeService.emitOrderUpdated(tab.branch_id, savedOrder.id, {
+        this.realtimeService.emitOrderUpdated(ctxBranch, savedOrder.id, {
           order_status: savedOrder.order_status,
         });
         this.realtimeService.emitOrderStatusChange(
-          tab.branch_id,
+          ctxBranch,
           savedOrder.id,
           savedOrder.order_status,
           savedOrder.tab_id,
         );
-        this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+        this.realtimeService.emitDashboardUpdate(ctxBranch, {
           type: 'order_declined',
           order: savedOrder,
         });
@@ -626,7 +640,7 @@ export class OrderService {
   }
 
   async cancel(id: string, userId: string, reason: string, branchId?: string) {
-    const { tab } = await this.getTabForOrder(id, branchId);
+    const { branchId: ctxBranch } = await this.getTabForOrder(id, branchId);
     const alphaIds = [id].sort();
     return this.dataSource
       .transaction(async (manager) => {
@@ -664,12 +678,12 @@ export class OrderService {
             menu_item_id: order.menu_item_id,
             quantity: order.quantity,
           },
-          tab.branch_id,
+          ctxBranch,
           manager,
         );
 
         await this.auditService.log({
-          branchId: tab.branch_id,
+          branchId: ctxBranch,
           userId,
           action: 'order.cancel',
           entityId: id,
@@ -680,16 +694,16 @@ export class OrderService {
         return order;
       })
       .then((savedOrder) => {
-        this.realtimeService.emitOrderUpdated(tab.branch_id, savedOrder.id, {
+        this.realtimeService.emitOrderUpdated(ctxBranch, savedOrder.id, {
           order_status: savedOrder.order_status,
         });
         this.realtimeService.emitOrderStatusChange(
-          tab.branch_id,
+          ctxBranch,
           savedOrder.id,
           savedOrder.order_status,
           savedOrder.tab_id,
         );
-        this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+        this.realtimeService.emitDashboardUpdate(ctxBranch, {
           type: 'order_cancelled',
           order: savedOrder,
         });
@@ -698,7 +712,7 @@ export class OrderService {
   }
 
   async confirmPickup(id: string, userId: string, branchId?: string) {
-    const { tab } = await this.getTabForOrder(id, branchId);
+    const { branchId: ctxBranch } = await this.getTabForOrder(id, branchId);
     const alphaIds = [id].sort();
     return this.dataSource
       .transaction(async (manager) => {
@@ -716,7 +730,7 @@ export class OrderService {
         await manager.getRepository(Order).save(order);
 
         await this.auditService.log({
-          branchId: tab.branch_id,
+          branchId: ctxBranch,
           userId,
           action: 'order.confirm_pickup',
           entityId: id,
@@ -727,16 +741,16 @@ export class OrderService {
       })
       .then((savedOrder) => {
         // Emit real-time events
-        this.realtimeService.emitOrderUpdated(tab.branch_id, savedOrder.id, {
+        this.realtimeService.emitOrderUpdated(ctxBranch, savedOrder.id, {
           order_status: savedOrder.order_status,
         });
         this.realtimeService.emitOrderStatusChange(
-          tab.branch_id,
+          ctxBranch,
           savedOrder.id,
           savedOrder.order_status,
           savedOrder.tab_id,
         );
-        this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+        this.realtimeService.emitDashboardUpdate(ctxBranch, {
           type: 'order_pickup',
           order: savedOrder,
         });
@@ -745,7 +759,7 @@ export class OrderService {
   }
 
   async deliver(id: string, userId: string, branchId?: string) {
-    const { tab } = await this.getTabForOrder(id, branchId);
+    const { branchId: ctxBranch } = await this.getTabForOrder(id, branchId);
     const alphaIds = [id].sort();
     return this.dataSource
       .transaction(async (manager) => {
@@ -768,7 +782,7 @@ export class OrderService {
         await manager.getRepository(Order).save(order);
 
         await this.auditService.log({
-          branchId: tab.branch_id,
+          branchId: ctxBranch,
           userId,
           action: 'order.deliver',
           entityId: id,
@@ -779,16 +793,16 @@ export class OrderService {
       })
       .then((savedOrder) => {
         // Emit real-time events
-        this.realtimeService.emitOrderUpdated(tab.branch_id, savedOrder.id, {
+        this.realtimeService.emitOrderUpdated(ctxBranch, savedOrder.id, {
           order_status: savedOrder.order_status,
         });
         this.realtimeService.emitOrderStatusChange(
-          tab.branch_id,
+          ctxBranch,
           savedOrder.id,
           savedOrder.order_status,
           savedOrder.tab_id,
         );
-        this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+        this.realtimeService.emitDashboardUpdate(ctxBranch, {
           type: 'order_delivered',
           order: savedOrder,
         });
@@ -803,7 +817,7 @@ export class OrderService {
    * and the timer cron advances it directly to READY_FOR_PICKUP.
    */
   async accept(id: string, userId: string, branchId?: string) {
-    const { tab } = await this.getTabForOrder(id, branchId);
+    const { branchId: ctxBranch } = await this.getTabForOrder(id, branchId);
     const alphaIds = [id].sort();
     return this.dataSource
       .transaction(async (manager) => {
@@ -831,7 +845,7 @@ export class OrderService {
         await manager.getRepository(Order).save(order);
 
         await this.auditService.log({
-          branchId: tab.branch_id,
+          branchId: ctxBranch,
           userId,
           action: 'order.accept',
           entityId: id,
@@ -841,16 +855,16 @@ export class OrderService {
         return order;
       })
       .then((savedOrder) => {
-        this.realtimeService.emitOrderUpdated(tab.branch_id, savedOrder.id, {
+        this.realtimeService.emitOrderUpdated(ctxBranch, savedOrder.id, {
           order_status: savedOrder.order_status,
         });
         this.realtimeService.emitOrderStatusChange(
-          tab.branch_id,
+          ctxBranch,
           savedOrder.id,
           savedOrder.order_status,
           savedOrder.tab_id,
         );
-        this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+        this.realtimeService.emitDashboardUpdate(ctxBranch, {
           type: 'order_preparing',
           order: savedOrder,
         });
@@ -865,7 +879,7 @@ export class OrderService {
    * before the passed timer. Safe no-op if already READY (idempotent-ish).
    */
   async bump(id: string, userId: string, branchId?: string) {
-    const { tab } = await this.getTabForOrder(id, branchId);
+    const { tab, branchId: ctxBranch } = await this.getTabForOrder(id, branchId);
     const alphaIds = [id].sort();
     return this.dataSource
       .transaction(async (manager) => {
@@ -888,7 +902,7 @@ export class OrderService {
         await manager.getRepository(Order).save(order);
 
         await this.auditService.log({
-          branchId: tab.branch_id,
+          branchId: ctxBranch,
           userId,
           action: 'order.bump',
           entityId: id,
@@ -898,35 +912,45 @@ export class OrderService {
         return order;
       })
       .then(async (savedOrder) => {
-        const tab = await this.tabRepository.findOne({
-          where: { id: savedOrder.tab_id },
-        });
-        if (!tab) return savedOrder;
-
         // Emit realtime events immediately
-        this.realtimeService.emitOrderUpdated(tab.branch_id, savedOrder.id, {
+        this.realtimeService.emitOrderUpdated(ctxBranch, savedOrder.id, {
           order_status: savedOrder.order_status,
         });
         this.realtimeService.emitOrderStatusChange(
-          tab.branch_id,
+          ctxBranch,
           savedOrder.id,
           savedOrder.order_status,
           savedOrder.tab_id,
         );
 
-        // Dispatch: if this tab is a dispatch tab, create/broadcast the delivery
-        await this.deliveryService.ensureOnOrdersReady(tab.id, [savedOrder.id]);
+        if (savedOrder.tab_id) {
+          // Dispatch: if this tab is a dispatch tab, create/broadcast the delivery
+          await this.deliveryService.ensureOnOrdersReady(
+            tab!.id,
+            [savedOrder.id],
+          );
 
-        // Buffer notification per tab (flush after 5s)
-        const tabId = savedOrder.tab_id;
-        const entry = this.orderReadyBuffer.get(tabId);
-        if (!entry) {
-          this.orderReadyBuffer.set(tabId, {
-            orders: [savedOrder],
-            timeout: setTimeout(() => this.flushOrderReadyBuffer(tabId), 5000),
-          });
-        } else {
-          entry.orders.push(savedOrder);
+          // Buffer notification per tab (flush after 5s)
+          const tabId = savedOrder.tab_id;
+          const entry = this.orderReadyBuffer.get(tabId);
+          if (!entry) {
+            this.orderReadyBuffer.set(tabId, {
+              orders: [savedOrder],
+              timeout: setTimeout(
+                () => this.flushOrderReadyBuffer(tabId),
+                5000,
+              ),
+            });
+          } else {
+            entry.orders.push(savedOrder);
+          }
+        } else if (savedOrder.tracking_code) {
+          // Standalone online dispatch groups create/broadcast the delivery too.
+          await this.deliveryService.ensureOnOrdersReady(
+            null,
+            [savedOrder.id],
+            savedOrder.tracking_code,
+          );
         }
 
         return savedOrder;
@@ -942,7 +966,7 @@ export class OrderService {
   ) {
     const orderClause =
       orderField === 'created_at'
-        ? 'o.created_at DESC'
+        ? 'MIN(o.created_at) DESC'
         : 'MIN(o.timer_ends_at) ASC NULLS LAST';
 
     const params: any[] = [branchId, statuses];
@@ -954,17 +978,17 @@ export class OrderService {
 
     const baseQuery = `
       FROM orders o
-      JOIN tabs t ON t.id = o.tab_id
-      LEFT JOIN tables tbl ON tbl.id = t.table_id
+      LEFT JOIN tabs t ON t.id = o.tab_id
+      LEFT JOIN tables tbl ON tbl.id = COALESCE(t.table_id, o.table_id)
       LEFT JOIN users w ON w.id = t.waiter_id
       LEFT JOIN menu_items mi ON mi.id = o.menu_item_id
       LEFT JOIN departments d ON d.id = o.assigned_department
-      WHERE t.branch_id = $1
+      WHERE COALESCE(t.branch_id, o.branch_id) = $1
         AND o.order_status = ANY($2::text[])
         ${waiterClause}
     `;
 
-    const countSql = `SELECT COUNT(DISTINCT o.tab_id) AS total ${baseQuery}`;
+    const countSql = `SELECT COUNT(DISTINCT COALESCE(o.tab_id, o.tracking_code)) AS total ${baseQuery}`;
     const countResult = await this.dataSource.query(countSql, params);
     const total = parseInt(countResult[0]?.total || '0', 10);
 
@@ -976,15 +1000,19 @@ export class OrderService {
 
     const dataSql = `
       SELECT
-        o.tab_id::text AS "tabId",
-        o.created_at AS "createdAt",
+        COALESCE(o.tab_id, o.tracking_code)::text AS "tabId",
+        MIN(o.created_at) AS "createdAt",
         t.table_id::text AS "tableId",
         tbl.table_number AS "tableNumber",
         t.waiter_id::text AS "waiterId",
         w.full_name AS "waiterName",
-        t.tracking_code AS "trackingCode",
-        t.tracking_generated_at AS "trackingGeneratedAt",
-        t.tab_type AS "tabType",
+        COALESCE(t.tracking_code, o.tracking_code) AS "trackingCode",
+        COALESCE(t.tracking_generated_at, MIN(o.created_at)) AS "trackingGeneratedAt",
+        COALESCE(t.tab_type, o.tab_type) AS "tabType",
+        COALESCE(t.customer_name, MIN(o.customer_name)) AS "customerName",
+        COALESCE(t.party_size, MIN(o.party_size)) AS "partySize",
+        COALESCE(t.pickup_mode, MIN(o.pickup_mode)) AS "pickupMode",
+        COALESCE(t.delivery_fee_kobo, MIN(o.delivery_fee_kobo)) AS "deliveryFeeKobo",
         SUM(o.subtotal_kobo) AS "totalKobo",
         MIN(o.timer_ends_at) AS "timerEndsAt",
         (ARRAY_AGG(d.id))[1] AS "departmentId",
@@ -1022,7 +1050,7 @@ export class OrderService {
           ) ORDER BY o.created_at
         ) AS items
       ${baseQuery}
-      GROUP BY o.tab_id, o.created_at, t.table_id, tbl.table_number, t.waiter_id, w.full_name, t.tracking_code, t.tracking_generated_at, t.tab_type
+      GROUP BY COALESCE(o.tab_id, o.tracking_code), t.table_id, tbl.table_number, t.waiter_id, w.full_name, t.tracking_code, t.tracking_generated_at, t.tab_type, t.customer_name, t.party_size, t.pickup_mode, t.delivery_fee_kobo
       ORDER BY ${orderClause}
       ${paginationClause}
     `;
@@ -1083,15 +1111,29 @@ export class OrderService {
     // cash payment before the customer has chosen a method. Filter by the bill so
     // a cash approval only appears once the customer explicitly chooses cash.
     const tabIds = data.map((g: any) => g.tabId);
-    const cashBills = await this.billRepository.find({
-      where: {
-        tab_id: In(tabIds),
-        payment_status: 'pending_cash',
-        voided_at: IsNull(),
-      },
-    });
-    const cashTabIds = new Set(cashBills.map((b) => b.tab_id));
-    return data.filter((g: any) => cashTabIds.has(g.tabId));
+    const cashBills = tabIds.length
+      ? await this.billRepository.find({
+          where: [
+            {
+              tab_id: In(tabIds),
+              payment_status: 'pending_cash',
+              voided_at: IsNull(),
+            },
+            {
+              tracking_code: In(tabIds),
+              payment_status: 'pending_cash',
+              voided_at: IsNull(),
+            },
+          ],
+        })
+      : [];
+    const cashKeys = new Set(
+      [
+        ...cashBills.map((b) => b.tab_id),
+        ...cashBills.map((b) => b.tracking_code),
+      ].filter((k): k is string => !!k),
+    );
+    return data.filter((g: any) => cashKeys.has(g.tabId));
   }
 
   async expireTimers() {

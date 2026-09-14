@@ -32,7 +32,12 @@ import { Branch } from '../branch/entities/branch.entity';
 import { Business } from '../business/entities/business.entity';
 import { BillService } from '../bill/bill.service';
 import { ProcessPaymentDto } from '../bill/dto/process-payment.dto';
-import { PaymentMethod, OrderStatus, TabType } from '../../common/shared';
+import {
+  PaymentMethod,
+  OrderStatus,
+  TabType,
+  isBillable,
+} from '../../common/shared';
 import { PaymentVerificationDto } from './dto/payment-verification.dto';
 import { buildPaymentMethods } from './payment-provider.util';
 import * as crypto from 'crypto';
@@ -68,7 +73,7 @@ export class PaymentController {
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({
     summary:
-      'Get payment instructions for a self-service tab (no auth, tracking code required)',
+      'Get payment instructions for a self-service tab or standalone online order group (no auth, tracking code required)',
   })
   @ApiBody({ type: PaymentVerificationDto })
   @ApiResponse({ status: 200, description: 'Payment instruction details.' })
@@ -77,38 +82,73 @@ export class PaymentController {
       throw new BadRequestException('tab_id and tracking_code are required');
     }
 
-    const tab = await this.tabRepo.findOne({ where: { id: dto.tab_id } });
-    if (!tab) throw new NotFoundException('Tab not found');
-    if (tab.tracking_code !== dto.tracking_code)
-      throw new ForbiddenException('Invalid tracking code');
-    if (tab.status !== 'open' && tab.status !== 'billed')
-      throw new BadRequestException('Tab is not payable');
+    let tabIdKey: string;
+    let branchId: string;
+    let isTakeaway: boolean;
+    let pickupMode: string;
+    let deliveryFeeKobo = 0;
+    let orders: Order[];
 
-    // Dine-in is waiter-served only. When the waiter has created a split /
-    // payment plan, the guests settle each share with the waiter — the public
-    // tracking page must not let a customer self-pay a wholesale amount that
-    // bears no relation to the plan (and would create a spurious pending bill).
-    if (tab.tab_type === TabType.DINE_IN) {
-      const activeSplit = await this.billRepo.findOne({
-        where: {
-          tab_id: tab.id,
-          split_group: Not(IsNull()),
-          voided_at: IsNull(),
-        },
-      });
-      if (activeSplit) {
-        throw new BadRequestException(
-          'This dine-in bill is collected by your waiter — please pay them directly.',
-        );
+    const tab = await this.tabRepo.findOne({ where: { id: dto.tab_id } });
+    if (tab) {
+      if (tab.tracking_code !== dto.tracking_code)
+        throw new ForbiddenException('Invalid tracking code');
+      if (tab.status !== 'open' && tab.status !== 'billed')
+        throw new BadRequestException('Tab is not payable');
+
+      // Dine-in is waiter-served only. When the waiter has created a split /
+      // payment plan, the guests settle each share with the waiter — the public
+      // tracking page must not let a customer self-pay a wholesale amount that
+      // bears no relation to the plan (and would create a spurious pending bill).
+      if (tab.tab_type === TabType.DINE_IN) {
+        const activeSplit = await this.billRepo.findOne({
+          where: {
+            tab_id: tab.id,
+            split_group: Not(IsNull()),
+            voided_at: IsNull(),
+          },
+        });
+        if (activeSplit) {
+          throw new BadRequestException(
+            'This dine-in bill is collected by your waiter — please pay them directly.',
+          );
+        }
       }
+
+      orders = await this.orderRepo.find({ where: { tab_id: tab.id } });
+      if (orders.length === 0)
+        throw new BadRequestException('Tab has no orders');
+      tabIdKey = tab.id;
+      branchId = tab.branch_id;
+      isTakeaway = tab.tab_type === TabType.TAKEAWAY;
+      pickupMode = tab.pickup_mode;
+      if (pickupMode === 'dispatch')
+        deliveryFeeKobo = Number(tab.delivery_fee_kobo || 0);
+    } else {
+      // Standalone (tabless) online order group: the tracking code is the id.
+      if (dto.tab_id !== dto.tracking_code) {
+        throw new NotFoundException('Order group not found');
+      }
+      orders = await this.orderRepo.find({
+        where: { tracking_code: dto.tracking_code },
+      });
+      if (orders.length === 0)
+        throw new NotFoundException('Order group not found');
+      tabIdKey = dto.tracking_code;
+      branchId = orders[0].branch_id!;
+      isTakeaway = true;
+      pickupMode = orders[0].pickup_mode;
+      if (pickupMode === 'dispatch')
+        deliveryFeeKobo = Number(orders[0].delivery_fee_kobo || 0);
     }
 
-    const orders = await this.orderRepo.find({ where: { tab_id: tab.id } });
-    if (orders.length === 0) throw new BadRequestException('Tab has no orders');
-
-    const subtotalKobo = orders.reduce((sum, o) => sum + o.subtotal_kobo, 0);
+    const billableOrders = orders.filter((o) => isBillable(o.order_status));
+    const subtotalKobo = billableOrders.reduce(
+      (sum, o) => sum + (o.subtotal_kobo ?? 0),
+      0,
+    );
     const tabBranch = await this.branchRepo.findOne({
-      where: { id: tab.branch_id },
+      where: { id: branchId },
     });
     const business = tabBranch
       ? await this.businessRepo.findOne({
@@ -119,16 +159,23 @@ export class PaymentController {
     const serviceChargeKobo = Math.round(
       subtotalKobo * (serviceChargePercent / 100),
     );
-    const deliveryFeeKobo =
-      tab.pickup_mode === 'dispatch' ? Number(tab.delivery_fee_kobo || 0) : 0;
 
-    let bill = await this.billRepo.findOne({
-      where: { tab_id: tab.id, payment_status: 'pending' },
-    });
+    let bill = tab
+      ? await this.billRepo.findOne({
+          where: { tab_id: tab.id, payment_status: 'pending' },
+        })
+      : await this.billRepo.findOne({
+          where: {
+            tracking_code: dto.tracking_code,
+            payment_status: 'pending',
+          },
+        });
     if (!bill) {
       const paymentReference = `PAY-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
       bill = this.billRepo.create({
-        tab_id: tab.id,
+        tab_id: tab?.id ?? null,
+        tracking_code: tab ? null : dto.tracking_code,
+        branch_id: branchId,
         subtotal_kobo: subtotalKobo,
         service_charge_kobo: serviceChargeKobo,
         tax_kobo: 0,
@@ -148,16 +195,16 @@ export class PaymentController {
 
     const [activeTerminals, branch] = await Promise.all([
       this.posTerminalRepo.find({
-        where: { branch_id: tab.branch_id, is_active: true },
+        where: { branch_id: branchId, is_active: true },
       }),
-      this.branchRepo.findOne({ where: { id: tab.branch_id } }),
+      this.branchRepo.findOne({ where: { id: branchId } }),
     ]);
 
     const settings = branch?.settings || {};
     const paymentMethods = buildPaymentMethods(
       activeTerminals,
       settings,
-      tab.tab_type !== TabType.TAKEAWAY,
+      !isTakeaway,
     );
 
     const currency = business?.currency ?? 'NGN';
@@ -174,7 +221,7 @@ export class PaymentController {
 
     return {
       bill_id: bill.id,
-      tab_id: tab.id,
+      tab_id: tabIdKey,
       amount_kobo: bill.total_kobo,
       amount_formatted: `${symbolMap[currency] ?? currency}${(
         bill.total_kobo / 100
@@ -199,7 +246,20 @@ export class PaymentController {
     }
 
     const tab = await this.tabRepo.findOne({ where: { id: dto.tab_id } });
-    if (!tab) throw new NotFoundException('Tab not found');
+    if (!tab) {
+      // Standalone (tabless) online order groups are prepaid only.
+      if (dto.tab_id === dto.tracking_code) {
+        const groupOrder = await this.orderRepo.findOne({
+          where: { tracking_code: dto.tracking_code },
+        });
+        if (groupOrder) {
+          throw new BadRequestException(
+            'Cash payment is not available for takeaway orders. Please pay with transfer or card.',
+          );
+        }
+      }
+      throw new NotFoundException('Tab not found');
+    }
     if (tab.tracking_code !== dto.tracking_code)
       throw new ForbiddenException('Invalid tracking code');
     if (tab.status !== 'open' && tab.status !== 'billed')
@@ -488,7 +548,7 @@ export class PaymentController {
    *  Split-bill routing was removed with the split-billing feature. */
   private async routeWebhookPayment(params: {
     bill: Bill;
-    tab: Tab;
+    tab: Tab | null;
     reference: string;
     amount: number;
     method: PaymentMethod;
@@ -507,11 +567,12 @@ export class PaymentController {
     };
 
     await this.billService.processPayment(
-      tab.id,
-      tab.branch_id,
+      tab?.id ?? null,
+      (tab?.branch_id ?? bill.branch_id) as string,
       'system-webhook',
       'owner',
       dto,
+      { bill },
     );
 
     return { received: true, status: 'processed' };
@@ -636,9 +697,15 @@ export class PaymentController {
         where: { payment_reference: opts.reference },
       });
       if (bill) {
-        const tab = await this.tabRepo.findOne({ where: { id: bill.tab_id } });
+        const tab = bill.tab_id
+          ? await this.tabRepo.findOne({ where: { id: bill.tab_id } })
+          : null;
         if (tab) {
           return this.branchRepo.findOne({ where: { id: tab.branch_id } });
+        }
+        // Standalone (tabless) online orders record the branch on the bill.
+        if (bill.branch_id) {
+          return this.branchRepo.findOne({ where: { id: bill.branch_id } });
         }
       }
     }
@@ -660,13 +727,21 @@ export class PaymentController {
     provider: 'monniepoint' | 'opay';
     terminalId?: string;
     accountNumber?: string;
-  }): Promise<{ bill: Bill; tab: Tab; branch: Branch | null } | null> {
+  }): Promise<{ bill: Bill; tab: Tab | null; branch: Branch | null } | null> {
     if (opts.reference) {
       const bill = await this.billRepo.findOne({
         where: { payment_reference: opts.reference },
       });
       if (bill) {
-        const tab = await this.tabRepo.findOne({ where: { id: bill.tab_id } });
+        const tab = bill.tab_id
+          ? await this.tabRepo.findOne({ where: { id: bill.tab_id } })
+          : null;
+        if (!tab && bill.branch_id) {
+          const branch = await this.branchRepo.findOne({
+            where: { id: bill.branch_id },
+          });
+          return { bill, tab: null, branch };
+        }
         if (tab) {
           const branch = await this.branchRepo.findOne({
             where: { id: tab.branch_id },
@@ -686,8 +761,10 @@ export class PaymentController {
 
     const candidateBills = await this.billRepo
       .createQueryBuilder('bill')
-      .innerJoin('tabs', 'tab', 'tab.id = bill.tab_id')
-      .where('tab.branch_id = :branchId', { branchId: branch.id })
+      .where(
+        'COALESCE(bill.branch_id, (SELECT t.branch_id FROM tabs t WHERE t.id = bill.tab_id)) = :branchId',
+        { branchId: branch.id },
+      )
       .andWhere('bill.voided_at IS NULL')
       .andWhere('bill.paid_at IS NULL')
       .orderBy('bill.created_at', 'DESC')
@@ -698,8 +775,9 @@ export class PaymentController {
     if (matches.length !== 1) return null;
 
     const bill = matches[0];
-    const tab = await this.tabRepo.findOne({ where: { id: bill.tab_id } });
-    if (!tab) return null;
+    const tab = bill.tab_id
+      ? await this.tabRepo.findOne({ where: { id: bill.tab_id } })
+      : null;
     return { bill, tab, branch };
   }
 

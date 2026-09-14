@@ -259,21 +259,54 @@ export class BillService {
   }
 
   async processPayment(
-    tabId: string,
+    tabId: string | null,
     branchId: string,
     userId: string,
     userRole: string,
     paymentDto: ProcessPaymentDto,
+    opts?: { bill?: Bill },
   ) {
-    const tab = await this.tabRepository.findOne({ where: { id: tabId } });
-    if (!tab) throw new NotFoundException('Tab not found');
-    if (tab.branch_id !== branchId)
-      throw new ForbiddenException('Tab does not belong to your branch');
+    // Standalone (tabless) online order groups are settled via the bill that a
+    // webhook already resolved; the caller hands it over so we don't re-query.
+    const bill =
+      opts?.bill ??
+      (await this.billRepository.findOne({
+        where: { tab_id: tabId!, voided_at: IsNull() },
+        order: { created_at: 'DESC' },
+      }));
+    if (!bill) throw new NotFoundException('Bill not found');
+
+    // Identify the orders this settlement covers. Tabs scope by tab_id;
+    // standalone online orders share their group's unique tracking_code.
+    const scope = tabId
+      ? ({ tab_id: tabId } as const)
+      : ({ tracking_code: bill.tracking_code } as const);
+
+    let tab: Tab | null = null;
+    if (tabId) {
+      tab = await this.tabRepository.findOne({ where: { id: tabId } });
+      if (!tab) throw new NotFoundException('Tab not found');
+      if (tab.branch_id !== branchId)
+        throw new ForbiddenException('Tab does not belong to your branch');
+
+      // For standalone groups the bill carries the branch, but waiter ownership
+      // only exists for dine-in tabs.
+      if (
+        tab.waiter_id &&
+        userId &&
+        tab.waiter_id !== userId &&
+        userRole !== 'owner' &&
+        userRole !== 'manager' &&
+        userRole !== 'cashier'
+      ) {
+        throw new ForbiddenException('This tab belongs to another waiter');
+      }
+    }
 
     // Takeaway / self-service orders are prepaid online — cash is not accepted
     // for them. Dine-in keeps the cash-at-counter flow.
     if (
-      tab.tab_type === 'takeaway' &&
+      (tab?.tab_type === 'takeaway' || !tabId) &&
       paymentDto.method === PaymentMethod.CASH
     ) {
       throw new BadRequestException(
@@ -281,29 +314,8 @@ export class BillService {
       );
     }
 
-    if (
-      tab.waiter_id &&
-      userId &&
-      tab.waiter_id !== userId &&
-      userRole !== 'owner' &&
-      userRole !== 'manager' &&
-      userRole !== 'cashier'
-    ) {
-      throw new ForbiddenException('This tab belongs to another waiter');
-    }
-
-    const bill = await this.billRepository.findOne({
-      where: { tab_id: tabId, voided_at: IsNull() },
-      order: { created_at: 'DESC' },
-    });
-    if (!bill) throw new NotFoundException('Bill not found');
-
-    // Payment gateway: a tab must not be settled while it still has undelivered
-    // billable orders. Declined/cancelled items are excluded, and prepaid-takeaway
-    // orders HELD in PENDING_PAYMENT_APPROVAL are exempt (they are paid up front and
-    // released to the kitchen at processPayment).
     const orders = await this.orderRepository.find({
-      where: { tab_id: tabId },
+      where: scope as any,
     });
     const blockingOrders = orders.filter((o) =>
       statusBlocksPayment(o.order_status),
@@ -342,13 +354,19 @@ export class BillService {
     // In this business's pay-at-order-time workflow, payment = fulfillment, so
     // processing deduction here is correct. In a traditional restaurant (pay-at-end)
     // the deduction would move to a kitchen status transition instead.
+    const branchIdForDeduction = tab?.branch_id ?? bill.branch_id ?? branchId;
     await this.dataSource.transaction(async (manager) => {
-      const orders = await manager
-        .getRepository(Order)
-        .find({ where: { tab_id: tabId } });
+      const orders = await manager.getRepository(Order).find({
+        where: scope as any,
+      });
 
+      // Standalone groups record stock movements against the bill id, which is
+      // stable for the life of the settlement and unique to the group.
       await this.ingredientService.deductByTab(
-        { id: tabId, branch_id: tab.branch_id },
+        {
+          id: tab?.id ?? bill.id,
+          branch_id: branchIdForDeduction,
+        },
         orders.map((o) => ({
           menu_item_id: o.menu_item_id,
           quantity: o.quantity,
@@ -372,12 +390,12 @@ export class BillService {
 
       await manager.getRepository(Bill).save(bill);
 
-      // Wholesale settlement supersedes any pending split/plan rows for the tab:
-      // void them so they cannot be settled later, double-counted in revenue, or
-      // show as outstanding splits after the tab is already closed as paid.
+      // Wholesale settlement supersedes any pending split/plan rows for the same
+      // scope: void them so they cannot be settled later, double-counted in revenue,
+      // or show as outstanding splits after the tab/group is already closed as paid.
       await manager.getRepository(Bill).update(
         {
-          tab_id: tabId,
+          ...(scope as any),
           id: Not(bill.id),
           paid_at: IsNull(),
           voided_at: IsNull(),
@@ -385,11 +403,22 @@ export class BillService {
         { voided_at: new Date() },
       );
 
-      await manager.getRepository(Tab).update(tabId, {
-        status: 'paid',
-        closed_at: new Date(),
-        cashier_id: userId,
-      });
+      if (tabId && tab) {
+        await manager.getRepository(Tab).update(tabId, {
+          status: 'paid',
+          closed_at: new Date(),
+          cashier_id: userId,
+        });
+      } else if (!tabId && bill.tracking_code) {
+        // Standalone groups carry the group status denormalized on each order.
+        await manager.getRepository(Order).update(
+          {
+            ...(scope as any),
+            status: Not('paid'),
+          },
+          { status: 'paid' },
+        );
+      }
 
       // Release prepaid takeaway orders (held on payment approval) to the kitchen now
       // that payment is confirmed. KDS-enabled branches send them straight to the
@@ -397,14 +426,14 @@ export class BillService {
       // supervisor pipeline.
       const heldOrders = await manager.getRepository(Order).find({
         where: {
-          tab_id: tabId,
+          ...(scope as any),
           order_status: OrderStatus.PENDING_PAYMENT_APPROVAL,
         },
       });
       if (heldOrders.length > 0) {
         const releaseBranch = await manager
           .getRepository(Branch)
-          .findOne({ where: { id: tab.branch_id } });
+          .findOne({ where: { id: branchIdForDeduction } });
         const releaseKdsEnabled =
           (
             releaseBranch?.settings?.feature_flags as
@@ -441,22 +470,28 @@ export class BillService {
       }
 
       // Virtual tables never participate in occupancy logic — they are system records, not seatable tables.
-      const payTable = await manager
-        .getRepository(Table)
-        .findOne({ where: { id: tab.table_id } });
-      if (payTable && !payTable.is_virtual) {
-        await manager
+      if (tabId && tab) {
+        const payTable = await manager
           .getRepository(Table)
-          .update(tab.table_id, { status: TableStatus.AVAILABLE });
+          .findOne({ where: { id: tab.table_id } });
+        if (payTable && !payTable.is_virtual) {
+          await manager
+            .getRepository(Table)
+            .update(tab.table_id, { status: TableStatus.AVAILABLE });
+        }
       }
     });
 
-    // Emit real-time events
-    this.realtimeService.emitBillUpdate(tab.branch_id, tabId, {
-      status: 'paid',
-      bill,
-    });
-    this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+    // Emit real-time events. Standalone groups are addressed by tracking_code.
+    this.realtimeService.emitBillUpdate(
+      branchIdForDeduction,
+      tabId ?? bill.tracking_code ?? '',
+      {
+        status: 'paid',
+        bill,
+      },
+    );
+    this.realtimeService.emitDashboardUpdate(branchIdForDeduction, {
       type: 'payment_received',
       tabId,
       bill,
@@ -464,30 +499,66 @@ export class BillService {
 
     // Push payment confirmation to the public customer tracking page so it does
     // not need to poll (poll-free). Covers cash, card and transfer payments.
-    getPublicServer()?.to(`tab:${tabId}`).emit('paymentConfirmed', {
-      tabId,
-      status: 'paid',
-    });
+    if (tabId) {
+      getPublicServer()
+        ?.to(`tab:${tabId}`)
+        .emit('paymentConfirmed', {
+          tabId,
+          status: 'paid',
+        });
+    } else if (bill.tracking_code) {
+      getPublicServer()
+        ?.to(`tracking:${bill.tracking_code}`)
+        .emit('paymentConfirmed', {
+          tabId: bill.tracking_code,
+          status: 'paid',
+        });
+    }
 
     // Generate PDF receipt and upload to Cloudinary
-    try {
-      const receiptData = await this.buildReceiptData(tabId);
-      if (!receiptData) return bill;
-      const pdfBuffer = this.receiptService.generatePdf(receiptData);
-      const uploadResult = await this.cloudinaryService.uploadFile(
-        pdfBuffer,
-        `receipts/${tabId}`,
-        'raw',
-      );
-      if (uploadResult?.secure_url) {
-        bill.receipt_url = uploadResult.secure_url;
-        await this.billRepository.save(bill);
+    if (tabId) {
+      try {
+        const receiptData = await this.buildReceiptData({ tabId });
+        if (!receiptData) return bill;
+        const pdfBuffer = this.receiptService.generatePdf(receiptData);
+        const uploadResult = await this.cloudinaryService.uploadFile(
+          pdfBuffer,
+          `receipts/${tabId}`,
+          'raw',
+        );
+        if (uploadResult?.secure_url) {
+          bill.receipt_url = uploadResult.secure_url;
+          await this.billRepository.save(bill);
+        }
+      } catch (err) {
+        console.error(
+          'PDF receipt generation failed (non-blocking):',
+          err instanceof Error ? err.message : String(err),
+        );
       }
-    } catch (err) {
-      console.error(
-        'PDF receipt generation failed (non-blocking):',
-        err instanceof Error ? err.message : String(err),
-      );
+    } else if (bill.tracking_code) {
+      try {
+        const receiptData = await this.buildReceiptData({
+          trackingCode: bill.tracking_code,
+        });
+        if (receiptData) {
+          const pdfBuffer = this.receiptService.generatePdf(receiptData);
+          const uploadResult = await this.cloudinaryService.uploadFile(
+            pdfBuffer,
+            `receipts/${bill.tracking_code}`,
+            'raw',
+          );
+          if (uploadResult?.secure_url) {
+            bill.receipt_url = uploadResult.secure_url;
+            await this.billRepository.save(bill);
+          }
+        }
+      } catch (err) {
+        console.error(
+          'PDF receipt generation failed (non-blocking):',
+          err instanceof Error ? err.message : String(err),
+        );
+      }
     }
 
     return bill;
@@ -597,15 +668,20 @@ export class BillService {
     };
   }
 
-  private async buildReceiptData(tabId: string) {
-    const tab = await this.tabRepository.findOne({ where: { id: tabId } });
-    if (!tab) throw new NotFoundException('Tab not found');
+  private async buildReceiptData(opts: {
+    tabId?: string;
+    trackingCode?: string;
+  }) {
+    const { tabId, trackingCode } = opts;
+    const tab = tabId
+      ? await this.tabRepository.findOne({ where: { id: tabId } })
+      : null;
+    if (tabId && !tab) throw new NotFoundException('Tab not found');
 
-    const allBills =
-      (await this.billRepository.find({
-        where: { tab_id: tabId },
-        order: { created_at: 'ASC' },
-      })) ?? [];
+    const allBills = (await this.billRepository.find({
+      where: tabId ? { tab_id: tabId } : { tracking_code: trackingCode },
+      order: { created_at: 'ASC' },
+    })) ?? [];
 
     // The receipt reflects the single full-tab bill. Prefer the most recently
     // paid bill so a settled tab shows the bill actually paid (method and amount),
@@ -619,9 +695,13 @@ export class BillService {
       allBills[allBills.length - 1] ??
       null;
 
-    const orders = await this.orderRepository.find({
-      where: { tab_id: tabId },
-    });
+    const orders = tabId
+      ? await this.orderRepository.find({
+          where: { tab_id: tabId },
+        })
+      : await this.orderRepository.find({
+          where: { tracking_code: trackingCode },
+        });
 
     const orderItems = [];
     for (const order of orders) {
@@ -634,15 +714,23 @@ export class BillService {
       });
     }
 
-    const table = await this.tableRepository.findOne({
-      where: { id: tab.table_id },
-    });
-    const waiter = tab.waiter_id
+    const table = tab?.table_id
+      ? await this.tableRepository.findOne({
+          where: { id: tab.table_id },
+        })
+      : null;
+    const waiter = tab?.waiter_id
       ? await this.userRepository.findOne({ where: { id: tab.waiter_id } })
       : null;
-    const branch = await this.branchRepository.findOne({
-      where: { id: tab.branch_id },
-    });
+    const branch = tab
+      ? await this.branchRepository.findOne({
+          where: { id: tab.branch_id },
+        })
+      : orders[0]?.branch_id
+        ? await this.branchRepository.findOne({
+            where: { id: orders[0].branch_id },
+          })
+        : null;
     const business = branch
       ? await this.businessRepository.findOne({
           where: { id: branch.business_id },
@@ -652,7 +740,7 @@ export class BillService {
     return {
       business,
       branch,
-      tab,
+      tab: tab as Tab | null,
       table,
       waiter,
       bill,
@@ -667,7 +755,7 @@ export class BillService {
     if (tab.branch_id !== branchId)
       throw new ForbiddenException('Tab does not belong to your branch');
 
-    return this.buildReceiptData(tabId);
+    return this.buildReceiptData({ tabId });
   }
 
   async getReceiptPdf(tabId: string, branchId: string): Promise<Buffer> {
@@ -676,7 +764,7 @@ export class BillService {
     if (tab.branch_id !== branchId)
       throw new ForbiddenException('Tab does not belong to your branch');
 
-    const data = await this.buildReceiptData(tabId);
+    const data = await this.buildReceiptData({ tabId });
     if (!data) throw new NotFoundException('Bill not found');
     return this.receiptService.generatePdf(data);
   }

@@ -93,6 +93,10 @@ import { AddRiderPayoutTables1842000000000 } from './database/migrations/1842000
 import { AddTableReservations1843000000000 } from './database/migrations/1843000000000-AddTableReservations';
 import { AddPrepTimeToMenuItems1860000000000 } from './database/migrations/1860000000000-AddPrepTimeToMenuItems';
 import { AddVersionToPayoutBatches1865000000000 } from './database/migrations/1865000000000-AddVersionToPayoutBatches';
+import { AddStandaloneOrderFields1870000000000 } from './database/migrations/1870000000000-AddStandaloneOrderFields';
+import { AddBranchIdToBills1870000000001 } from './database/migrations/1870000000001-AddBranchIdToBills';
+import { MakeDeliveriesTabIdNullable1870000000002 } from './database/migrations/1870000000002-MakeDeliveriesTabIdNullable';
+import { AddStandaloneReviewFields1870000000003 } from './database/migrations/1870000000003-AddStandaloneReviewFields';
 import { PlatformPaymentProvider } from './modules/admin/entities/platform-payment-provider.entity';
 import { Feedback } from './modules/feedback/entities/feedback.entity';
 import { WaiterCall } from './modules/waiter-call/entities/waiter-call.entity';
@@ -240,6 +244,10 @@ import { ReservationsModule } from './modules/reservations/reservations.module';
         AddTableReservations1843000000000,
         AddPrepTimeToMenuItems1860000000000,
         AddVersionToPayoutBatches1865000000000,
+        AddStandaloneOrderFields1870000000000,
+        AddBranchIdToBills1870000000001,
+        MakeDeliveriesTabIdNullable1870000000002,
+        AddStandaloneReviewFields1870000000003,
       ],
       migrationsRun: true,
       synchronize: false,

@@ -46,16 +46,21 @@ export class OrderScheduler {
 
     await this.orderRepo.save(expired);
 
-    const tabIds = [...new Set(expired.map((o) => o.tab_id))];
-    const tabs = await this.tabRepo.find({ where: { id: In(tabIds) } });
+    const tabIds = [...new Set(expired.map((o) => o.tab_id).filter(Boolean))] as string[];
+    const tabs = tabIds.length > 0
+      ? await this.tabRepo.find({ where: { id: In(tabIds) } })
+      : [];
     const tabById = new Map(tabs.map((t) => [t.id, t]));
 
-    // Group expired orders by tab and send one notification per tab
+    // Group expired orders by tab and send one notification per tab. Standalone
+    // (tabless) online orders have no waiter to notify; their tracking page is
+    // updated via the bump()/emit path instead.
     const byTab = new Map<string, Order[]>();
     for (const order of expired) {
-      const arr = byTab.get(order.tab_id) ?? [];
+      if (!order.tab_id) continue;
+      const arr = byTab.get(order.tab_id!) ?? [];
       arr.push(order);
-      byTab.set(order.tab_id, arr);
+      byTab.set(order.tab_id!, arr);
     }
 
     for (const [tabId, orders] of byTab) {

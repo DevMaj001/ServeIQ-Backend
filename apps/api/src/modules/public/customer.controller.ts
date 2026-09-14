@@ -118,6 +118,24 @@ export class CustomerController {
             },
           },
         },
+        branch_id: {
+          type: 'string',
+          description:
+            'Required only when placing the first order of a new takeaway/group (no tab exists yet)',
+        },
+        customer_name: { type: 'string' },
+        party_size: { type: 'number' },
+        pickup_mode: { type: 'string', enum: ['self', 'dispatch'] },
+        delivery_details: {
+          type: 'object',
+          properties: {
+            full_name: { type: 'string' },
+            phone: { type: 'string' },
+            address: { type: 'string' },
+            notes: { type: 'string' },
+          },
+        },
+        delivery_fee_kobo: { type: 'number' },
       },
     },
   })
@@ -133,13 +151,31 @@ export class CustomerController {
         notes?: string;
         modifiers?: any[];
       }[];
+      branch_id?: string;
+      customer_name?: string;
+      party_size?: number;
+      pickup_mode?: string;
+      delivery_details?: {
+        full_name?: string;
+        phone?: string;
+        address?: string;
+        notes?: string;
+      };
+      delivery_fee_kobo?: number;
     },
   ) {
     if (!trackingCode)
       throw new BadRequestException('x-tracking-code header is required');
     if (!body.items || body.items.length === 0)
       throw new BadRequestException('At least one item is required');
-    return this.customerService.addItems(tabId, trackingCode, body.items);
+    return this.customerService.addItems(tabId, trackingCode, body.items, {
+      branch_id: body.branch_id,
+      customer_name: body.customer_name,
+      party_size: body.party_size,
+      pickup_mode: body.pickup_mode,
+      delivery_details: body.delivery_details,
+      delivery_fee_kobo: body.delivery_fee_kobo,
+    });
   }
 
   @Get('tabs/:tabId')

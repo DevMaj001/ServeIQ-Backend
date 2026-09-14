@@ -43,10 +43,12 @@ export class TrackingService {
   async generateUniqueCode(): Promise<string> {
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       const code = this.generateCode();
-      const existing = await this.tabRepo.findOne({
-        where: { tracking_code: code },
-      });
-      if (!existing) return code;
+      const [existingTab, existingOrder, existingBill] = await Promise.all([
+        this.tabRepo.findOne({ where: { tracking_code: code } }),
+        this.orderRepo.findOne({ where: { tracking_code: code } }),
+        this.billRepo.findOne({ where: { tracking_code: code } }),
+      ]);
+      if (!existingTab && !existingOrder && !existingBill) return code;
     }
     throw new Error(
       'Failed to generate unique tracking code after max retries',
@@ -61,44 +63,97 @@ export class TrackingService {
     }
 
     const tab = await this.tabRepo.findOne({ where: { tracking_code: code } });
-    if (!tab) {
-      throw new NotFoundException('Tracking code not found');
-    }
 
     let businessName = '';
     let branchName = '';
     let logoUrl: string | null = null;
     let branchId = '';
+    let tabId = '';
+    let tabType: string | null = null;
+    let tabStatus: string | null = null;
 
-    const branch = await this.branchRepo.findOne({
-      where: { id: tab.branch_id },
-      relations: { business: true },
-    });
-    branchId = tab.branch_id;
-    branchName = branch?.name || '';
-    if (branch?.business) {
-      businessName = branch.business.name;
-      logoUrl = branch.business.logo_url || null;
-    }
+    const branch =
+      tab && (await this.branchRepo.findOne({
+        where: { id: tab.branch_id },
+        relations: { business: true },
+      }));
 
     let paymentAccountNumber = '';
     let bill: Bill | null = null;
-    try {
-      bill = await this.billRepo.findOne({ where: { tab_id: tab.id } });
-      if (bill?.terminal_id) {
-        const terminal = await this.posTerminalRepo.findOne({
-          where: { id: bill.terminal_id },
-        });
-        paymentAccountNumber = terminal?.account_number || '';
+    let trackingGeneratedAt: Date | null = null;
+
+    if (tab) {
+      branchId = tab.branch_id;
+      tabId = tab.id;
+      tabType = tab.tab_type;
+      tabStatus = tab.status;
+      trackingGeneratedAt = tab.tracking_generated_at;
+      try {
+        bill = await this.billRepo.findOne({ where: { tab_id: tab.id } });
+        if (bill?.terminal_id) {
+          const terminal = await this.posTerminalRepo.findOne({
+            where: { id: bill.terminal_id },
+          });
+          paymentAccountNumber = terminal?.account_number || '';
+        }
+      } catch {
+        // non-fatal: bill lookup failed
       }
-    } catch {
-      // non-fatal: menu item lookup failed
+    } else {
+      // Standalone (tabless) group oriented by its order tracking code.
+      const firstOrder = await this.orderRepo.findOne({
+        where: { tracking_code: code },
+        order: { created_at: 'ASC' },
+      });
+      if (!firstOrder) {
+        throw new NotFoundException('Tracking code not found');
+      }
+      branchId = firstOrder.branch_id!;
+      tabId = code;
+      tabType = 'takeaway';
+      tabStatus =
+        firstOrder.status === 'paid'
+          ? 'paid'
+          : firstOrder.status === 'billed'
+            ? 'billed'
+            : firstOrder.status || 'open';
+      trackingGeneratedAt = firstOrder.created_at;
+      try {
+        bill = await this.billRepo.findOne({
+          where: { tracking_code: code },
+        });
+        if (bill?.terminal_id) {
+          const terminal = await this.posTerminalRepo.findOne({
+            where: { id: bill.terminal_id },
+          });
+          paymentAccountNumber = terminal?.account_number || '';
+        }
+      } catch {
+        // non-fatal: bill lookup failed
+      }
     }
 
-    const orders = await this.orderRepo.find({
-      where: { tab_id: tab.id },
-      order: { created_at: 'ASC' },
-    });
+    const branchResolved =
+      branch ??
+      (await this.branchRepo.findOne({
+        where: { id: branchId },
+        relations: { business: true },
+      }));
+    branchName = branchResolved?.name || '';
+    if (branchResolved?.business) {
+      businessName = branchResolved.business.name;
+      logoUrl = branchResolved.business.logo_url || null;
+    }
+
+    const orders = tab
+      ? await this.orderRepo.find({
+          where: { tab_id: tab.id },
+          order: { created_at: 'ASC' },
+        })
+      : await this.orderRepo.find({
+          where: { tracking_code: code },
+          order: { created_at: 'ASC' },
+        });
 
     if (orders.length === 0) {
       return {
@@ -106,14 +161,14 @@ export class TrackingService {
         branchName,
         logoUrl,
         branchId,
-        currency: branch?.business?.currency || 'NGN',
+        currency: branchResolved?.business?.currency || 'NGN',
         paymentAccountNumber,
         paymentStatus: bill?.payment_status || null,
         paymentMethod: bill?.payment_method || null,
-        tabStatus: tab.status,
-        tabId: tab.id,
-        tabType: tab.tab_type,
-        trackingGeneratedAt: tab.tracking_generated_at,
+        tabStatus,
+        tabId,
+        tabType,
+        trackingGeneratedAt,
         orders: [],
       };
     }
@@ -155,14 +210,14 @@ export class TrackingService {
       branchName,
       logoUrl,
       branchId,
-      currency: branch?.business?.currency || 'NGN',
+      currency: branchResolved?.business?.currency || 'NGN',
       paymentAccountNumber,
       paymentStatus: bill?.payment_status || null,
       paymentMethod: bill?.payment_method || null,
-      tabStatus: tab.status,
-      tabId: tab.id,
-      tabType: tab.tab_type,
-      trackingGeneratedAt: tab.tracking_generated_at,
+      tabStatus,
+      tabId,
+      tabType,
+      trackingGeneratedAt,
       overallStatus: hasDeclined ? 'PARTIALLY_DECLINED' : 'ACTIVE',
       orders: items,
     };

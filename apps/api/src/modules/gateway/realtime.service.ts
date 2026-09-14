@@ -85,7 +85,7 @@ export class RealtimeService {
     branchId: string,
     orderId: string,
     status: string,
-    tabId?: string,
+    tabId?: string | null,
   ) {
     this.emitTo(
       [
