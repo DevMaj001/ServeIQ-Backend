@@ -29,6 +29,9 @@ import { NotificationService } from '../notification/notification.service';
 import { NotificationType } from '../notification/entities/notification.entity';
 import { RealtimeService } from '../gateway/realtime.service';
 import { DeliveryService } from '../delivery/delivery.service';
+import type { FindOptionsWhere } from 'typeorm';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 @Injectable()
 export class OrderService {
@@ -988,7 +991,7 @@ const { tab, branchId: ctxBranchId } = await this.getTabForOrder(id, branchId);
         ${waiterClause}
     `;
 
-    const countSql = `SELECT COUNT(DISTINCT COALESCE(o.tab_id, o.tracking_code)) AS total ${baseQuery}`;
+    const countSql = `SELECT COUNT(DISTINCT COALESCE(o.tab_id::text, o.tracking_code)) AS total ${baseQuery}`;
     const countResult = await this.dataSource.query(countSql, params);
     const total = parseInt(countResult[0]?.total || '0', 10);
 
@@ -1000,7 +1003,7 @@ const { tab, branchId: ctxBranchId } = await this.getTabForOrder(id, branchId);
 
     const dataSql = `
       SELECT
-        COALESCE(o.tab_id, o.tracking_code)::text AS "tabId",
+        COALESCE(o.tab_id::text, o.tracking_code)::text AS "tabId",
         MIN(o.created_at) AS "createdAt",
         t.table_id::text AS "tableId",
         CASE
@@ -1053,7 +1056,7 @@ const { tab, branchId: ctxBranchId } = await this.getTabForOrder(id, branchId);
           ) ORDER BY o.created_at
         ) AS items
       ${baseQuery}
-      GROUP BY COALESCE(o.tab_id, o.tracking_code), t.table_id, tbl.table_number, t.waiter_id, w.full_name, t.tracking_code, t.tracking_generated_at, t.tab_type, t.customer_name, t.party_size, t.pickup_mode, t.delivery_fee_kobo
+      GROUP BY COALESCE(o.tab_id::text, o.tracking_code), t.table_id, tbl.table_number, t.waiter_id, w.full_name, t.tracking_code, t.tracking_generated_at, t.tab_type, t.customer_name, t.party_size, t.pickup_mode, t.delivery_fee_kobo
       ORDER BY ${orderClause}
       ${paginationClause}
     `;
@@ -1114,21 +1117,25 @@ const { tab, branchId: ctxBranchId } = await this.getTabForOrder(id, branchId);
     // cash payment before the customer has chosen a method. Filter by the bill so
     // a cash approval only appears once the customer explicitly chooses cash.
     const tabIds = data.map((g: any) => g.tabId);
-    const cashBills = tabIds.length
-      ? await this.billRepository.find({
-          where: [
-            {
-              tab_id: In(tabIds),
-              payment_status: 'pending_cash',
-              voided_at: IsNull(),
-            },
-            {
-              tracking_code: In(tabIds),
-              payment_status: 'pending_cash',
-              voided_at: IsNull(),
-            },
-          ],
-        })
+    // tab_id is a uuid column; tracking codes (which also appear as group keys
+    // for tabless orders) must not be passed into it or Postgres raises 22P02.
+    const uuidKeys = tabIds.filter((k: string) => UUID_RE.test(k));
+    const trackingKeys = tabIds.filter((k: string) => !UUID_RE.test(k));
+    const billWhere: FindOptionsWhere<Bill>[] = [];
+    if (trackingKeys.length)
+      billWhere.push({
+        tracking_code: In(trackingKeys),
+        payment_status: 'pending_cash',
+        voided_at: IsNull(),
+      });
+    if (uuidKeys.length)
+      billWhere.push({
+        tab_id: In(uuidKeys),
+        payment_status: 'pending_cash',
+        voided_at: IsNull(),
+      });
+    const cashBills = billWhere.length
+      ? await this.billRepository.find({ where: billWhere })
       : [];
     const cashKeys = new Set(
       [
