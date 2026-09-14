@@ -73,8 +73,9 @@ export class AddStandaloneOrderFields1870000000000 implements MigrationInterface
     await queryRunner.query(`
         CREATE INDEX IF NOT EXISTS "IDX_orders_branch_id" ON "orders" ("branch_id")
     `);
+    // Not unique: every order in a group shares its tab's tracking code.
     await queryRunner.query(`
-        CREATE UNIQUE INDEX IF NOT EXISTS "IDX_orders_tracking_code" ON "orders" ("tracking_code")
+        CREATE INDEX IF NOT EXISTS "IDX_orders_tracking_code" ON "orders" ("tracking_code")
         WHERE "tracking_code" IS NOT NULL
     `);
 
