@@ -33,6 +33,9 @@ import {
   isBillable,
 } from '../../common/shared';
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 @Injectable()
 export class CustomerService {
   constructor(
@@ -190,7 +193,7 @@ export class CustomerService {
       delivery_fee_kobo?: number;
     },
   ) {
-    const tab = await this.tabRepo.findOne({ where: { id: orderKey } });
+    const tab = await this.findTabByOrderKey(orderKey);
 
     if (tab) {
       if (tab.tracking_code !== trackingCode)
@@ -432,8 +435,15 @@ export class CustomerService {
     return this.computePrepaid(tab.branch_id);
   }
 
+  /** A tab id is a uuid; anything else (e.g. a tracking code) can never match a
+   *  tab row, and querying a uuid column with a non-uuid literal raises 22P02. */
+  private async findTabByOrderKey(orderKey: string): Promise<Tab | null> {
+    if (!UUID_RE.test(orderKey)) return null;
+    return this.tabRepo.findOne({ where: { id: orderKey } });
+  }
+
   async getTab(orderKey: string, trackingCode: string) {
-    const tab = await this.tabRepo.findOne({ where: { id: orderKey } });
+    const tab = await this.findTabByOrderKey(orderKey);
     if (tab) {
       if (tab.tracking_code !== trackingCode)
         throw new ForbiddenException('Invalid tracking code');
@@ -448,7 +458,7 @@ export class CustomerService {
    *  direct replacement for the supervisor's confirm-pickup → deliver dance —
    *  no waiter involvement needed for self-service orders. */
   async confirmReceived(orderKey: string, trackingCode: string) {
-    const tab = await this.tabRepo.findOne({ where: { id: orderKey } });
+    const tab = await this.findTabByOrderKey(orderKey);
     if (tab) {
       if (tab.tracking_code !== trackingCode)
         throw new ForbiddenException('Invalid tracking code');
@@ -568,7 +578,7 @@ export class CustomerService {
     trackingCode: string,
     deliveryId: string,
   ) {
-    const tab = await this.tabRepo.findOne({ where: { id: orderKey } });
+    const tab = await this.findTabByOrderKey(orderKey);
     if (tab) {
       if (tab.tracking_code !== trackingCode)
         throw new ForbiddenException('Invalid tracking code');
@@ -622,7 +632,7 @@ export class CustomerService {
     trackingCode: string,
     body: { rating: number; comment?: string },
   ) {
-    const tab = await this.tabRepo.findOne({ where: { id: orderKey } });
+    const tab = await this.findTabByOrderKey(orderKey);
     if (tab) {
       if (tab.tracking_code !== trackingCode)
         throw new ForbiddenException('Invalid tracking code');
@@ -702,7 +712,7 @@ export class CustomerService {
   }
 
   private async getTabResponse(tabId: string) {
-    const tab = await this.tabRepo.findOne({ where: { id: tabId } });
+    const tab = await this.findTabByOrderKey(tabId);
     if (!tab) throw new NotFoundException('Tab not found');
     const orders = await this.orderRepo.find({
       where: { tab_id: tabId },

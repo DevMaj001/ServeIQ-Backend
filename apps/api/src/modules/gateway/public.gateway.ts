@@ -77,9 +77,16 @@ export class PublicGateway
       return { success: false, error: 'tabId and trackingCode required' };
     }
     try {
-      const tab = await this.dataSource
-        .getRepository(Tab)
-        .findOne({ where: { id: tabId, tracking_code: code } });
+      // Only query the tab table when the id actually looks like a uuid —
+      // otherwise a non-uuid literal against the uuid column raises 22P02.
+      const tab =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          tabId,
+        )
+          ? await this.dataSource
+              .getRepository(Tab)
+              .findOne({ where: { id: tabId, tracking_code: code } })
+          : null;
       if (tab) {
         client.join(`tab:${tabId}`);
         return { success: true };

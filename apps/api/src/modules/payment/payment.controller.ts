@@ -811,6 +811,31 @@ export class PaymentController {
     if (!tabId || !trackingCode)
       throw new BadRequestException('tab_id and tracking_code are required');
 
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    if (!UUID_RE.test(tabId)) {
+      // Standalone (tabless) online order group: the "tab id" is the tracking
+      // code. Only query the tab table for real uuids, otherwise Postgres
+      // raises 22P02 casting the code to uuid.
+      const groupOrder = await this.orderRepo.findOne({
+        where: { tracking_code: trackingCode },
+      });
+      if (!groupOrder) throw new NotFoundException('Tab not found');
+
+      const bill = await this.billRepo.findOne({
+        where: { tracking_code: trackingCode },
+        order: { created_at: 'DESC' },
+      });
+
+      return {
+        tab_id: tabId,
+        tab_status: bill?.paid_at ? 'paid' : 'open',
+        payment_status: bill?.payment_status || 'no_bill',
+        payment_method: bill?.payment_method || null,
+        paid_at: bill?.paid_at || null,
+      };
+    }
+
     const tab = await this.tabRepo.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
     if (tab.tracking_code !== trackingCode)
