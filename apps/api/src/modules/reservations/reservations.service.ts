@@ -6,7 +6,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, In, Not, IsNull, LessThan, MoreThan, Or, DataSource } from 'typeorm';
+import { Repository, Between, In, Not, IsNull, LessThan, LessThanOrEqual, MoreThan, MoreThanOrEqual, Or, DataSource } from 'typeorm';
 import { Reservation, ReservationStatus, ReservationSource } from './entities/reservation.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { Table, TableStatus } from '../table/entities/table.entity';
@@ -369,9 +369,13 @@ export class ReservationsService {
     if (query.table_id) where.table_id = query.table_id;
     if (query.status) where.status = query.status;
     if (query.from || query.to) {
-      where.reservation_time = {};
-      if (query.from) where.reservation_time = { ...where.reservation_time, ...{ gte: new Date(query.from) } };
-      if (query.to) where.reservation_time = { ...where.reservation_time, ...{ lte: new Date(query.to) } };
+      if (query.from && query.to) {
+        where.reservation_time = Between(new Date(query.from), new Date(query.to));
+      } else if (query.from) {
+        where.reservation_time = MoreThanOrEqual(new Date(query.from));
+      } else if (query.to) {
+        where.reservation_time = LessThanOrEqual(new Date(query.to));
+      }
     }
 
     const reservations = await this.reservationRepo.find({
