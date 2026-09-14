@@ -57,7 +57,6 @@ import { BackfillBusinessCodes1796000000001 } from './database/migrations/179600
 import { AddTokenVersionFields1797000000000 } from './database/migrations/1797000000000-AddTokenVersionFields';
 import { MakeAdBranchIdNullable1798000000000 } from './database/migrations/1798000000000-MakeAdBranchIdNullable';
 import { MakeExistingAdsUniversal1798000000001 } from './database/migrations/1798000000001-MakeExistingAdsUniversal';
-import { AddVirtualCounterTable1800000000000 } from './database/migrations/1800000000000-AddVirtualCounterTable';
 import { AddTabType1800000000001 } from './database/migrations/1800000000001-AddTabType';
 import { AddFulfillmentType1800000000002 } from './database/migrations/1800000000002-AddFulfillmentType';
 import { RelocateTrackingToTabs1800000000003 } from './database/migrations/1800000000003-RelocateTrackingToTabs';
@@ -97,6 +96,7 @@ import { AddStandaloneOrderFields1870000000000 } from './database/migrations/187
 import { AddBranchIdToBills1870000000001 } from './database/migrations/1870000000001-AddBranchIdToBills';
 import { MakeDeliveriesTabIdNullable1870000000002 } from './database/migrations/1870000000002-MakeDeliveriesTabIdNullable';
 import { AddStandaloneReviewFields1870000000003 } from './database/migrations/1870000000003-AddStandaloneReviewFields';
+import { RemoveVirtualTables1870000000004 } from './database/migrations/1870000000004-RemoveVirtualTables';
 import { PlatformPaymentProvider } from './modules/admin/entities/platform-payment-provider.entity';
 import { Feedback } from './modules/feedback/entities/feedback.entity';
 import { WaiterCall } from './modules/waiter-call/entities/waiter-call.entity';
@@ -210,7 +210,6 @@ import { ReservationsModule } from './modules/reservations/reservations.module';
         MakeExistingAdsUniversal1798000000001,
         CreateMenuCategoriesTable1799000000000,
         CreateUnitsTable1799000000001,
-        AddVirtualCounterTable1800000000000,
         AddTabType1800000000001,
         AddFulfillmentType1800000000002,
         RelocateTrackingToTabs1800000000003,
@@ -248,6 +247,7 @@ import { ReservationsModule } from './modules/reservations/reservations.module';
         AddBranchIdToBills1870000000001,
         MakeDeliveriesTabIdNullable1870000000002,
         AddStandaloneReviewFields1870000000003,
+        RemoveVirtualTables1870000000004,
       ],
       migrationsRun: true,
       synchronize: false,

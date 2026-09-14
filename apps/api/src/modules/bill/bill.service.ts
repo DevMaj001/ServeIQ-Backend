@@ -469,12 +469,12 @@ export class BillService {
         }
       }
 
-      // Virtual tables never participate in occupancy logic — they are system records, not seatable tables.
-      if (tabId && tab) {
+      // Release the physical table for dine-in tabs (takeaway tabs have none).
+      if (tabId && tab && tab.table_id) {
         const payTable = await manager
           .getRepository(Table)
           .findOne({ where: { id: tab.table_id } });
-        if (payTable && !payTable.is_virtual) {
+        if (payTable) {
           await manager
             .getRepository(Table)
             .update(tab.table_id, { status: TableStatus.AVAILABLE });

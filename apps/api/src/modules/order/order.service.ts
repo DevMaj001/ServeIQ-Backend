@@ -1003,7 +1003,10 @@ const { tab, branchId: ctxBranchId } = await this.getTabForOrder(id, branchId);
         COALESCE(o.tab_id, o.tracking_code)::text AS "tabId",
         MIN(o.created_at) AS "createdAt",
         t.table_id::text AS "tableId",
-        tbl.table_number AS "tableNumber",
+        CASE
+          WHEN tbl.table_number IS NOT NULL THEN tbl.table_number
+          ELSE 'Takeaway'
+        END AS "tableNumber",
         t.waiter_id::text AS "waiterId",
         w.full_name AS "waiterName",
         COALESCE(t.tracking_code, o.tracking_code) AS "trackingCode",

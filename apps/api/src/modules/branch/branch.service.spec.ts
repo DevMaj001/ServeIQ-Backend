@@ -23,7 +23,6 @@ describe('BranchService', () => {
       mockRepo() as any,
       { createTrialSubscription: jest.fn() } as any,
       { log: jest.fn() } as any,
-      { ensureSystemTables: jest.fn() } as any,
     );
   });
 

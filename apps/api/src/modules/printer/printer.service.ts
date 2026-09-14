@@ -288,7 +288,9 @@ export class PrinterService {
     const event = {
       type: 'new_order',
       tab_id: groupKey,
-      table_number: table?.table_number || (tableId ?? groupKey)?.slice(0, 8),
+      table_number: tab
+        ? table?.table_number || (tableId ?? groupKey)?.slice(0, 8)
+        : 'Takeaway',
       customer_name: orders[0]?.customer_name ?? tab?.customer_name,
       round_number: orders[0]?.round_number || 1,
       items,

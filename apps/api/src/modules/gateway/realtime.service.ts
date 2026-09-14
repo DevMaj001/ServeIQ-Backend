@@ -40,7 +40,7 @@ export class RealtimeService {
     });
   }
 
-  emitTabClosed(branchId: string, tabId: string, tableId: string) {
+  emitTabClosed(branchId: string, tabId: string, tableId: string | null) {
     this.emitTo([`branch:${branchId}`, `managers:${branchId}`], 'tab:closed', {
       tabId,
     });

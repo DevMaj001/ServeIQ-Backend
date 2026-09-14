@@ -67,19 +67,10 @@ export class TabService {
     let tableId = createDto.table_id;
 
     if (tabType === TabType.TAKEAWAY) {
-      // Look up the branch's virtual counter table
-      const virtualTable = await this.tableRepository.findOne({
-        where: { branch_id: createDto.branch_id, is_virtual: true },
-      });
-      if (!virtualTable) {
-        throw new BadRequestException(
-          'No takeaway counter configured for this branch. Please contact an administrator.',
-        );
-      }
-      tableId = virtualTable.id;
+      tableId = null;
     }
 
-    // Virtual tables never participate in occupancy logic — they are system records, not seatable tables.
+    // Takeaway tabs have no physical table — they never participate in occupancy logic.
     // For dine-in tables, check if the table already has an open tab.
     if (tabType !== TabType.TAKEAWAY) {
       const table = await this.tableRepository.findOne({
@@ -135,7 +126,7 @@ export class TabService {
         newTab,
       )) as unknown as Tab;
 
-      // Virtual tables never participate in occupancy logic — they are system records, not seatable tables.
+      // Takeaway tabs have no physical table — never mark one occupied.
       if (tabType !== TabType.TAKEAWAY) {
         await queryRunner.manager.update(Table, tableId, {
           status: TableStatus.OCCUPIED,
@@ -191,9 +182,11 @@ export class TabService {
       );
     }
 
-    const table = await this.tableRepository.findOne({
-      where: { id: tab.table_id },
-    });
+    const table = tab.table_id
+      ? await this.tableRepository.findOne({
+          where: { id: tab.table_id },
+        })
+      : null;
     const waiter = tab.waiter_id
       ? await this.userRepository.findOne({ where: { id: tab.waiter_id } })
       : null;
@@ -245,9 +238,11 @@ export class TabService {
 
     const tabsWithDetails = [];
     for (const tab of tabs) {
-      const table = await this.tableRepository.findOne({
-        where: { id: tab.table_id },
-      });
+      const table = tab.table_id
+        ? await this.tableRepository.findOne({
+            where: { id: tab.table_id },
+          })
+        : null;
       const waiter = tab.waiter_id
         ? await this.userRepository.findOne({ where: { id: tab.waiter_id } })
         : null;
@@ -332,12 +327,14 @@ export class TabService {
         closed_at: new Date(),
       });
 
-      // Virtual tables never participate in occupancy logic — they are system records, not seatable tables.
-      const table = await this.tableRepository.findOne({
-        where: { id: tab.table_id },
-      });
-      if (table && !table.is_virtual) {
-        await queryRunner.manager.update(Table, tab.table_id, {
+      // Takeaway tabs have no physical table to release.
+      const table = tab.table_id
+        ? await this.tableRepository.findOne({
+            where: { id: tab.table_id },
+          })
+        : null;
+      if (table) {
+        await queryRunner.manager.update(Table, tab.table_id!, {
           status: TableStatus.AVAILABLE,
         });
       }
@@ -346,13 +343,15 @@ export class TabService {
 
       // Emit real-time events
       this.realtimeService.emitTabClosed(branchId, id, tab.table_id);
-      const updatedTable = await this.tableRepository.findOne({
-        where: { id: tab.table_id },
-      });
-      if (updatedTable && !updatedTable.is_virtual) {
+      const updatedTable = tab.table_id
+        ? await this.tableRepository.findOne({
+            where: { id: tab.table_id },
+          })
+        : null;
+      if (updatedTable) {
         this.realtimeService.emitTableStatusChange(
           branchId,
-          tab.table_id,
+          tab.table_id!,
           TableStatus.AVAILABLE,
         );
       }
@@ -372,28 +371,21 @@ export class TabService {
       throw new BadRequestException('Only open tabs can be transferred');
     }
 
-    const sourceTable = await this.tableRepository.findOne({
-      where: { id: tab.table_id },
-    });
-
-    // Block incompatible transfers: takeaway <-> physical, dine-in <-> virtual counter
+    // Takeaway tabs have no physical table — they cannot be transferred.
     if (tab.tab_type === TabType.TAKEAWAY) {
       throw new BadRequestException(
         'Takeaway tabs cannot be transferred to another table.',
       );
     }
-    // For dine-in tabs, ensure the target is a physical table (not virtual)
+
+    const sourceTable = await this.tableRepository.findOne({
+      where: { id: tab.table_id! },
+    });
+
+    // For dine-in tabs, ensure the target is a physical table
     const targetTable = await this.tableRepository.findOne({
       where: { id: targetTableId, branch_id: branchId },
     });
-    if (!targetTable) {
-      throw new NotFoundException('Target table not found');
-    }
-    if (targetTable.is_virtual) {
-      throw new BadRequestException(
-        'Cannot transfer a dine-in tab to the takeaway counter.',
-      );
-    }
     if (!targetTable) {
       throw new NotFoundException('Target table not found');
     }
@@ -425,7 +417,7 @@ export class TabService {
     await queryRunner.startTransaction();
 
     try {
-      const oldTableId = tab.table_id;
+      const oldTableId = tab.table_id!;
 
       await queryRunner.manager.update(Tab, id, { table_id: targetTableId });
       await queryRunner.manager.update(Table, oldTableId, {
@@ -509,9 +501,11 @@ export class TabService {
       );
     }
 
-    const sourceTable = await this.tableRepository.findOne({
-      where: { id: sourceTab.table_id },
-    });
+    const sourceTable = sourceTab.table_id
+      ? await this.tableRepository.findOne({
+          where: { id: sourceTab.table_id },
+        })
+      : null;
 
     await this.dataSource.transaction(async (manager) => {
       const tabRepo = manager.getRepository(Tab);
@@ -553,9 +547,9 @@ export class TabService {
         closed_at: new Date(),
       });
 
-      // Virtual tables never participate in occupancy logic
-      if (sourceTable && !sourceTable.is_virtual) {
-        await tableRepo.update(sourceTab.table_id, {
+      // Takeaway tabs have no physical table to release
+      if (sourceTable) {
+        await tableRepo.update(sourceTab.table_id!, {
           status: TableStatus.INACTIVE,
         });
       }
@@ -569,10 +563,10 @@ export class TabService {
     this.realtimeService.emitTabUpdate(branchId, targetTabId, {
       merged: true,
     });
-    if (sourceTable && !sourceTable.is_virtual) {
+    if (sourceTable) {
       this.realtimeService.emitTableStatusChange(
         branchId,
-        sourceTab.table_id,
+        sourceTab.table_id!,
         TableStatus.INACTIVE,
       );
     }
@@ -621,12 +615,14 @@ export class TabService {
         closed_at: new Date(),
       });
 
-      // Virtual tables never participate in occupancy logic — they are system records, not seatable tables.
-      const voidTable = await this.tableRepository.findOne({
-        where: { id: tab.table_id },
-      });
-      if (voidTable && !voidTable.is_virtual) {
-        await tableRepo.update(tab.table_id, { status: TableStatus.AVAILABLE });
+      // Takeaway tabs have no physical table to release
+      const voidTable = tab.table_id
+        ? await this.tableRepository.findOne({
+            where: { id: tab.table_id },
+          })
+        : null;
+      if (voidTable) {
+        await tableRepo.update(tab.table_id!, { status: TableStatus.AVAILABLE });
       }
 
       if (existingReversal) return;
@@ -675,13 +671,15 @@ export class TabService {
 
     // Emit real-time events
     this.realtimeService.emitTabUpdate(branchId, id, { status: 'voided' });
-    const voidTable = await this.tableRepository.findOne({
-      where: { id: tab.table_id },
-    });
-    if (voidTable && !voidTable.is_virtual) {
+    const voidTable = tab.table_id
+      ? await this.tableRepository.findOne({
+          where: { id: tab.table_id },
+        })
+      : null;
+    if (voidTable) {
       this.realtimeService.emitTableStatusChange(
         branchId,
-        tab.table_id,
+        tab.table_id!,
         TableStatus.AVAILABLE,
       );
     }

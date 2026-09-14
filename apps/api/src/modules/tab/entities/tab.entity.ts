@@ -20,8 +20,8 @@ export class Tab {
   branch_id: string;
 
   @Index()
-  @Column({ type: 'uuid' })
-  table_id: string;
+  @Column({ type: 'uuid', nullable: true })
+  table_id: string | null;
 
   @Index()
   @Column({ type: 'uuid', nullable: true })

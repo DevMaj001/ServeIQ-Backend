@@ -84,8 +84,6 @@ export class CustomerService {
         where: { id: dto.table_id, branch_id: dto.branch_id },
       });
       if (!table) throw new NotFoundException('Table not found');
-      if (table.is_virtual)
-        throw new BadRequestException('Cannot dine-in at the takeaway counter');
 
       const existingOpenTab = await this.tabRepo.findOne({
         where: { table_id: dto.table_id, status: 'open' },
@@ -162,13 +160,10 @@ export class CustomerService {
     }
 
     const trackingCode = await this.trackingService.generateUniqueCode();
-    const virtualTable = await this.tableRepo.findOne({
-      where: { branch_id: dto.branch_id, is_virtual: true },
-    });
 
     return this.buildGroupResponse(trackingCode, {
       branch_id: dto.branch_id,
-      table_id: virtualTable?.id ?? null,
+      table_id: null,
       customer_name: dto.customer_name || 'Guest',
       party_size: dto.party_size || 1,
       pickup_mode: pickupMode,

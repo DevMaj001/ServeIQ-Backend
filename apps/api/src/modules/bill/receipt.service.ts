@@ -10,7 +10,7 @@ export interface ReceiptData {
     email?: string;
   } | null;
   branch?: { name?: string; address?: string } | null;
-  tab?: { id: string; table_id: string } | null;
+  tab?: { id: string; table_id: string | null } | null;
   table?: { label?: string } | null;
   waiter?: { full_name?: string } | null;
   bill: {

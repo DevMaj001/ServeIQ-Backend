@@ -9,7 +9,6 @@ import { Order } from '../order/entities/order.entity';
 import { User } from '../user/entities/user.entity';
 import { SubscriptionService } from '../subscription/subscription.service';
 import { AuditService } from '../../common/services/audit.service';
-import { TableSystemService } from '../table/table-system.service';
 
 @Injectable()
 export class BranchService {
@@ -28,7 +27,6 @@ export class BranchService {
     private userRepository: Repository<User>,
     private subscriptionService: SubscriptionService,
     private auditService: AuditService,
-    private tableSystemService: TableSystemService,
   ) {}
 
   async create(createDto: any) {
@@ -36,7 +34,6 @@ export class BranchService {
     Object.assign(branch, createDto);
     const saved = await this.branchRepository.save(branch);
     await this.subscriptionService.createTrialSubscription(saved.id);
-    await this.tableSystemService.ensureSystemTables(saved.id);
     return saved;
   }
 
@@ -97,15 +94,14 @@ export class BranchService {
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
 
-      // Tables stats — exclude virtual (system) tables
+      // Tables stats
       const totalTables = await this.tableRepository.count({
-        where: { branch_id: branchId, is_virtual: false },
+        where: { branch_id: branchId },
       });
       const activeTables = await this.tableRepository.count({
         where: {
           branch_id: branchId,
           status: TableStatus.OCCUPIED,
-          is_virtual: false,
         },
       });
 
