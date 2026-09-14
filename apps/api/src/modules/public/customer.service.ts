@@ -223,6 +223,7 @@ export class CustomerService {
       );
 
     const pickupMode = first?.pickup_mode ?? meta?.pickup_mode ?? PickupMode.SELF;
+    let deliveryFeeKobo = first?.delivery_fee_kobo ?? meta?.delivery_fee_kobo ?? 0;
     if (pickupMode === PickupMode.DISPATCH) {
       const details = (meta?.delivery_details ??
         first?.delivery_details) as DeliveryDetails | null;
@@ -231,10 +232,21 @@ export class CustomerService {
           'delivery_details.address and delivery_details.phone are required for dispatch',
         );
       }
+      if (!deliveryFeeKobo) {
+        // Brand-new group: source the fee from the branch delivery config,
+        // mirroring the fee computed by openTab.
+        const branch = await this.branchRepo.findOne({
+          where: { id: branchId },
+        });
+        const config = getDeliveryConfig(branch);
+        if (!config.enabled || config.fee_kobo <= 0) {
+          throw new BadRequestException(
+            'Dispatch delivery is not enabled at this branch',
+          );
+        }
+        deliveryFeeKobo = config.fee_kobo;
+      }
     }
-
-    const deliveryFeeKobo =
-      first?.delivery_fee_kobo ?? meta?.delivery_fee_kobo ?? 0;
 
     const menuItemIds = items.map((i) => i.menu_item_id);
     const menuItems = await this.menuItemRepo.find({
