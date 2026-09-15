@@ -11,6 +11,7 @@ import {
   Headers,
   HttpCode,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { Request } from 'express';
 import {
@@ -56,6 +57,8 @@ interface PaymentProviderConfig {
 @ApiTags('Customer Payments')
 @Controller('public/payments')
 export class PaymentController {
+  private readonly logger = new Logger(PaymentController.name);
+
   constructor(
     @InjectRepository(Tab)
     private tabRepo: Repository<Tab>,
@@ -399,6 +402,9 @@ export class PaymentController {
     if (!reference || !amount || status !== 'SUCCESSFUL') {
       return { received: true };
     }
+    this.logger.log(
+      `[monniepoint][arrive] ref=${reference} amount=${amount} status=${status} terminal=${terminalId} account=${account_number}`,
+    );
 
     // Resolve the bill first (reference, else branch-scoped amount). We must
     // have a real target before enforcing provider config/signature so that
@@ -411,9 +417,15 @@ export class PaymentController {
       provider: 'monniepoint',
     });
     if (!resolved) {
+      this.logger.warn(
+        `[monniepoint][unresolved] no bill/branch for ref=${reference} terminal=${terminalId} account=${account_number}`,
+      );
       return { received: true, error: 'Bill not found' };
     }
     const { bill, tab, branch } = resolved;
+    this.logger.log(
+      `[monniepoint][resolved] bill=${bill?.id} tab=${tab?.id ?? '(standalone)'} branch=${branch?.id}`,
+    );
 
     const providerConfig = branch
       ? this.findProviderConfig(branch.settings, 'monniepoint')
@@ -421,6 +433,9 @@ export class PaymentController {
     const isTestSimulation = this.isTestSimulation(req);
 
     if (!isTestSimulation && !providerConfig) {
+      this.logger.warn(
+        `[monniepoint][misconfig] branch=${branch?.id} has no monniepoint provider configured`,
+      );
       throw new ForbiddenException('Moniepoint webhook not configured');
     }
 
@@ -431,13 +446,20 @@ export class PaymentController {
       const secret =
         providerConfig.config.webhook_secret || providerConfig.config.secret;
       if (!secret) {
+        this.logger.warn(
+          `[monniepoint][misconfig] branch=${branch?.id} configured hmac-sha512 but has no webhook_secret`,
+        );
         throw new ForbiddenException(
           'Moniepoint webhook secret not configured',
         );
       }
       if (!this.verifyMoniepointSignature(req, payload, signature, secret)) {
+        this.logger.warn(
+          `[monniepoint][bad-signature] branch=${branch?.id} signature rejected against configured secret`,
+        );
         throw new ForbiddenException('Invalid Moniepoint signature');
       }
+      this.logger.log(`[monniepoint][verified] signature ok for branch=${branch?.id}`);
     }
 
     if (bill.paid_at) return { received: true, status: 'already_paid' };
@@ -446,9 +468,15 @@ export class PaymentController {
     // bill's known total before settling.
     const amountKobo = this.normalizeAmountToKobo(amount, bill.total_kobo);
     if (amountKobo === null) {
+      this.logger.warn(
+        `[monniepoint][amount-mismatch] sent=${amount} bill_total=${bill.total_kobo}`,
+      );
       return { received: true, error: 'Amount mismatch' };
     }
 
+    this.logger.log(
+      `[monniepoint][settle] bill=${bill.id} amountKobo=${amountKobo} method=POS ref=${reference}`,
+    );
     return this.routeWebhookPayment({
       bill,
       tab,
