@@ -1014,7 +1014,7 @@ const { tab, branchId: ctxBranchId } = await this.getTabForOrder(id, branchId);
         w.full_name AS "waiterName",
         COALESCE(t.tracking_code, o.tracking_code) AS "trackingCode",
         COALESCE(t.tracking_generated_at, MIN(o.created_at)) AS "trackingGeneratedAt",
-        COALESCE(t.tab_type, o.tab_type) AS "tabType",
+        COALESCE(t.tab_type::text, MIN(o.tab_type)) AS "tabType",
         COALESCE(t.customer_name, MIN(o.customer_name)) AS "customerName",
         COALESCE(t.party_size, MIN(o.party_size)) AS "partySize",
         COALESCE(t.pickup_mode, MIN(o.pickup_mode)) AS "pickupMode",
@@ -1056,7 +1056,7 @@ const { tab, branchId: ctxBranchId } = await this.getTabForOrder(id, branchId);
           ) ORDER BY o.created_at
         ) AS items
       ${baseQuery}
-      GROUP BY COALESCE(o.tab_id::text, o.tracking_code), t.table_id, tbl.table_number, t.waiter_id, w.full_name, t.tracking_code, t.tracking_generated_at, t.tab_type, t.customer_name, t.party_size, t.pickup_mode, t.delivery_fee_kobo
+      GROUP BY COALESCE(o.tab_id::text, o.tracking_code), t.table_id, tbl.table_number, t.waiter_id, w.full_name, t.tracking_code, t.tracking_generated_at, t.tab_type::text, t.customer_name, t.party_size, t.pickup_mode, t.delivery_fee_kobo
       ORDER BY ${orderClause}
       ${paginationClause}
     `;
