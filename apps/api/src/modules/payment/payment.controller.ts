@@ -42,6 +42,9 @@ import { PaymentVerificationDto } from './dto/payment-verification.dto';
 import { buildPaymentMethods } from './payment-provider.util';
 import * as crypto from 'crypto';
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 interface PaymentProviderConfig {
   name: string;
   type: 'manual' | 'webhook';
@@ -89,7 +92,11 @@ export class PaymentController {
     let deliveryFeeKobo = 0;
     let orders: Order[];
 
-    const tab = await this.tabRepo.findOne({ where: { id: dto.tab_id } });
+    let tab: Tab | null = null;
+    if (UUID_RE.test(dto.tab_id)) {
+      tab = await this.tabRepo.findOne({ where: { id: dto.tab_id } });
+    }
+
     if (tab) {
       if (tab.tracking_code !== dto.tracking_code)
         throw new ForbiddenException('Invalid tracking code');
@@ -245,7 +252,9 @@ export class PaymentController {
       throw new BadRequestException('tab_id and tracking_code are required');
     }
 
-    const tab = await this.tabRepo.findOne({ where: { id: dto.tab_id } });
+    const tab = UUID_RE.test(dto.tab_id)
+      ? await this.tabRepo.findOne({ where: { id: dto.tab_id } })
+      : null;
     if (!tab) {
       // Standalone (tabless) online order groups are prepaid only.
       if (dto.tab_id === dto.tracking_code) {
@@ -810,8 +819,6 @@ export class PaymentController {
   ) {
     if (!tabId || !trackingCode)
       throw new BadRequestException('tab_id and tracking_code are required');
-
-    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
     if (!UUID_RE.test(tabId)) {
       // Standalone (tabless) online order group: the "tab id" is the tracking

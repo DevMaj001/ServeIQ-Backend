@@ -1,12 +1,12 @@
-import { IsString, IsUUID } from 'class-validator';
+import { IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class PaymentVerificationDto {
   @ApiProperty({
-    example: 'tab-uuid-here',
-    description: 'Tab UUID',
+    example: 'tab-uuid-here or tracking code',
+    description: 'Tab UUID or tracking code for standalone groups',
   })
-  @IsUUID()
+  @IsString()
   tab_id: string;
 
   @ApiProperty({
