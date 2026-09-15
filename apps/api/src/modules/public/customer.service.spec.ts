@@ -33,7 +33,7 @@ describe('CustomerService.submitReview', () => {
   };
 
   const openTab = {
-    id: 'tab-1',
+    id: '11111111-1111-1111-1111-111111111111',
     branch_id: 'branch-1',
     tracking_code: 'TRACK-1',
     status: 'paid',
@@ -54,7 +54,7 @@ describe('CustomerService.submitReview', () => {
           provide: getRepositoryToken(MenuItem),
           useValue: { find: jest.fn() },
         },
-        { provide: getRepositoryToken(Order), useValue: { find: jest.fn() } },
+        { provide: getRepositoryToken(Order), useValue: { find: jest.fn(), findOne: jest.fn().mockResolvedValue(null) } },
         { provide: getRepositoryToken(Branch), useValue: branchRepo },
         {
           provide: getRepositoryToken(Business),
@@ -81,21 +81,27 @@ describe('CustomerService.submitReview', () => {
   it('throws NotFoundException when tab does not exist', async () => {
     tabRepo.findOne.mockResolvedValue(null);
     await expect(
-      service.submitReview('tab-x', 'TRACK-1', { rating: 5 }),
+      service.submitReview('GROUP-TRACK', 'GROUP-TRACK', { rating: 5 }),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('throws ForbiddenException when tracking code does not match', async () => {
     tabRepo.findOne.mockResolvedValue(openTab);
     await expect(
-      service.submitReview('tab-1', 'WRONG', { rating: 5 }),
+      service.submitReview('11111111-1111-1111-1111-111111111111', 'WRONG', {
+        rating: 5,
+      }),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('throws BadRequestException when tab is not open/paid', async () => {
     tabRepo.findOne.mockResolvedValue({ ...openTab, status: 'closed' });
     await expect(
-      service.submitReview('tab-1', 'TRACK-1', { rating: 5 }),
+      service.submitReview(
+        '11111111-1111-1111-1111-111111111111',
+        'TRACK-1',
+        { rating: 5 },
+      ),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
@@ -104,7 +110,9 @@ describe('CustomerService.submitReview', () => {
     async (rating) => {
       tabRepo.findOne.mockResolvedValue(openTab);
       await expect(
-        service.submitReview('tab-1', 'TRACK-1', { rating }),
+        service.submitReview('11111111-1111-1111-1111-111111111111', 'TRACK-1', {
+          rating,
+        }),
       ).rejects.toBeInstanceOf(BadRequestException);
     },
   );
@@ -120,7 +128,7 @@ describe('CustomerService.submitReview', () => {
       id: 'review-1',
       business_id: 'biz-1',
       branch_id: 'branch-1',
-      tab_id: 'tab-1',
+      tab_id: '11111111-1111-1111-1111-111111111111',
       rating: 5,
       comment: 'Food was great!',
       created_at: new Date(),
@@ -128,15 +136,20 @@ describe('CustomerService.submitReview', () => {
     reviewRepo.create.mockImplementation((dto: any) => dto);
     reviewRepo.save.mockResolvedValue(created);
 
-    const res = await service.submitReview('tab-1', 'TRACK-1', {
-      rating: 5,
-      comment: '  Food was great!  ',
-    });
+    const res = await service.submitReview(
+      '11111111-1111-1111-1111-111111111111',
+      'TRACK-1',
+      {
+        rating: 5,
+        comment: '  Food was great!  ',
+      },
+    );
 
     expect(reviewRepo.create).toHaveBeenCalledWith({
       business_id: 'biz-1',
       branch_id: 'branch-1',
-      tab_id: 'tab-1',
+      tab_id: '11111111-1111-1111-1111-111111111111',
+      tracking_code: null,
       rating: 5,
       comment: 'Food was great!',
     });
@@ -170,10 +183,14 @@ describe('CustomerService.submitReview', () => {
       comment: 'new',
     });
 
-    await service.submitReview('tab-1', 'TRACK-1', {
-      rating: 4,
-      comment: 'new',
-    });
+    await service.submitReview(
+      '11111111-1111-1111-1111-111111111111',
+      'TRACK-1',
+      {
+        rating: 4,
+        comment: 'new',
+      },
+    );
 
     expect(reviewRepo.create).not.toHaveBeenCalled();
     expect(existing.rating).toBe(4);
@@ -193,18 +210,26 @@ describe('CustomerService.submitReview', () => {
       Promise.resolve({ id: 'review-1', ...r, created_at: new Date() }),
     );
 
-    await service.submitReview('tab-1', 'TRACK-1', {
-      rating: 4,
-      comment: 'x'.repeat(2500),
-    });
+    await service.submitReview(
+      '11111111-1111-1111-1111-111111111111',
+      'TRACK-1',
+      {
+        rating: 4,
+        comment: 'x'.repeat(2500),
+      },
+    );
     expect(reviewRepo.save).toHaveBeenCalledWith(
       expect.objectContaining({ comment: 'x'.repeat(2000) }),
     );
 
-    await service.submitReview('tab-1', 'TRACK-1', {
-      rating: 4,
-      comment: '   ',
-    });
+    await service.submitReview(
+      '11111111-1111-1111-1111-111111111111',
+      'TRACK-1',
+      {
+        rating: 4,
+        comment: '   ',
+      },
+    );
     expect(reviewRepo.save).toHaveBeenCalledWith(
       expect.objectContaining({ comment: null }),
     );

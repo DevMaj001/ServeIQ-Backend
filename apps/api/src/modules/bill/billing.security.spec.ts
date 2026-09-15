@@ -317,7 +317,15 @@ describe('BillService — security / data isolation', () => {
     });
 
     it('blocks processPayment on a tab from another branch', async () => {
-      const { service } = await buildService({ tab: foreignTab });
+      const { service } = await buildService({
+        tab: foreignTab,
+        existingBill: {
+          id: 'bill-1',
+          tab_id: 'tab-1',
+          total_kobo: 23500,
+          payment_status: 'pending',
+        },
+      });
       await expect(
         service.processPayment('tab-1', 'branch-A', 'owner-1', 'owner', {
           amount: 100,

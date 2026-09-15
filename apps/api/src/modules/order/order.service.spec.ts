@@ -1250,14 +1250,14 @@ describe('OrderService', () => {
     it('returns only orders whose tab has an active pending-cash bill', async () => {
       const dataSource = {
         query: jest.fn().mockResolvedValue([
-          { tabId: 'tab-1', totalKobo: 5000, items: [] },
-          { tabId: 'tab-2', totalKobo: 7000, items: [] },
+          { tabId: '11111111-1111-1111-1111-111111111111', totalKobo: 5000, items: [] },
+          { tabId: '22222222-2222-2222-2222-222222222222', totalKobo: 7000, items: [] },
         ]),
       };
       const billRepository = {
         find: jest.fn().mockResolvedValue([
           {
-            tab_id: 'tab-1',
+            tab_id: '11111111-1111-1111-1111-111111111111',
             payment_status: 'pending_cash',
             voided_at: null,
           },
@@ -1268,14 +1268,19 @@ describe('OrderService', () => {
       const result = await service.findPendingCashByBranch('branch-1');
 
       expect(billRepository.find).toHaveBeenCalledWith({
-        where: {
-          tab_id: In(['tab-1', 'tab-2']),
-          payment_status: 'pending_cash',
-          voided_at: IsNull(),
-        },
+        where: [
+          {
+            tab_id: In([
+              '11111111-1111-1111-1111-111111111111',
+              '22222222-2222-2222-2222-222222222222',
+            ]),
+            payment_status: 'pending_cash',
+            voided_at: IsNull(),
+          },
+        ],
       });
       expect(result).toHaveLength(1);
-      expect(result[0].tabId).toBe('tab-1');
+      expect(result[0].tabId).toBe('11111111-1111-1111-1111-111111111111');
     });
 
     it('returns empty when a takeaway order is held without a cash choice', async () => {

@@ -166,6 +166,7 @@ describe('PaymentController', () => {
           terminal_id: 'term-1',
           idempotency_key: 'monniepoint-ref-1',
         }),
+        { bill: expect.objectContaining({ tab_id: 'tab-1' }) },
       );
     });
 
@@ -252,6 +253,7 @@ describe('PaymentController', () => {
           amount: 50000,
           idempotency_key: 'opay-ref-1',
         }),
+        { bill: expect.objectContaining({ tab_id: 'tab-1' }) },
       );
     });
 
@@ -296,6 +298,7 @@ describe('PaymentController', () => {
           amount: 50000,
           idempotency_key: 'opay-ref-1',
         }),
+        { bill: expect.objectContaining({ tab_id: 'tab-1' }) },
       );
     });
 
@@ -391,6 +394,7 @@ describe('PaymentController', () => {
         'system-webhook',
         'owner',
         expect.objectContaining({ idempotency_key: 'opay-ref-1' }),
+        { bill: expect.objectContaining({ tab_id: 'tab-1' }) },
       );
     });
 
@@ -455,6 +459,7 @@ describe('PaymentController', () => {
         'system-webhook',
         'owner',
         expect.objectContaining({ amount: 150000 }),
+        { bill: expect.objectContaining({ tab_id: 'tab-1' }) },
       );
     });
 
@@ -621,15 +626,17 @@ describe('PaymentController', () => {
           amount: 50000,
           idempotency_key: 'opay-provider-ref-xyz',
         }),
+        { bill: expect.objectContaining({ tab_id: 'tab-fb' }) },
       );
     });
   });
 
   describe('initializePayment cash exclusion for takeaway', () => {
     it('omits cash from payment methods for a takeaway tab', async () => {
+      const tabId = '11111111-1111-1111-1111-111111111111';
       billRepo.findOne.mockResolvedValue({
         id: 'bill-1',
-        tab_id: 'tab-1',
+        tab_id: tabId,
         total_kobo: 10000,
         payment_status: 'pending',
         payment_reference: 'PAY-REF',
@@ -639,7 +646,7 @@ describe('PaymentController', () => {
         payment_status: 'pending',
       });
       tabRepo.findOne.mockResolvedValue({
-        id: 'tab-1',
+        id: tabId,
         branch_id: 'branch-1',
         tab_type: 'takeaway',
         tracking_code: 'SVQ-CODE',
@@ -653,7 +660,7 @@ describe('PaymentController', () => {
       });
 
       const result = await controller.initializePayment({
-        tab_id: 'tab-1',
+        tab_id: tabId,
         tracking_code: 'SVQ-CODE',
       });
 
@@ -663,6 +670,7 @@ describe('PaymentController', () => {
     });
 
     it('includes cash for a dine-in tab', async () => {
+      const tabId = '11111111-1111-1111-1111-111111111111';
       billRepo.findOne.mockResolvedValue(null);
       billRepo.create.mockReturnValue({
         payment_reference: 'PAY-REF-3',
@@ -670,7 +678,7 @@ describe('PaymentController', () => {
       });
       billRepo.save.mockResolvedValue({ id: 'bill-1' });
       tabRepo.findOne.mockResolvedValue({
-        id: 'tab-1',
+        id: tabId,
         branch_id: 'branch-1',
         tab_type: 'dine_in',
         tracking_code: 'SVQ-CODE',
@@ -684,7 +692,7 @@ describe('PaymentController', () => {
       });
 
       const result = await controller.initializePayment({
-        tab_id: 'tab-1',
+        tab_id: tabId,
         tracking_code: 'SVQ-CODE',
       });
 
@@ -696,8 +704,9 @@ describe('PaymentController', () => {
 
   describe('submitCashIntent', () => {
     it('rejects cash intent on a takeaway tab', async () => {
+      const tabId = '11111111-1111-1111-1111-111111111111';
       tabRepo.findOne.mockResolvedValue({
-        id: 'tab-1',
+        id: tabId,
         branch_id: 'branch-1',
         tab_type: 'takeaway',
         tracking_code: 'SVQ-CODE',
@@ -706,7 +715,7 @@ describe('PaymentController', () => {
 
       await expect(
         controller.submitCashIntent({
-          tab_id: 'tab-1',
+          tab_id: tabId,
           tracking_code: 'SVQ-CODE',
         }),
       ).rejects.toThrow(

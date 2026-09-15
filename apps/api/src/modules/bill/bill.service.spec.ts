@@ -417,6 +417,11 @@ describe('BillService', () => {
     });
 
     it('rejects cash payments for takeaway tabs', async () => {
+      billRepo.findOne.mockResolvedValue({
+        id: 'bill-1',
+        tab_id: 'tab-1',
+        total_kobo: 5000,
+      });
       tabRepo.findOne.mockResolvedValue({
         id: 'tab-1',
         branch_id: 'branch-1',
