@@ -1012,7 +1012,7 @@ const { tab, branchId: ctxBranchId } = await this.getTabForOrder(id, branchId);
         END AS "tableNumber",
         t.waiter_id::text AS "waiterId",
         w.full_name AS "waiterName",
-        COALESCE(t.tracking_code, o.tracking_code) AS "trackingCode",
+        COALESCE(t.tracking_code, MIN(o.tracking_code)) AS "trackingCode",
         COALESCE(t.tracking_generated_at, MIN(o.created_at)) AS "trackingGeneratedAt",
         COALESCE(t.tab_type::text, MIN(o.tab_type)) AS "tabType",
         COALESCE(t.customer_name, MIN(o.customer_name)) AS "customerName",
