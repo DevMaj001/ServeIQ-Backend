@@ -612,6 +612,10 @@ describe('PaymentController', () => {
           amount: 500,
           status: 'SUCCESS',
           transactionType: 'TRANSFER',
+          // A Moniepoint/OPay terminal id is never a uuid — the terminal lookup
+          // must not crash with 22P02 and must fall through to the account +
+          // amount resolution instead.
+          terminalId: '3A000001',
           account_number: '0123456789',
         },
       });

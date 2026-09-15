@@ -679,7 +679,11 @@ export class PaymentController {
 
   /** Resolve the branch a webhook concerns, preferring explicit identifiers in
    *  the payload over a reference round-trip: terminal id, then deposit account
-   *  number, then payment reference. Returns null when nothing can be resolved. */
+   *  number, then payment reference. Returns null when nothing can be resolved.
+   *
+   *  pos_terminals.id is a uuid, so a provider terminal id (e.g. Moniepoint's
+   *  "3A000001") can only be looked up once. When it isn't a uuid, match the
+   *  terminal by its label instead of crashing with Postgres 22P02. */
   private async resolveWebhookBranch(opts: {
     provider: 'monniepoint' | 'opay';
     reference?: string;
@@ -687,9 +691,17 @@ export class PaymentController {
     accountNumber?: string;
   }): Promise<Branch | null> {
     if (opts.terminalId) {
-      const term = await this.posTerminalRepo.findOne({
-        where: { id: opts.terminalId },
-      });
+      let term: PosTerminal | null = null;
+      if (UUID_RE.test(opts.terminalId)) {
+        term = await this.posTerminalRepo.findOne({
+          where: { id: opts.terminalId },
+        });
+      }
+      if (!term) {
+        term = await this.posTerminalRepo.findOne({
+          where: { label: opts.terminalId },
+        });
+      }
       if (term) {
         const b = await this.branchRepo.findOne({
           where: { id: term.branch_id },
