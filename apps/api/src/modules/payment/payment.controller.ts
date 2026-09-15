@@ -397,13 +397,43 @@ export class PaymentController {
     @Headers('x-moniepoint-signature') signature: string,
     @Body() payload: any,
   ) {
-    const { reference, amount, status, terminalId, account_number } =
-      payload?.data || payload;
-    if (!reference || !amount || status !== 'SUCCESSFUL') {
+    // Moniepoint/Monnify wrap transaction details in `eventData` and mark a
+    // successful payment with `eventType: SUCCESSFUL_TRANSACTION` and
+    // `paymentStatus: PAID`. Accept all known shapes (`eventData`, `data`,
+    // or the flat object) so a real POS deposit is never silently dropped.
+    const eventData = payload?.eventData || payload?.data || payload || {};
+    const reference =
+      eventData.reference ||
+      eventData.paymentReference ||
+      eventData.transactionReference ||
+      eventData.product?.reference ||
+      eventData.merchantReference;
+    const rawStatus =
+      payload?.eventType ||
+      eventData.paymentStatus ||
+      eventData.status ||
+      eventData.eventType ||
+      '';
+    const isSuccess = /SUCCESS|PAID/.test(String(rawStatus).toUpperCase());
+    const amount =
+      eventData.amountPaid ?? eventData.totalPayable ?? eventData.amount;
+    const terminalId =
+      eventData.terminalId ||
+      eventData.terminal_id ||
+      eventData.terminalSerial ||
+      eventData.posTerminalId ||
+      eventData.terminal;
+    const account_number =
+      eventData.destinationAccountInformation?.accountNumber ||
+      eventData.account_number ||
+      eventData.accountNumber ||
+      (Array.isArray(eventData.paymentSourceInformation) &&
+        eventData.paymentSourceInformation[0]?.accountNumber);
+    if (!reference || !amount || !isSuccess) {
       return { received: true };
     }
     this.logger.log(
-      `[monniepoint][arrive] ref=${reference} amount=${amount} status=${status} terminal=${terminalId} account=${account_number}`,
+      `[monniepoint][arrive] ref=${reference} amount=${amount} status=${rawStatus} terminal=${terminalId} account=${account_number}`,
     );
 
     // Resolve the bill first (reference, else branch-scoped amount). We must
@@ -643,7 +673,11 @@ export class PaymentController {
     secret: string,
   ): boolean {
     const sig =
-      signature || String(req.headers['moniepoint-webhook-signature'] || '');
+      signature ||
+      String(req.headers['moniepoint-webhook-signature'] || '') ||
+      String(req.headers['monniepoint-webhook-signature'] || '') ||
+      String(req.headers['monnify-signature'] || '') ||
+      String(req.headers['x-monnify-signature'] || '');
     if (!sig) return false;
     const rawBody: Buffer = (req as any).rawBody
       ? Buffer.from((req as any).rawBody)

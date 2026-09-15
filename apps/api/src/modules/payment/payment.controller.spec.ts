@@ -555,6 +555,67 @@ describe('PaymentController', () => {
     });
   });
 
+  describe('monniepointWebhook Monnify eventData format', () => {
+    const monnifyPayload = {
+      eventType: 'SUCCESSFUL_TRANSACTION',
+      eventData: {
+        transactionReference: 'MNFY|20260915|001|000123',
+        paymentReference: 'MP-000123',
+        amountPaid: 50000,
+        totalPayable: 50000,
+        paymentStatus: 'PAID',
+        paymentMethod: 'ACCOUNT_TRANSFER',
+        destinationAccountInformation: { accountNumber: '0123456789' },
+      },
+    };
+
+    it('should settle using the Monnify eventData shape', async () => {
+      billRepo.findOne.mockResolvedValue(null);
+      branchRepo.find.mockResolvedValue([
+        {
+          id: 'branch-1',
+          settings: {
+            payment_providers: [
+              {
+                name: 'monniepoint',
+                type: 'webhook',
+                label: 'Moniepoint',
+                verification_method: 'hmac-sha512',
+                config: { account_number: '0123456789' },
+              },
+            ],
+          },
+        },
+      ]);
+
+      // Branch scoped amount fallback finds the single unsettled bill.
+      const qb: any = {};
+      qb.innerJoin = jest.fn().mockReturnValue(qb);
+      qb.where = jest.fn().mockReturnValue(qb);
+      qb.andWhere = jest.fn().mockReturnValue(qb);
+      qb.orderBy = jest.fn().mockReturnValue(qb);
+      qb.getMany = jest
+        .fn()
+        .mockResolvedValue([
+          { id: 'bill-1', tab_id: 'tab-1', total_kobo: 50000, paid_at: null },
+        ]);
+      (billRepo.createQueryBuilder as any).mockReturnValue(qb);
+      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
+      billRepo.save.mockResolvedValue({
+        id: 'bill-1',
+        payment_reference: 'MP-000123',
+      });
+
+      const result = await controller.monniepointWebhook(
+        { rawBody: JSON.stringify(monnifyPayload), headers: { 'x-simulate': '1' } } as any,
+        'any-sig',
+        monnifyPayload,
+      );
+      expect(result.status).toBe('processed');
+      expect(billService.processPayment).toHaveBeenCalled();
+    });
+  });
+
   describe('opayWebhook amount+account fallback', () => {
     function mockQbReturning(rows: any[]) {
       const qb: any = {};
