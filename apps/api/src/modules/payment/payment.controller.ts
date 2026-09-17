@@ -49,14 +49,6 @@ import * as crypto from 'crypto';
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-interface PaymentProviderConfig {
-  name: string;
-  type: 'manual' | 'webhook';
-  label: string;
-  verification_method?: 'hmac-sha512' | 'rsa' | 'none';
-  config: Record<string, string>;
-}
-
 @ApiTags('Customer Payments')
 @Controller('public/payments')
 export class PaymentController {
