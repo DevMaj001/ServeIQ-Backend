@@ -189,10 +189,57 @@ describe('PaymentController', () => {
       expect(result.received).toBe(true);
     });
 
-    it('should return received:true when bill not found', async () => {
+    it('rejects an unverifiable request rather than echoing Bill not found', async () => {
+      // No terminal / account in the payload, no bill to resolve the branch:
+      // there is no provider secret to verify against, so this must not reach
+      // the graceful bill-not-found 200 (that 200-vs-403 split would leak
+      // whether a bill exists). It rejects with 403 so Moniepoint retries and
+      // the delivery can surface later via reconciliation.
       billRepo.findOne.mockResolvedValue(null);
+      await expect(
+        controller.monniepointWebhook(mockReq, 'sig', {
+          data: { reference: 'ref-1', amount: 100, status: 'SUCCESSFUL' },
+        }),
+      ).rejects.toThrow('Invalid Moniepoint signature');
+    });
+
+    it('should return received:true with Bill not found for a verifiable request whose branch has no bill', async () => {
+      // Branch resolves from the terminal (pre-auth), provider does not
+      // require HMAC (verification_method: none), and the amount fallback
+      // finds no candidate bill: the request is authenticated-and-known but
+      // has no bill to settle, so it still returns the graceful 200.
+      posTerminalRepo.findOne.mockResolvedValue({
+        id: 'term-1',
+        branch_id: 'branch-1',
+      });
+      branchRepo.findOne.mockResolvedValue({
+        settings: {
+          payment_providers: [
+            {
+              name: 'monniepoint',
+              type: 'webhook',
+              label: 'Moniepoint',
+              verification_method: 'none',
+              config: {},
+            },
+          ],
+        },
+      });
+      billRepo.findOne.mockResolvedValue(null);
+      billRepo.createQueryBuilder.mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([]),
+      });
+
       const result = await controller.monniepointWebhook(mockReq, 'sig', {
-        data: { reference: 'ref-1', amount: 100, status: 'SUCCESSFUL' },
+        data: {
+          reference: 'ref-1',
+          amount: 100,
+          status: 'SUCCESSFUL',
+          terminalId: 'term-1',
+        },
       });
       expect(result.received).toBe(true);
       expect(result.error).toBe('Bill not found');
@@ -214,6 +261,21 @@ describe('PaymentController', () => {
           ],
         },
       });
+
+      await expect(
+        controller.monniepointWebhook(mockReq, 'wrong-sig', {
+          data: { reference: 'ref-1', amount: 100, status: 'SUCCESSFUL' },
+        }),
+      ).rejects.toThrow('Invalid Moniepoint signature');
+      expect(billService.processPayment).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unverifiable request with 403 when the branch is reference-only and unmatched', async () => {
+      // No terminalId / account in the payload, and no bill exists to resolve
+      // the branch, so there is NOTHING to verify the signature against. The
+      // response must be 403 - NOT 200 - so the outcome does not reveal
+      // whether a matching bill exists (bill-existence oracle).
+      billRepo.findOne.mockResolvedValue(null);
 
       await expect(
         controller.monniepointWebhook(mockReq, 'wrong-sig', {

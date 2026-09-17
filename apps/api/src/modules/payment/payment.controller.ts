@@ -436,6 +436,7 @@ export class PaymentController {
     // Terminal, account number, and payment reference each identify the branch
     // that configured the provider. We resolve this FIRST so signature
     // verification can run before any settlement-oriented queries.
+    const isTestSimulation = this.isTestSimulation(req);
     const branch = await this.resolveWebhookBranch({
       provider: 'monniepoint',
       reference,
@@ -444,13 +445,20 @@ export class PaymentController {
     });
     if (!branch) {
       this.logger.warn(
-        `[monniepoint][unresolved] no branch for ref=${reference} terminal=${terminalId} account=${account_number}`,
+        `[monniepoint][unverifiable] no branch for ref=${reference} terminal=${terminalId} account=${account_number}`,
       );
+      if (!isTestSimulation) {
+        // No branch means no provider secret exists to verify the signature
+        // against, so this webhook is unverifiable. Reject it (Moniepoint then
+        // retries and the delivery eventually lands in FAILED where
+        // reconciliation can surface it) instead of echoing a permissive
+        // response whose body leaks whether a matching bill exists.
+        throw new ForbiddenException('Invalid Moniepoint signature');
+      }
       return { received: true, error: 'Bill not found' };
     }
 
     // ── Step 2: Verify signature against the branch's config ──
-    const isTestSimulation = this.isTestSimulation(req);
     const providerConfig = this.findProviderConfig(
       branch.settings,
       'monniepoint',
