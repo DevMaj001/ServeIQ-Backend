@@ -130,11 +130,14 @@ describe('PaymentController', () => {
           .expect({ received: true, status: 'processed' });
 
         expect(billService.processPayment).toHaveBeenCalledTimes(1);
-        expect(billService.processPayment).toHaveBeenCalledWith(
+        const callArgs = billService.processPayment.mock.calls[0];
+        expect(callArgs.slice(0, 4)).toEqual([
           'tab-1',
           'branch-1',
           'system-webhook',
           'owner',
+        ]);
+        expect(callArgs[4]).toEqual(
           expect.objectContaining({
             reference: 'ref-1',
             idempotency_key: 'monniepoint-ref-1',
