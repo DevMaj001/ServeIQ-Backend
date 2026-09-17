@@ -1,74 +1,200 @@
 import { Injectable, Logger } from '@nestjs/common';
 
-export interface MoniepointDeposit {
-  reference: string;
-  amount_kobo: number;
-  account_number: string;
-  timestamp: Date;
-  status: string;
-}
+export type MoniepointEventStatus = 'SUCCESS' | 'PENDING' | 'FAILED';
 
 /**
- * Moniepoint API client — reconciliation scaffold.
+ * Moniepoint webhook subscription event (SubscriptionEventModel in the
+ * official POS API spec). `status` FAILED/PENDING/SUCCESS describes the
+ * DELIVERY of an event to our registered endpoint, and `payload` carries the
+ * same body a webhook would have delivered. `retryTimes` counts delivery
+ * attempts; a future `retryAt` means Moniepoint is still going to try again.
+ */
+export interface MoniepointSubscriptionEvent {
+  id: string;
+  subscriptionId: string;
+  idempotentId?: string;
+  eventType?: string;
+  payload: Record<string, any>;
+  retryTimes?: number;
+  retryAt?: string;
+  status: MoniepointEventStatus;
+  subjectUrn?: string;
+  endpointUrl?: string;
+  createdAt?: string;
+}
+
+export interface MoniepointEventPage {
+  content: MoniepointSubscriptionEvent[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+  last: boolean;
+}
+
+export interface MoniepointEventLog {
+  id: string;
+  subscriptionId: string;
+  subscriptionEventId: string;
+  status: MoniepointEventStatus;
+  message?: string;
+}
+
+export interface MoniepointEventLogPage {
+  content: MoniepointEventLog[];
+  totalElements: number;
+  totalPages: number;
+  last: boolean;
+}
+
+export interface MoniepointIntrospection {
+  scopes: string[];
+  businesses: Array<{ id: number; businessName: string }>;
+  authMethod: 'API_KEY';
+  environment: 'SANDBOX' | 'PROD';
+}
+
+export interface MoniepointListEventsParams {
+  statuses?: MoniepointEventStatus[];
+  eventTypes?: string[];
+  from?: Date;
+  to?: Date;
+  page?: number;
+  size?: number;
+}
+
+export interface MoniepointResendEventsParams {
+  statuses?: MoniepointEventStatus[];
+  eventTypes?: string[];
+  from?: Date;
+  to?: Date;
+}
+
+export class MoniepointApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly body?: any,
+  ) {
+    super(message);
+    this.name = 'MoniepointApiError';
+  }
+}
+
+const ISO_DATE = (d: Date) => d.toISOString().slice(0, 10);
+
+/**
+ * Client for the Moniepoint POS API (https://api.pos.moniepoint.com).
  *
- * The webhook is currently the ONLY path that records a deposit. This client
- * exists so a periodic reconciliation job can cross-check Moniepoint's own
- * transaction/deposit history for money that landed but never triggered a
- * webhook (dropped webhook, signature failure, unresolved amount, etc).
+ * Reconciliation uses the webhook subscription delivery model, NOT a deposits
+ * poll: we ask Moniepoint which event DELIVERIES it failed/pending'd, then
+ * resend or alert — the registered webhook URL is the only delivery target.
  *
- * Gate: the client no-ops (returns []) when credentials are not configured,
- * so the reconcile scheduler can run safely in every environment.
+ * Auth: `Authorization: Bearer <apiKey>` (verified via GET /v1/introspect).
+ * No request body signing is required for API calls.
  *
- * Configuration (env vars):
- *  - MONIEPOINT_API_BASE_URL: API base URL (e.g. https://api.moniepoint.com)
- *  - MONIEPOINT_API_KEY:      API key used for authentication
- *  - MONIEPOINT_API_SECRET:   API secret (signature/digest credential)
- *
- * TODO: Fill in the real Moniepoint endpoint/auth contract once production
- *  credentials and API documentation are available. The method below is a
- *  structural placeholder that returns [] and logs when unimplemented.
+ * Configuration (env): MONIEPOINT_API_BASE_URL, MONIEPOINT_API_KEY,
+ * MONIEPOINT_WEBHOOK_SUBSCRIPTION_ID (uuid of the subscription the operator
+ * registered for this deployment).
  */
 @Injectable()
 export class MoniepointApiClient {
   private readonly logger = new Logger(MoniepointApiClient.name);
 
-  private readonly baseUrl: string | null = process.env.MONIEPOINT_API_BASE_URL || null;
-  private readonly apiKey: string | null = process.env.MONIEPOINT_API_KEY || null;
-  private readonly apiSecret: string | null = process.env.MONIEPOINT_API_SECRET || null;
+  private readonly baseUrl = process.env.MONIEPOINT_API_BASE_URL || null;
+  private readonly apiKey = process.env.MONIEPOINT_API_KEY || null;
+  private readonly subscriptionId =
+    process.env.MONIEPOINT_WEBHOOK_SUBSCRIPTION_ID || null;
 
-  /** Whether the client is safe/capable of calling the external API. */
+  /** Whether the client can call the external API at all. */
   get isConfigured(): boolean {
-    return !!(this.baseUrl && this.apiKey && this.apiSecret);
+    return !!(this.baseUrl && this.apiKey && this.subscriptionId);
   }
 
-  /**
-   * Fetch deposits recorded by Moniepoint after `since` for a destination
-   * account (or across all accounts when `accountNumber` is omitted).
-   */
-  async fetchDeposits(since: Date, accountNumber?: string): Promise<MoniepointDeposit[]> {
+  async introspect(): Promise<MoniepointIntrospection> {
+    return this.request('/v1/introspect');
+  }
+
+  async listSubscriptionEvents(
+    params: MoniepointListEventsParams = {},
+  ): Promise<MoniepointEventPage> {
+    const query = this.buildQuery(params);
+    return this.request('/v1/webhook-subscription-events', { query });
+  }
+
+  /** Force Moniepoint to resend failed/pending deliveries matching filters.
+   *  Only PENDING and FAILED events are actually re-delivered. */
+  async resendEvents(
+    params: MoniepointResendEventsParams = {},
+  ): Promise<MoniepointEventLogPage> {
+    const query = this.buildQuery(params);
+    return this.request('/v1/webhook-subscription-events/resend', {
+      method: 'POST',
+      query,
+    });
+  }
+
+  private buildQuery(
+    params: MoniepointListEventsParams,
+  ): Record<string, string | string[]> {
+    const query: Record<string, string | string[]> = {
+      subscriptionId: this.subscriptionId!,
+    };
+    if (params.statuses?.length) query.status = params.statuses;
+    if (params.eventTypes?.length) query.eventType = params.eventTypes;
+    if (params.from) query.from = ISO_DATE(params.from);
+    if (params.to) query.to = ISO_DATE(params.to);
+    if (params.page !== undefined) query.page = String(params.page);
+    if (params.size !== undefined) query.size = String(params.size);
+    return query;
+  }
+
+  private async request(
+    path: string,
+    opts?: {
+      method?: 'GET' | 'POST';
+      query?: Record<string, string | string[]>;
+    },
+  ): Promise<any> {
     if (!this.isConfigured) {
-      this.logger.debug(
-        'Moniepoint reconciliation: API not configured, skipping deposit fetch',
+      throw new MoniepointApiError(
+        'MoniepointApiClient is not configured (check MONIEPOINT_API_BASE_URL / MONIEPOINT_API_KEY / MONIEPOINT_WEBHOOK_SUBSCRIPTION_ID)',
+        0,
       );
-      return [];
+    }
+    const url = new URL(`${this.baseUrl}${path}`);
+    for (const [key, value] of Object.entries(opts?.query ?? {})) {
+      for (const v of Array.isArray(value) ? value : [value]) {
+        url.searchParams.append(key, v);
+      }
     }
 
-    try {
-      // TODO: implement the real call, e.g.
-      //   GET {baseUrl}/api/v1/deposits?since={since.toISOString()}&account={accountNumber}
-      // with `Authorization: Bearer {apiKey}` and a request signature.
-      this.logger.warn(
-        'Moniepoint reconciliation: fetchDeposits not implemented yet ' +
-          `(baseUrl=${this.baseUrl} since=${since.toISOString()} account=${accountNumber ?? 'any'})`,
-      );
-      return [];
-    } catch (err) {
-      this.logger.error(
-        `Moniepoint reconciliation: fetchDeposits failed: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
-      return [];
+    this.logger.debug(`Moniepoint API ${opts?.method ?? 'GET'} ${path}`);
+    const res = await fetch(url, {
+      method: opts?.method ?? 'GET',
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+    });
+    const text = await res.text();
+    let body: any = null;
+    if (text) {
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = null;
+      }
     }
+    if (!res.ok) {
+      const message = body?.message ?? body?.error ?? `HTTP ${res.status}`;
+      throw new MoniepointApiError(
+        `${path} failed: ${message}`,
+        res.status,
+        body,
+      );
+    }
+    return body;
   }
 }
