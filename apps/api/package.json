@@ -25,7 +25,9 @@
     "migration:run:prod": "npm run typeorm:prod migration:run -- -d dist/database/data-source.js",
     "migration:revert": "npm run typeorm migration:revert -- -d src/database/data-source.ts",
     "seed": "ts-node -r tsconfig-paths/register src/database/seed.ts",
-    "seed:demo-history": "ts-node -r tsconfig-paths/register src/database/seed-demo-history.ts"
+    "seed:demo-history": "ts-node -r tsconfig-paths/register src/database/seed-demo-history.ts",
+    "moniepoint:preflight": "ts-node -r tsconfig-paths/register scripts/moniepoint-preflight.ts preflight",
+    "moniepoint:inspect": "ts-node -r tsconfig-paths/register scripts/moniepoint-preflight.ts inspect-delivery"
   },
   "dependencies": {
     "@nestjs/bull": "^11.0.4",

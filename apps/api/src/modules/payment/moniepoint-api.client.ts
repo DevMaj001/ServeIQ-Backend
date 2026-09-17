@@ -38,6 +38,7 @@ export interface MoniepointEventLog {
   subscriptionEventId: string;
   status: MoniepointEventStatus;
   message?: string;
+  createdAt?: string;
 }
 
 export interface MoniepointEventLogPage {
@@ -45,6 +46,40 @@ export interface MoniepointEventLogPage {
   totalElements: number;
   totalPages: number;
   last: boolean;
+}
+
+/**
+ * TransactionResponse in the official POS API spec (GET /v1/transactions and
+ * GET /v1/transactions/merchants/{merchantReference}). This is the ONLY
+ * documented place accountName / nubanAccount exist — the webhook payload
+ * (SubscriptionEventModel.payload) is a free-form `object` in the spec and is
+ * NOT guaranteed to carry these fields.
+ */
+export interface MoniepointTransaction {
+  id?: string;
+  createdAt?: string;
+  modifiedAt?: string;
+  clientId?: string;
+  businessOwnerId?: number;
+  terminalSerial?: string;
+  terminalHardwareId?: number;
+  requestAmount?: number;
+  transactionReference?: string;
+  merchantReference?: string;
+  transactionType?: string;
+  requestPaymentMethod?: string;
+  actualPaymentMethod?: string;
+  actualAmount?: number;
+  processingStatus?: string;
+  responseCode?: string;
+  responseMessage?: string;
+  metaData?: string;
+  accountNumber?: string;
+  accountName?: string;
+  nubanAccount?: string;
+  queueStatus?: string;
+  callbackUrl?: string;
+  callbackNotified?: boolean;
 }
 
 export interface MoniepointIntrospection {
@@ -120,6 +155,34 @@ export class MoniepointApiClient {
   ): Promise<MoniepointEventPage> {
     const query = this.buildQuery(params);
     return this.request('/v1/webhook-subscription-events', { query });
+  }
+
+  /** Per-delivery-attempt logs for one event (SubscriptionEventLogModel).
+   *  Each attempt carries its own status and — critically for the auto-resend
+   *  decision — a free-form `message` describing why that attempt failed. */
+  async listEventLogs(
+    subscriptionEventId: string,
+    params: { page?: number; size?: number } = {},
+  ): Promise<MoniepointEventLogPage> {
+    const query: Record<string, string> = {};
+    if (params.page !== undefined) query.page = String(params.page);
+    if (params.size !== undefined) query.size = String(params.size);
+    return this.request(
+      `/v1/webhook-subscription-events/${encodeURIComponent(subscriptionEventId)}/logs`,
+      { query },
+    );
+  }
+
+  /** Fetch the outcome of a transaction by merchant reference
+   *  (GET /v1/transactions/merchants/{merchantReference}). Returns the full
+   *  TransactionResponse shape, which is where accountName/nubanAccount live
+   *  — these are NOT guaranteed on the webhook payload. */
+  async getMerchantTransaction(
+    merchantReference: string,
+  ): Promise<MoniepointTransaction> {
+    return this.request(
+      `/v1/transactions/merchants/${encodeURIComponent(merchantReference)}`,
+    );
   }
 
   /** Force Moniepoint to resend failed/pending deliveries matching filters.

@@ -132,6 +132,54 @@ describe('MoniepointApiClient', () => {
     expect(result.content[0].subscriptionEventId).toBe('ev-1');
   });
 
+  it('fetches per-attempt delivery logs for a subscription event', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        content: [
+          {
+            id: 'log-1',
+            subscriptionId: SUB,
+            subscriptionEventId: 'ev-1',
+            status: 'FAILED',
+            message: 'Connection refused',
+            createdAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+        totalElements: 1,
+        totalPages: 1,
+        last: true,
+      }),
+    );
+
+    const result = await client.listEventLogs('ev-1', { size: 100 });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain('/v1/webhook-subscription-events/ev-1/logs');
+    expect(String(url)).toContain('size=100');
+    expect((init as RequestInit).method).toBe('GET');
+    expect(result.content[0].status).toBe('FAILED');
+    expect(result.content[0].message).toBe('Connection refused');
+  });
+
+  it('fetches merchant transaction details by reference (TransactionResponse)', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        merchantReference: 'MP-000123',
+        accountNumber: '0123456789',
+        accountName: 'ACME LTD',
+        processingStatus: 'SUCCESSFUL',
+        actualAmount: 50000,
+      }),
+    );
+
+    const tx = await client.getMerchantTransaction('MP-000123');
+
+    const [url] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain('/v1/transactions/merchants/MP-000123');
+    expect(tx.accountName).toBe('ACME LTD');
+    expect(tx.accountNumber).toBe('0123456789');
+  });
+
   it('introspects the API key scope', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
