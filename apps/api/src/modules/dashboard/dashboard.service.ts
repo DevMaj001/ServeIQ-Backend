@@ -31,9 +31,9 @@ export class DashboardService {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    // Exclude virtual (system) tables from occupancy reporting
+    // Lived tables used for occupancy reporting
     const totalTables = await this.tableRepository.count({
-      where: { branch_id: branchId, is_virtual: false },
+      where: { branch_id: branchId },
     });
 
     // Active tables = distinct tables that have open tabs (includes virtual tables for counter orders)
@@ -269,7 +269,7 @@ export class DashboardService {
         AVG(EXTRACT(EPOCH FROM (t.closed_at - t.opened_at)) / 60)::int AS avg_duration_minutes,
         COUNT(t.id) AS total_covers
       FROM tabs t
-      INNER JOIN tables tbl ON tbl.id::varchar = t.table_id::varchar AND tbl.is_virtual = false
+      INNER JOIN tables tbl ON tbl.id::varchar = t.table_id::varchar
       WHERE t.branch_id = $1
         AND t.status = 'paid'
         AND t.opened_at IS NOT NULL

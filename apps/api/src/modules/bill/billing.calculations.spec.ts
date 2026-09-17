@@ -141,7 +141,10 @@ describe('BillService — V1 billing calculations', () => {
         { provide: ReceiptService, useValue: { generatePdf: jest.fn() } },
         { provide: CloudinaryService, useValue: { uploadFile: jest.fn() } },
         { provide: RealtimeService, useValue: mockRealtimeService() },
-        { provide: OrderService, useValue: { approve: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: OrderService,
+          useValue: { approve: jest.fn().mockResolvedValue(undefined) },
+        },
       ],
     }).compile();
     return module;

@@ -6,12 +6,11 @@
 ## Base URL Structure
 
 ```
-Production:  https://api.serveiq.io/api/v1
-Staging:     https://staging-api.serveiq.io/api/v1
-Development: http://localhost:3000/api/v1
+Production:  https://serveiq-backend.onrender.com/api/v1
+Development: http://localhost:5000/api/v1
 ```
 
-All endpoints are versioned. Breaking changes increment the version (`/api/v2/...`).
+All endpoints are versioned (URI versioning). Breaking changes increment the version (`/api/v2/...`).
 
 ---
 
@@ -188,6 +187,57 @@ GET    /reports/export         → Export sales report as PDF
 
 ---
 
+## Reservation Endpoints
+
+```
+GET    /reservations/availability          → Available time slots for a date + party size (public)
+POST   /reservations/book                  → Book a table with confirmation code (public)
+GET    /reservations/confirm/:code         → Confirm reservation by code (public)
+POST   /reservations/cancel/:code          → Cancel reservation by code with reason (public)
+GET    /reservations/lookup/:code          → Look up reservation by code (public)
+GET    /reservations                       → List reservations (branch filters, status, search)
+GET    /reservations/today                 → Today's reservations summary for branch
+PATCH  /reservations/:id                   → Update reservation (time, party size, status, reason)
+POST   /reservations/walkin                → Create a walk-in reservation and seat the party
+PATCH  /reservations/:id/seat              → Seat a confirmed reservation and open a tab
+POST   /reservations/reminders/send        → Dispatch reservation reminders (date_range optional)
+```
+
+---
+
+## Rider Endpoints
+
+```
+GET    /riders                             → List delivery riders for business (branch filter)
+POST   /riders                             → Create rider (creates a rider user account with PIN login)
+PATCH  /riders/:id                         → Update rider (branch, vehicle, active, online)
+DELETE /riders/:id                         → Remove a rider
+POST   /riders/me/toggle-online            → Toggle current rider online availability
+```
+
+---
+
+## Delivery & Payout Endpoints
+
+```
+GET    /deliveries                         → List deliveries for branch (status filter)
+GET    /deliveries/available               → Rider: available + my deliveries
+GET    /deliveries/mine                    → Rider: my accepted/ongoing deliveries
+POST   /deliveries/:id/accept              → Rider: accept available delivery (first-accept wins)
+POST   /deliveries/:id/delivered           → Rider: mark delivery handed over
+POST   /deliveries/:id/reassign            → Manager: reassign undelivered delivery
+GET    /deliveries/payouts/pending         → Pending payout summary by branch
+GET    /deliveries/payout-batches          → All payout batches for business
+GET    /deliveries/riders/:riderId/payouts/pending   → Pending payout details for a rider
+GET    /deliveries/riders/:riderId/ledger             → Earnings/payout ledger for a rider
+GET    /deliveries/riders/:riderId/payout-batches     → Payout batch history for a rider
+POST   /deliveries/riders/:riderId/payout             → Process rider payout (provider, providerBatchId)
+POST   /deliveries/payout-batches/:batchId/complete   → Mark payout batch completed
+POST   /deliveries/payout-batches/:batchId/fail       → Mark payout batch failed (reason)
+```
+
+---
+
 ## Response Format
 
 All responses follow this envelope:
@@ -249,20 +299,41 @@ All responses follow this envelope:
 ```
 src/
 ├── auth/
-│   ├── auth.module.ts
-│   ├── auth.controller.ts
-│   ├── auth.service.ts
-│   └── strategies/
-├── businesses/
-├── branches/
-├── users/
-├── tables/
-├── menu-items/
-├── tabs/
-├── orders/
-├── bills/
+├── business/          (businesses, branches, settings, feature flags)
+├── menu/              (menu items, categories, modifiers)
+├── table/
+├── tab/
+├── order/
+├── bill/
+├── department/
+├── subscription/
+├── ingredient/        (inventory, restock, stock-variance)
+├── supplier/
+├── unit/
+├── shift/
+├── role/              (roles + permissions)
+├── notification/
+├── printer/           (printers + KDS)
+├── pos-terminal/
 ├── dashboard/
-├── reports/
+├── report/
+├── audit-log/
+├── advertisement/
+├── ai/
+├── tracking/
+├── upload/
+├── sync/
+├── admin/
+├── waiter-call/
+├── reservations/
+├── rider/
+├── delivery/
+├── public/            (payments, customer self-service)
+├── device/
+├── feedback/
+├── review/
+├── health/
+├── gateway/           (Socket.IO, no REST)
 ├── common/
 │   ├── guards/
 │   ├── interceptors/

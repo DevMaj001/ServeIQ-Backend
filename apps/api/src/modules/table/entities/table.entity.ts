@@ -35,9 +35,6 @@ export class Table {
   capacity: number;
 
   @Column({ default: false })
-  is_virtual: boolean;
-
-  @Column({ default: false })
   is_vip: boolean;
 
   @Column({

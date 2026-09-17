@@ -237,15 +237,30 @@ export class PrinterService {
     return this.kdsSubjects.get(branchId)!.asObservable();
   }
 
-  async sendToKds(branchId: string, tabId: string) {
-    const tab = await this.tabRepo.findOne({ where: { id: tabId } });
-    if (!tab) return;
+  async sendToKds(branchId: string, groupKey: string) {
+    const tab = await this.tabRepo.findOne({ where: { id: groupKey } });
+    let tableId: string | null = null;
+    let orders: Order[];
+    let orderIds = [];
+    if (tab) {
+      tableId = tab.table_id;
+      orders = await this.orderRepo.find({
+        where: { tab_id: groupKey },
+        order: { created_at: 'ASC' },
+      });
+    } else {
+      // Standalone (tabless) order group addressed by its tracking code.
+      orders = await this.orderRepo.find({
+        where: { tracking_code: groupKey },
+        order: { created_at: 'ASC' },
+      });
+      tableId = orders[0]?.table_id ?? null;
+    }
+    if (orders.length === 0) return;
 
-    const table = await this.tableRepo.findOne({ where: { id: tab.table_id } });
-    const orders = await this.orderRepo.find({
-      where: { tab_id: tabId },
-      order: { created_at: 'ASC' },
-    });
+    const table = tableId
+      ? await this.tableRepo.findOne({ where: { id: tableId } })
+      : null;
     const items = [];
     for (const order of orders) {
       if (
@@ -272,8 +287,11 @@ export class PrinterService {
 
     const event = {
       type: 'new_order',
-      tab_id: tabId,
-      table_number: table?.table_number || tab.table_id?.slice(0, 8),
+      tab_id: groupKey,
+      table_number: tab
+        ? table?.table_number || (tableId ?? groupKey)?.slice(0, 8)
+        : 'Takeaway',
+      customer_name: orders[0]?.customer_name ?? tab?.customer_name,
       round_number: orders[0]?.round_number || 1,
       items,
       ordered_at: orders[0]?.created_at,
@@ -292,7 +310,13 @@ export class PrinterService {
   async fireOrder(branchId: string, tabId: string, orderIds?: string[]) {
     const where: any = { tab_id: tabId };
     if (orderIds) where.id = In(orderIds);
-    const orders = await this.orderRepo.find({ where });
+    let orders = await this.orderRepo.find({ where });
+    if (orders.length === 0) {
+      // Standalone (tabless) order group addressed by its tracking code.
+      const groupWhere: any = { tracking_code: tabId };
+      if (orderIds) groupWhere.id = In(orderIds);
+      orders = await this.orderRepo.find({ where: groupWhere });
+    }
     for (const order of orders) {
       await this.orderRepo.update(order.id, {
         round_number: order.round_number + 1,

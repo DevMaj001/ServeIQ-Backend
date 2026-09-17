@@ -57,7 +57,6 @@ import { BackfillBusinessCodes1796000000001 } from './database/migrations/179600
 import { AddTokenVersionFields1797000000000 } from './database/migrations/1797000000000-AddTokenVersionFields';
 import { MakeAdBranchIdNullable1798000000000 } from './database/migrations/1798000000000-MakeAdBranchIdNullable';
 import { MakeExistingAdsUniversal1798000000001 } from './database/migrations/1798000000001-MakeExistingAdsUniversal';
-import { AddVirtualCounterTable1800000000000 } from './database/migrations/1800000000000-AddVirtualCounterTable';
 import { AddTabType1800000000001 } from './database/migrations/1800000000001-AddTabType';
 import { AddFulfillmentType1800000000002 } from './database/migrations/1800000000002-AddFulfillmentType';
 import { RelocateTrackingToTabs1800000000003 } from './database/migrations/1800000000003-RelocateTrackingToTabs';
@@ -74,6 +73,8 @@ import { CreateReviewsTable1808000000000 } from './database/migrations/180800000
 import { AddNavigationPermissions1809000000000 } from './database/migrations/1809000000000-AddNavigationPermissions';
 import { CreateShiftTemplates1810000000000 } from './database/migrations/1810000000000-CreateShiftTemplates';
 import { AddBusinessIdToShiftTemplates1811000000000 } from './database/migrations/1811000000000-AddBusinessIdToShiftTemplates';
+import { NormalizeShiftTemplateDaysOfWeek1819900000000 } from './database/migrations/1819900000000-NormalizeShiftTemplateDaysOfWeek';
+import { AddCountryToBusinesses1819950000000 } from './database/migrations/1819950000000-AddCountryToBusinesses';
 import { SeedDefaultShiftTemplates1820000000000 } from './database/migrations/1820000000000-SeedDefaultShiftTemplates';
 import { AddManageShiftsPermission1812000000000 } from './database/migrations/1812000000000-AddManageShiftsPermission';
 import { AddDeviceFingerprintToRefreshTokens1813000000000 } from './database/migrations/1813000000000-AddDeviceFingerprintToRefreshTokens';
@@ -83,9 +84,26 @@ import { AddVersionColumns1816000000000 } from './database/migrations/1816000000
 import { AddUserIdToNotifications1817000000000 } from './database/migrations/1817000000000-AddUserIdToNotifications';
 import { CreateWaiterCallsTable1818000000000 } from './database/migrations/1818000000000-CreateWaiterCallsTable';
 import { AddMaxTablesPerWaiterToBranches1819000000000 } from './database/migrations/1819000000000-AddMaxTablesPerWaiterToBranches';
+import { ActivateBerbadosNightlifeSubscription1836000000000 } from './database/migrations/1836000000000-ActivateBarbadosNightlifeSubscription';
+import { ActivateBerbadosNightlifeSubscription1836000000001 } from './database/migrations/1836000000001-ActivateBerbadosNightlifeSubscription';
+import { AddDispatchDelivery1840000000000 } from './database/migrations/1840000000000-AddDispatchDelivery';
+import { CleanRiderVehicleData1841000000000 } from './database/migrations/1841000000000-CleanRiderVehicleData';
+import { AddRiderPayoutTables1842000000000 } from './database/migrations/1842000000000-AddRiderPayoutTables';
+import { AddTableReservations1843000000000 } from './database/migrations/1843000000000-AddTableReservations';
+import { AddPrepTimeToMenuItems1860000000000 } from './database/migrations/1860000000000-AddPrepTimeToMenuItems';
+import { AddVersionToPayoutBatches1865000000000 } from './database/migrations/1865000000000-AddVersionToPayoutBatches';
+import { AddStandaloneOrderFields1870000000000 } from './database/migrations/1870000000000-AddStandaloneOrderFields';
+import { AddBranchIdToBills1870000000001 } from './database/migrations/1870000000001-AddBranchIdToBills';
+import { MakeDeliveriesTabIdNullable1870000000002 } from './database/migrations/1870000000002-MakeDeliveriesTabIdNullable';
+import { AddStandaloneReviewFields1870000000003 } from './database/migrations/1870000000003-AddStandaloneReviewFields';
+import { RemoveVirtualTables1870000000004 } from './database/migrations/1870000000004-RemoveVirtualTables';
 import { PlatformPaymentProvider } from './modules/admin/entities/platform-payment-provider.entity';
 import { Feedback } from './modules/feedback/entities/feedback.entity';
 import { WaiterCall } from './modules/waiter-call/entities/waiter-call.entity';
+import { Rider } from './modules/riders/entities/rider.entity';
+import { Delivery } from './modules/delivery/entities/delivery.entity';
+import { RiderLedger, PayoutBatch } from './modules/delivery/entities/rider-payout.entity';
+import { Reservation } from './modules/reservations/entities/reservation.entity';
 
 import { AuthModule } from './modules/auth/auth.module';
 import { BusinessModule } from './modules/business/business.module';
@@ -121,6 +139,9 @@ import { ReviewModule } from './modules/review/review.module';
 import { GatewayModule } from './modules/gateway/gateway.module';
 import { DeviceModule } from './modules/device/device.module';
 import { WaiterCallModule } from './modules/waiter-call/waiter-call.module';
+import { RiderModule } from './modules/riders/rider.module';
+import { DeliveryModule } from './modules/delivery/delivery.module';
+import { ReservationsModule } from './modules/reservations/reservations.module';
 
 @Module({
   imports: [
@@ -165,6 +186,11 @@ import { WaiterCallModule } from './modules/waiter-call/waiter-call.module';
         PlatformPaymentProvider,
         Feedback,
         WaiterCall,
+        Rider,
+        Delivery,
+        RiderLedger,
+        PayoutBatch,
+        Reservation,
       ],
       migrations: [
         BackfillUserRoleId1752892800000,
@@ -184,7 +210,6 @@ import { WaiterCallModule } from './modules/waiter-call/waiter-call.module';
         MakeExistingAdsUniversal1798000000001,
         CreateMenuCategoriesTable1799000000000,
         CreateUnitsTable1799000000001,
-        AddVirtualCounterTable1800000000000,
         AddTabType1800000000001,
         AddFulfillmentType1800000000002,
         RelocateTrackingToTabs1800000000003,
@@ -199,6 +224,8 @@ import { WaiterCallModule } from './modules/waiter-call/waiter-call.module';
         AddNavigationPermissions1809000000000,
         CreateShiftTemplates1810000000000,
         AddBusinessIdToShiftTemplates1811000000000,
+        NormalizeShiftTemplateDaysOfWeek1819900000000,
+        AddCountryToBusinesses1819950000000,
         SeedDefaultShiftTemplates1820000000000,
         AddManageShiftsPermission1812000000000,
         AddDeviceFingerprintToRefreshTokens1813000000000,
@@ -208,6 +235,19 @@ import { WaiterCallModule } from './modules/waiter-call/waiter-call.module';
         AddUserIdToNotifications1817000000000,
         CreateWaiterCallsTable1818000000000,
         AddMaxTablesPerWaiterToBranches1819000000000,
+        ActivateBerbadosNightlifeSubscription1836000000000,
+        ActivateBerbadosNightlifeSubscription1836000000001,
+        AddDispatchDelivery1840000000000,
+        CleanRiderVehicleData1841000000000,
+        AddRiderPayoutTables1842000000000,
+        AddTableReservations1843000000000,
+        AddPrepTimeToMenuItems1860000000000,
+        AddVersionToPayoutBatches1865000000000,
+        AddStandaloneOrderFields1870000000000,
+        AddBranchIdToBills1870000000001,
+        MakeDeliveriesTabIdNullable1870000000002,
+        AddStandaloneReviewFields1870000000003,
+        RemoveVirtualTables1870000000004,
       ],
       migrationsRun: true,
       synchronize: false,
@@ -271,6 +311,9 @@ import { WaiterCallModule } from './modules/waiter-call/waiter-call.module';
     GatewayModule,
     DeviceModule,
     WaiterCallModule,
+    RiderModule,
+    DeliveryModule,
+    ReservationsModule,
   ],
   controllers: [AppController],
   providers: [

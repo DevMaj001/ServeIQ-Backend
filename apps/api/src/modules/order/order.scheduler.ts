@@ -7,6 +7,7 @@ import { Tab } from '../tab/entities/tab.entity';
 import { OrderStatus } from '../../common/shared';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationType } from '../notification/entities/notification.entity';
+import { DeliveryService } from '../delivery/delivery.service';
 
 @Injectable()
 export class OrderScheduler {
@@ -18,6 +19,7 @@ export class OrderScheduler {
     @InjectRepository(Tab)
     private tabRepo: Repository<Tab>,
     private notificationService: NotificationService,
+    private deliveryService: DeliveryService,
   ) {}
 
   @Cron(CronExpression.EVERY_30_SECONDS)
@@ -44,25 +46,51 @@ export class OrderScheduler {
 
     await this.orderRepo.save(expired);
 
-    const tabIds = [...new Set(expired.map((o) => o.tab_id))];
-    const tabs = await this.tabRepo.find({ where: { id: In(tabIds) } });
+    const tabIds = [...new Set(expired.map((o) => o.tab_id).filter(Boolean))] as string[];
+    const tabs = tabIds.length > 0
+      ? await this.tabRepo.find({ where: { id: In(tabIds) } })
+      : [];
     const tabById = new Map(tabs.map((t) => [t.id, t]));
 
+    // Group expired orders by tab and send one notification per tab. Standalone
+    // (tabless) online orders have no waiter to notify; their tracking page is
+    // updated via the bump()/emit path instead.
+    const byTab = new Map<string, Order[]>();
     for (const order of expired) {
-      const tab = tabById.get(order.tab_id);
+      if (!order.tab_id) continue;
+      const arr = byTab.get(order.tab_id!) ?? [];
+      arr.push(order);
+      byTab.set(order.tab_id!, arr);
+    }
+
+    for (const [tabId, orders] of byTab) {
+      const tab = tabById.get(tabId);
       if (!tab) continue;
 
+      const orderIds = orders.map((o) => o.id);
+      const count = orders.length;
       await this.notificationService.create({
         branch_id: tab.branch_id,
         user_id: tab.waiter_id ?? null,
         type: NotificationType.ORDER_READY,
-        title: 'Order Ready for Pickup',
-        message: `Order ${order.id.slice(0, 8)}… is ready`,
-        data: { order_id: order.id, tab_id: order.tab_id },
+        title: 'Orders Ready for Pickup',
+        message:
+          count === 1
+            ? `Order ${orders[0].id.slice(0, 8)}… is ready`
+            : `${count} orders ready (${orderIds.map((id) => id.slice(0, 8)).join(', ')})`,
+        data: {
+          order_ids: orderIds,
+          tab_id: tabId,
+          count,
+        },
       });
 
+      // Dispatch: if this is a dispatch tab, create/broadcast the delivery
+      // to online riders for the branch.
+      await this.deliveryService.ensureOnOrdersReady(tabId, orderIds);
+
       this.logger.log(
-        `Order ${order.id}: timer expired → ready_for_pickup, notification sent`,
+        `Tab ${tabId}: ${count} orders timer expired → ready_for_pickup`,
       );
     }
   }

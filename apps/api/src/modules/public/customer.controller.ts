@@ -5,7 +5,6 @@ import {
   Body,
   Param,
   Headers,
-  NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
 import {
@@ -44,6 +43,20 @@ export class CustomerController {
         },
         customer_name: { type: 'string', example: 'John Doe' },
         party_size: { type: 'number', example: 2 },
+        pickup_mode: {
+          type: 'string',
+          enum: ['self', 'dispatch'],
+          example: 'self',
+        },
+        delivery_details: {
+          type: 'object',
+          properties: {
+            full_name: { type: 'string' },
+            phone: { type: 'string', example: '+2348012345678' },
+            address: { type: 'string' },
+            notes: { type: 'string' },
+          },
+        },
       },
     },
   })
@@ -61,6 +74,13 @@ export class CustomerController {
       customer_name?: string;
       party_size?: number;
       tab_type?: string;
+      pickup_mode?: string;
+      delivery_details?: {
+        full_name?: string;
+        phone?: string;
+        address?: string;
+        notes?: string;
+      };
     },
   ) {
     if (!body.branch_id) {
@@ -98,6 +118,24 @@ export class CustomerController {
             },
           },
         },
+        branch_id: {
+          type: 'string',
+          description:
+            'Required only when placing the first order of a new takeaway/group (no tab exists yet)',
+        },
+        customer_name: { type: 'string' },
+        party_size: { type: 'number' },
+        pickup_mode: { type: 'string', enum: ['self', 'dispatch'] },
+        delivery_details: {
+          type: 'object',
+          properties: {
+            full_name: { type: 'string' },
+            phone: { type: 'string' },
+            address: { type: 'string' },
+            notes: { type: 'string' },
+          },
+        },
+        delivery_fee_kobo: { type: 'number' },
       },
     },
   })
@@ -113,13 +151,31 @@ export class CustomerController {
         notes?: string;
         modifiers?: any[];
       }[];
+      branch_id?: string;
+      customer_name?: string;
+      party_size?: number;
+      pickup_mode?: string;
+      delivery_details?: {
+        full_name?: string;
+        phone?: string;
+        address?: string;
+        notes?: string;
+      };
+      delivery_fee_kobo?: number;
     },
   ) {
     if (!trackingCode)
       throw new BadRequestException('x-tracking-code header is required');
     if (!body.items || body.items.length === 0)
       throw new BadRequestException('At least one item is required');
-    return this.customerService.addItems(tabId, trackingCode, body.items);
+    return this.customerService.addItems(tabId, trackingCode, body.items, {
+      branch_id: body.branch_id,
+      customer_name: body.customer_name,
+      party_size: body.party_size,
+      pickup_mode: body.pickup_mode,
+      delivery_details: body.delivery_details,
+      delivery_fee_kobo: body.delivery_fee_kobo,
+    });
   }
 
   @Get('tabs/:tabId')
@@ -171,10 +227,44 @@ export class CustomerController {
     return this.customerService.confirmReceived(tabId, trackingCode);
   }
 
+  @Post('tabs/:tabId/confirm-delivery')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({
+    summary:
+      'Dispatch: customer confirms they received the delivery -> marks the delivery + orders DELIVERED',
+  })
+  @ApiParam({ name: 'tabId', description: 'Tab UUID' })
+  @ApiHeader({
+    name: 'x-tracking-code',
+    required: true,
+    description: 'Tracking code for the tab',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['delivery_id'],
+      properties: { delivery_id: { type: 'string' } },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Delivery confirmed by the customer.',
+  })
+  async confirmDelivery(
+    @Param('tabId') tabId: string,
+    @Headers('x-tracking-code') trackingCode: string,
+    @Body() body: { delivery_id: string },
+  ) {
+    if (!trackingCode)
+      throw new BadRequestException('x-tracking-code header is required');
+    return this.customerService.confirmDelivery(tabId, trackingCode, body?.delivery_id);
+  }
+
   @Post('tabs/:tabId/review')
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({
-    summary: 'Self-service: submit a customer review (rating 1-5) after payment',
+    summary:
+      'Self-service: submit a customer review (rating 1-5) after payment',
   })
   @ApiParam({ name: 'tabId', description: 'Tab UUID' })
   @ApiHeader({

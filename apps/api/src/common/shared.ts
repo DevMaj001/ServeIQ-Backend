@@ -6,6 +6,30 @@ export enum UserRole {
   CHEF = 'chef',
   CASHIER = 'cashier',
   SUPERVISOR = 'supervisor',
+  RIDER = 'rider',
+}
+
+export enum PickupMode {
+  SELF = 'self',
+  DISPATCH = 'dispatch',
+}
+
+export enum DeliveryStatus {
+  PENDING = 'pending',
+  ACCEPTED = 'accepted',
+  OUT_FOR_DELIVERY = 'out_for_delivery',
+  // Rider has physically handed the order to the customer; pending the
+  // customer's own confirmation before it is marked DELIVERED.
+  HANDED_OVER = 'handed_over',
+  DELIVERED = 'delivered',
+  CANCELLED = 'cancelled',
+}
+
+export interface DeliveryDetails {
+  full_name?: string;
+  phone: string;
+  address: string;
+  notes?: string;
 }
 
 export enum OrderStatus {

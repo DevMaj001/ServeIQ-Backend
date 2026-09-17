@@ -74,6 +74,7 @@ async function bootstrap() {
     'https://serveiq-admin.vercel.app',
     'https://serve-iq-one.vercel.app',
     'https://serve-iq-waiter.vercel.app',
+    'https://serveiqhq.com',
   ];
   app.enableCors({
     origin: allowedOrigins,
@@ -89,8 +90,10 @@ async function bootstrap() {
     ],
   });
 
-  // Swagger / OpenAPI (disabled in production to reduce attack surface)
-  if ((process.env.NODE_ENV ?? 'development') !== 'production') {
+  // Swagger / OpenAPI (disabled in production unless SWAGGER_ENABLED=true)
+  const swaggerEnabled =
+    (process.env.NODE_ENV ?? 'development') !== 'production' || process.env.SWAGGER_ENABLED === 'true';
+  if (swaggerEnabled) {
     const config = new DocumentBuilder()
       .setTitle('ServeIQ API')
       .setDescription(

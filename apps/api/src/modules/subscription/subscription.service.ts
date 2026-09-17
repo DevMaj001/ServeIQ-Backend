@@ -15,12 +15,11 @@ import {
 import { Plan } from './entities/plan.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { Business } from '../business/entities/business.entity';
-
-const Paystack = require('paystack');
+import { PaystackClient } from './paystack.client';
 
 @Injectable()
 export class SubscriptionService {
-  private paystack: any;
+  private paystack: PaystackClient | null;
 
   constructor(
     @InjectRepository(Subscription)
@@ -35,7 +34,9 @@ export class SubscriptionService {
   ) {
     const secretKey = this.configService.get<string>('PAYSTACK_SECRET_KEY');
     if (secretKey) {
-      this.paystack = new Paystack(secretKey);
+      this.paystack = new PaystackClient(secretKey);
+    } else {
+      this.paystack = null;
     }
   }
 
@@ -54,8 +55,9 @@ export class SubscriptionService {
     return repo.save(subscription);
   }
 
-  async initialize(branchId: string, planId: string) {
-    if (!this.paystack) {
+  async initialize(branchId: string, planId: string, callbackUrl?: string) {
+    const paystack = this.paystack;
+    if (!paystack) {
       throw new BadRequestException(
         'Payment gateway (Paystack) is not configured',
       );
@@ -115,9 +117,7 @@ export class SubscriptionService {
     if (!customerCode) {
       let customerResp;
       try {
-        customerResp = await this.paystack.customer.create({
-          email: customerEmail,
-        });
+        customerResp = await paystack.createCustomer(customerEmail);
       } catch (e) {
         throw new BadRequestException(
           `Paystack customer creation failed: ${e.message}`,
@@ -143,10 +143,11 @@ export class SubscriptionService {
 
     let initializeResp;
     try {
-      initializeResp = await this.paystack.transaction.initialize({
+      initializeResp = await paystack.initializeTransaction({
         amount: plan.price,
         email: customerEmail,
         plan: paystackPlanCode,
+        ...(callbackUrl ? { callback_url: callbackUrl } : {}),
         channels: [
           'card',
           'bank',
@@ -189,6 +190,79 @@ export class SubscriptionService {
       access_code: initializeResp.data.access_code,
       reference: initializeResp.data.reference,
     };
+  }
+
+  async verifyByReference(branchId: string, reference: string) {
+    const paystack = this.paystack;
+    if (!paystack) {
+      throw new BadRequestException(
+        'Payment gateway (Paystack) is not configured',
+      );
+    }
+
+    let verifyResp;
+    try {
+      verifyResp = await paystack.verifyTransaction(reference);
+    } catch (e) {
+      throw new BadRequestException(
+        `Unable to verify transaction: ${e.message}`,
+      );
+    }
+
+    if (!verifyResp?.status || verifyResp.data?.status !== 'success') {
+      throw new BadRequestException(
+        verifyResp?.data?.status === 'abandoned'
+          ? 'Payment was not completed'
+          : 'Transaction could not be verified as successful',
+      );
+    }
+
+    const data = verifyResp.data;
+    const customerEmail = data.customer?.email;
+    if (!customerEmail) {
+      throw new BadRequestException('Transaction has no customer email');
+    }
+
+    const business = await this.businessRepo.findOne({
+      where: { email: customerEmail },
+    });
+    if (!business) {
+      throw new NotFoundException('No business found for this payment');
+    }
+
+    const branch = await this.branchRepo.findOne({
+      where: { business_id: business.id },
+    });
+    if (!branch) {
+      throw new NotFoundException('No branch found for this payment');
+    }
+
+    let subscription = await this.subscriptionRepo.findOne({
+      where: { branch_id: branch.id },
+    });
+    if (!subscription) {
+      subscription = this.subscriptionRepo.create({
+        branch_id: branch.id,
+        status: SubscriptionStatus.TRIALING,
+      });
+    }
+
+    subscription.status = SubscriptionStatus.ACTIVE;
+    subscription.current_period_start = new Date(
+      this.toDateFromPaystack(data.created_at) ?? Date.now(),
+    );
+    subscription.current_period_end = new Date(
+      this.toDateFromPaystack(data.subscription?.next_payment_date) ??
+        Date.now() + 30 * 24 * 60 * 60 * 1000,
+    );
+    subscription.paystack_customer_code =
+      data.customer?.customer_code || subscription.paystack_customer_code;
+    subscription.paystack_subscription_code =
+      data.subscription?.subscription_code ||
+      subscription.paystack_subscription_code;
+    subscription.trial_ends_at = null;
+
+    return this.subscriptionRepo.save(subscription);
   }
 
   async handleChargeSuccess(data: any) {
@@ -404,17 +478,18 @@ export class SubscriptionService {
     subscription.canceled_at = new Date();
     await this.subscriptionRepo.save(subscription);
 
-    if (subscription.paystack_subscription_code) {
+    const paystack = this.paystack;
+    if (paystack && subscription.paystack_subscription_code) {
       try {
-        const sub = await this.paystack.subscription.get(
+        const sub = await paystack.getSubscription(
           subscription.paystack_subscription_code,
         );
         const token = sub?.data?.email_token;
         if (token) {
-          await this.paystack.subscription.disable({
-            code: subscription.paystack_subscription_code,
+          await paystack.disableSubscription(
+            subscription.paystack_subscription_code,
             token,
-          });
+          );
         }
       } catch {
         // if Paystack disable fails, local cancel is still recorded

@@ -13,7 +13,9 @@ export class PublicBusinessesController {
   ) {}
 
   @Get('businesses')
-  @ApiOperation({ summary: 'List active registered businesses (no auth required)' })
+  @ApiOperation({
+    summary: 'List active registered businesses (no auth required)',
+  })
   @ApiResponse({ status: 200, description: 'Active registered businesses.' })
   async getPublicBusinesses() {
     const businesses = await this.businessRepo.find({

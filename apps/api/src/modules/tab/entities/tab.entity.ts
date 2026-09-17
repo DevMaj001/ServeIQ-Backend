@@ -20,15 +20,15 @@ export class Tab {
   branch_id: string;
 
   @Index()
-  @Column({ type: 'uuid' })
-  table_id: string;
+  @Column({ type: 'uuid', nullable: true })
+  table_id: string | null;
 
   @Index()
   @Column({ type: 'uuid', nullable: true })
   waiter_id: string | null;
 
   @Column({ type: 'uuid', nullable: true })
-  shift_id: string;
+  shift_id: string | null;
 
   @Column({ nullable: true })
   cashier_id: string;
@@ -83,4 +83,16 @@ export class Tab {
 
   @VersionColumn()
   version: number;
+
+  @Column({ type: 'uuid', nullable: true })
+  reservation_id: string | null;
+
+  @Column({ type: 'varchar', length: 20, default: 'self' })
+  pickup_mode: string;
+
+  @Column({ type: 'jsonb', nullable: true })
+  delivery_details: any;
+
+  @Column({ type: 'integer', default: 0 })
+  delivery_fee_kobo: number;
 }

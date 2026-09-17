@@ -50,6 +50,9 @@ export class MenuItem {
   @Column({ type: 'varchar', length: 20, default: 'cook' })
   prep_type: string;
 
+  @Column({ type: 'integer', nullable: true })
+  prep_time_seconds: number | null;
+
   @Column({ type: 'decimal', precision: 12, scale: 3, default: 0 })
   quantity_in_stock: number;
 

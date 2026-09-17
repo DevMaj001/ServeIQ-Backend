@@ -14,6 +14,7 @@ const CREATABLE_ROLES = [
   UserRole.MANAGER,
   UserRole.CHEF,
   UserRole.CASHIER,
+  UserRole.RIDER,
 ] as const;
 
 export class CreateWaiterDto {
@@ -58,12 +59,20 @@ export class CreateWaiterDto {
   avatar_url?: string;
 
   @ApiPropertyOptional({
+    example: 'Motorcycle',
+    description: 'Rider vehicle description (only used when role is rider)',
+  })
+  @IsOptional()
+  @IsString()
+  vehicle?: string;
+
+  @ApiPropertyOptional({
     example: 'waiter',
     description: 'Role to assign. Defaults to waiter.',
   })
   @IsOptional()
   @IsIn(CREATABLE_ROLES, {
-    message: 'Role must be one of: waiter, supervisor, manager, chef',
+    message: 'Role must be one of: waiter, supervisor, manager, chef, rider',
   })
   role?: string;
 }

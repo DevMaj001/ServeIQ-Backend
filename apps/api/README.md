@@ -8,6 +8,8 @@ This is the NestJS + PostgreSQL API that powers ServeIQ's waiter, admin and cust
 
 - Per-guest split settlement (`POST /bills/tab/:tabId/splits/:billId/pay`) with item-level, amount, percentage and "remaining balance" allocations; the tab closes only when the last guest share is paid.
 - Offline synchronization gateway (`/sync`) that replays queued order/bill mutations with stable idempotency keys.
+- Table reservations: public availability + booking by confirmation code, walk-ins, seating, reminders, per-branch settings (`/reservations`).
+- Delivery dispatch and rider payouts: rider role + PIN login, online/offline availability, delivery accept/complete/reassign lifecycle, per-rider earnings ledger and payout batches (`/riders`, `/deliveries`).
 - Multi-currency (including NGN) and cash / card / transfer / USSD settlement, POS terminal integration, PDF receipts.
 - Real time via Socket.IO: dashboard updates, bill updates, and public `tab:{id}` order-tracking events.
 - Role-based access (waiter, supervisor, manager, owner, super admin), branch isolation, audit logs, inventory deduction.
@@ -35,4 +37,4 @@ npm run test -w apps/api
 
 ## Links
 
-Product: [https://serveiq.io](https://serveiq.io) · Contact: [hello@serveiq.io](mailto:hello@serveiq.io)
+Product: [https://serveiqhq.com](https://serveiqhq.com) · Contact: [hello@serveiq.io](mailto:hello@serveiq.io)

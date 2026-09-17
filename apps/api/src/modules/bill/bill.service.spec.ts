@@ -105,7 +105,10 @@ describe('BillService', () => {
         { provide: ReceiptService, useValue: receiptService },
         { provide: CloudinaryService, useValue: cloudinaryService },
         { provide: RealtimeService, useValue: mockRealtimeService() },
-        { provide: OrderService, useValue: { approve: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: OrderService,
+          useValue: { approve: jest.fn().mockResolvedValue(undefined) },
+        },
       ],
     }).compile();
 
@@ -412,54 +415,174 @@ describe('BillService', () => {
 
       expect(result).toEqual(existing);
     });
-  });
 
-  describe('splitEvenly', () => {
-    it('splits tab total evenly across N bills', async () => {
-      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
-      orderRepo.find.mockResolvedValue([
-        { subtotal_kobo: 10000 },
-        { subtotal_kobo: 5000 },
-        { subtotal_kobo: 3000 },
-      ]);
+    it('rejects cash payments for takeaway tabs', async () => {
+      billRepo.findOne.mockResolvedValue({
+        id: 'bill-1',
+        tab_id: 'tab-1',
+        total_kobo: 5000,
+      });
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        tab_type: 'takeaway',
+        waiter_id: null,
+      });
 
-      const result = await service.splitEvenly(
-        'tab-1',
-        'branch-1',
-        'user-1',
-        'owner',
-        3,
-      );
-
-      expect(result).toHaveLength(3);
-      const total = result.reduce((s: number, b: any) => s + b.total_kobo, 0);
-      expect(total).toBe(18000);
+      await expect(
+        service.processPayment('tab-1', 'branch-1', 'user-1', 'owner', {
+          amount: 5000,
+          method: 'cash' as any,
+        }),
+      ).rejects.toThrow('Cash payment is not available for takeaway orders');
     });
-  });
 
-  describe('splitByItem', () => {
-    it('splits by item allocations', async () => {
-      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
+    it('releases held prepaid orders to the kitchen queue when branch kds_enabled', async () => {
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        table_id: null,
+        tab_type: 'takeaway',
+        waiter_id: null,
+      });
+      billRepo.findOne.mockResolvedValue({
+        id: 'bill-1',
+        tab_id: 'tab-1',
+        total_kobo: 5000,
+      });
       orderRepo.find.mockResolvedValue([
-        { id: 'o1', subtotal_kobo: 10000 },
-        { id: 'o2', subtotal_kobo: 5000 },
-        { id: 'o3', subtotal_kobo: 3000 },
+        { menu_item_id: 'mi-1', order_status: 'delivered' },
       ]);
+      let releaseUpdate: any;
+      dataSource.transaction = jest.fn(async (cb) =>
+        cb({
+          getRepository: jest.fn((entity) => {
+            if (entity === Order) {
+              return {
+                find: jest.fn(async () => [
+                  {
+                    id: 'held-1',
+                    menu_item_id: 'mi-1',
+                    order_status: 'pending_payment_approval',
+                    assigned_department: null,
+                    estimated_preparation_time_seconds: null,
+                  },
+                ]),
+                update: jest.fn((id, patch) => {
+                  releaseUpdate = patch;
+                  return Promise.resolve(undefined);
+                }),
+              };
+            }
+            if (entity === Branch) {
+              return {
+                findOne: jest.fn().mockResolvedValue({
+                  id: 'branch-1',
+                  settings: {
+                    feature_flags: { kds_enabled: true },
+                    kds_default_department_id: 'dept-default',
+                  },
+                }),
+              };
+            }
+            if (entity === MenuItem) {
+              return {
+                find: jest.fn().mockResolvedValue([
+                  {
+                    id: 'mi-1',
+                    prep_time_seconds: 900,
+                  },
+                ]),
+              };
+            }
+            return {
+              findOne: jest.fn(),
+              find: jest.fn().mockResolvedValue([]),
+              update: jest.fn(),
+              save: jest.fn(async (e) => e),
+            };
+          }),
+        }),
+      );
 
-      const result = await service.splitByItem(
+      const result = await service.processPayment(
         'tab-1',
         'branch-1',
         'user-1',
         'owner',
-        [
-          { order_ids: ['o1', 'o2'] },
-          { order_ids: ['o3'] },
-        ],
+        { amount: 5000, method: 'card' as any, terminal_id: 'term-1' },
       );
 
-      expect(result).toHaveLength(2);
-      expect(result[0].total_kobo).toBe(15000);
-      expect(result[1].total_kobo).toBe(3000);
+      expect(releaseUpdate.order_status).toBe('assigned_to_department');
+      expect(releaseUpdate.assigned_department).toBe('dept-default');
+      expect(releaseUpdate.estimated_preparation_time_seconds).toBe(900);
+      expect(result.payment_method).toBe('card');
+    });
+
+    it('keeps held prepaid orders on the supervisor pipeline when kds_enabled is off', async () => {
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        table_id: null,
+        tab_type: 'takeaway',
+        waiter_id: null,
+      });
+      billRepo.findOne.mockResolvedValue({
+        id: 'bill-1',
+        tab_id: 'tab-1',
+        total_kobo: 5000,
+      });
+      orderRepo.find.mockResolvedValue([
+        { menu_item_id: 'mi-1', order_status: 'delivered' },
+      ]);
+
+      let releaseUpdate: any;
+      dataSource.transaction = jest.fn(async (cb) =>
+        cb({
+          getRepository: jest.fn((entity) => {
+            if (entity === Order) {
+              return {
+                find: jest.fn(async () => [
+                  {
+                    id: 'held-1',
+                    menu_item_id: 'mi-1',
+                    order_status: 'pending_payment_approval',
+                    assigned_department: null,
+                    estimated_preparation_time_seconds: 600,
+                  },
+                ]),
+                update: jest.fn((id, patch) => {
+                  releaseUpdate = patch;
+                  return Promise.resolve(undefined);
+                }),
+              };
+            }
+            if (entity === Branch) {
+              return {
+                findOne: jest.fn().mockResolvedValue({
+                  id: 'branch-1',
+                  settings: { feature_flags: { kds_enabled: false } },
+                }),
+              };
+            }
+            return {
+              findOne: jest.fn(),
+              find: jest.fn().mockResolvedValue([]),
+              update: jest.fn(),
+              save: jest.fn(async (e) => e),
+            };
+          }),
+        }),
+      );
+
+      await service.processPayment('tab-1', 'branch-1', 'user-1', 'owner', {
+        amount: 5000,
+        method: 'card' as any,
+        terminal_id: 'term-1',
+      });
+
+      expect(releaseUpdate.order_status).toBe('pending_supervisor_approval');
+      expect(releaseUpdate.estimated_preparation_time_seconds).toBe(600);
     });
   });
 });

@@ -14,6 +14,9 @@ import { Role } from '../role/entities/role.entity';
 import { UserRole } from '../../common/shared';
 import { CreateWaiterDto } from './dto/create-waiter.dto';
 import { AuditService } from '../../common/services/audit.service';
+import { Rider } from '../riders/entities/rider.entity';
+import { Permission } from '../role/entities/permission.entity';
+import { PERMISSIONS } from '../role/permission-codes';
 
 @Injectable()
 export class UserService {
@@ -24,12 +27,43 @@ export class UserService {
     private branchRepository: Repository<Branch>,
     @InjectRepository(Role)
     private roleRepository: Repository<Role>,
+    @InjectRepository(Rider)
+    private riderRepository: Repository<Rider>,
+    @InjectRepository(Permission)
+    private permissionRepository: Repository<Permission>,
     private auditService: AuditService,
   ) {}
 
   async create(createDto: Partial<User>) {
     const user = this.userRepository.create(createDto);
     return this.userRepository.save(user);
+  }
+
+  private async resolveOrCreateRole(roleName: string): Promise<Role | null> {
+    const permissionCodesByRole: Record<string, string[]> = {
+      Rider: [
+        PERMISSIONS.ACCEPT_DELIVERY,
+        PERMISSIONS.COMPLETE_DELIVERY,
+        PERMISSIONS.VIEW_DELIVERIES,
+        PERMISSIONS.VIEW_TRACKING,
+      ],
+    };
+    const codes = permissionCodesByRole[roleName];
+    if (!codes) return null;
+
+    const permissions = await this.permissionRepository.find({
+      where: { code: In(codes) },
+    });
+    const role = this.roleRepository.create({
+      name: roleName,
+      description: `Delivers ${roleName.toLowerCase()} orders`,
+      is_system: true,
+    });
+    role.permissions = permissions;
+    console.warn(
+      `[UserService] PBAC role '${roleName}' missing; created it on the fly`,
+    );
+    return this.roleRepository.save(role);
   }
 
   async createWaiter(
@@ -113,9 +147,12 @@ export class UserService {
 
       // Look up the PBAC Role entity for this user's role
       const roleName = targetRole.charAt(0).toUpperCase() + targetRole.slice(1);
-      const pbacRole = await this.roleRepository.findOne({
+      let pbacRole = await this.roleRepository.findOne({
         where: { name: roleName },
       });
+      if (!pbacRole) {
+        pbacRole = await this.resolveOrCreateRole(roleName);
+      }
 
       const user = new User();
       Object.assign(user, {
@@ -134,6 +171,20 @@ export class UserService {
 
       const savedUser = await this.userRepository.save(user);
 
+      // When creating a Rider, also insert a rider row so the delivery
+      // board can find them by user_id (riderService.findByUserId).
+      if (targetRole === UserRole.RIDER) {
+        const riderRow = this.riderRepository.create({
+          user_id: savedUser.id,
+          business_id: businessId,
+          branch_id: dto.branchId,
+          is_online: false,
+          // no separate vehicle field on the staff-create DTO yet.
+          vehicle: dto.vehicle ?? null,
+        });
+        await this.riderRepository.save(riderRow);
+      }
+
       const auditAction =
         targetRole === UserRole.SUPERVISOR
           ? 'SUPERVISOR_CREATED'
@@ -143,7 +194,9 @@ export class UserService {
               ? 'CHEF_CREATED'
               : targetRole === UserRole.CASHIER
                 ? 'CASHIER_CREATED'
-                : 'WAITER_CREATED';
+                : targetRole === UserRole.RIDER
+                  ? 'RIDER_CREATED'
+                  : 'WAITER_CREATED';
       await this.auditService.log({
         branchId: dto.branchId,
         userId: savedUser.id,
@@ -190,8 +243,28 @@ export class UserService {
         );
       }
 
+      // Surface useful diagnostics for driver-level failures (missing tables,
+      // wrong enum values, etc.) instead of a blank "Failed to create user",
+      // which hides migration drift at runtime.
+      const driver =
+        (err as any)?.driverError ?? (err as any)?.original ?? undefined;
+      const dbCode: string | undefined =
+        (driver as any)?.code ?? (err as any)?.code;
+      if (dbCode === '42P01') {
+        throw new BadRequestException(
+          'Staff creation failed: a required database table is missing. Please run the latest migrations and retry.',
+        );
+      }
+      if (dbCode === '22P02' || dbCode === '42703') {
+        throw new BadRequestException(
+          'Staff creation failed: the database schema is out of date for the selected role. Please run the latest migrations and retry.',
+        );
+      }
+
       // For any other DB error, wrap it in a BadRequestException or re-throw
-      throw new BadRequestException('Failed to create user');
+      throw new BadRequestException(
+        `Failed to create user${dbCode ? ` (${dbCode})` : ''}`,
+      );
     }
   }
 
@@ -208,6 +281,7 @@ export class UserService {
         UserRole.MANAGER,
         UserRole.CHEF,
         UserRole.CASHIER,
+        UserRole.RIDER,
       ]);
     } else {
       where.role = UserRole.WAITER;

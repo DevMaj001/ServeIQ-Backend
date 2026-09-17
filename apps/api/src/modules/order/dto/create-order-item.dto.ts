@@ -10,6 +10,7 @@ import {
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { FulfillmentType } from '../../../common/shared';
+import { IsUUID, Min } from 'class-validator';
 
 export class ModifierSelectionDto {
   @ApiProperty({ example: 'modifier-option-uuid' })
@@ -71,4 +72,25 @@ export class CreateOrderItemDto {
   @IsOptional()
   @IsEnum(FulfillmentType)
   fulfillment_type?: FulfillmentType;
+
+  @ApiProperty({
+    example: 'b3d5f2c1-...',
+    required: false,
+    description:
+      'Kitchen department UUID for KDS-enabled branches. Used when the waiter punches an order straight to the kitchen (bypassing supervisor approval). Ignored when KDS is disabled.',
+  })
+  @IsOptional()
+  @IsUUID()
+  department?: string;
+
+  @ApiProperty({
+    example: 600,
+    required: false,
+    description:
+      'Estimated preparation time in seconds for KDS-enabled branches. Optional; defaults to the menu item prep time when set.',
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  estimated_preparation_time_seconds?: number;
 }

@@ -41,6 +41,9 @@ export class Business {
   @Column({ nullable: true })
   address: string;
 
+  @Column({ length: 2, nullable: true })
+  country: string;
+
   @Column({ default: 'NGN' })
   currency: string;
 

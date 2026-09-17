@@ -10,7 +10,7 @@ export interface ReceiptData {
     email?: string;
   } | null;
   branch?: { name?: string; address?: string } | null;
-  tab?: { id: string; table_id: string } | null;
+  tab?: { id: string; table_id: string | null } | null;
   table?: { label?: string } | null;
   waiter?: { full_name?: string } | null;
   bill: {
@@ -144,7 +144,9 @@ export class ReceiptService {
     doc.moveDown(0.5);
     doc.fontSize(7).text('Thank you for your patronage!', { align: 'center' });
     doc.moveDown(0.1);
-    doc.fontSize(6).text('Powered by ServeIQ — serveiq.io', { align: 'center' });
+    doc
+      .fontSize(6)
+      .text('Powered by ServeIQ — serveiqhq.com', { align: 'center' });
 
     doc.end();
 

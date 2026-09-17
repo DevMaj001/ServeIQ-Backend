@@ -12,7 +12,12 @@ import { Table } from '../table/entities/table.entity';
 import { Order } from '../order/entities/order.entity';
 import { Review } from '../review/entities/review.entity';
 import { Business } from '../business/entities/business.entity';
+import { Bill } from '../bill/entities/bill.entity';
+import { Delivery } from '../delivery/entities/delivery.entity';
+import { Rider } from '../riders/entities/rider.entity';
+import { User } from '../user/entities/user.entity';
 import { TrackingModule } from '../tracking/tracking.module';
+import { DeliveryModule } from '../delivery/delivery.module';
 
 @Module({
   imports: [
@@ -25,10 +30,19 @@ import { TrackingModule } from '../tracking/tracking.module';
       Order,
       Review,
       Business,
+      Bill,
+      Delivery,
+      Rider,
+      User,
     ]),
     TrackingModule,
+    DeliveryModule,
   ],
-  controllers: [PublicMenuController, PublicBusinessesController, CustomerController],
+  controllers: [
+    PublicMenuController,
+    PublicBusinessesController,
+    CustomerController,
+  ],
   providers: [CustomerService],
 })
 export class PublicModule {}

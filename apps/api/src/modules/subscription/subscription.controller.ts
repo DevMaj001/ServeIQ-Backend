@@ -17,6 +17,7 @@ import {
 } from '@nestjs/swagger';
 import { SubscriptionService } from './subscription.service';
 import { InitializeSubscriptionDto } from './dto/initialize-subscription.dto';
+import { VerifySubscriptionDto } from './dto/verify-subscription.dto';
 import { AdminGrantDto } from './dto/admin-grant.dto';
 import { AdminExtendGraceDto } from './dto/admin-extend-grace.dto';
 import { CreatePlanDto } from './dto/create-plan.dto';
@@ -46,7 +47,26 @@ export class SubscriptionController {
     @Request() req: any,
     @Body() dto: InitializeSubscriptionDto,
   ) {
-    return this.subscriptionService.initialize(req.user.branchId, dto.plan_id);
+    return this.subscriptionService.initialize(req.user.branchId, dto.plan_id, dto.callback_url);
+  }
+
+  @Post('verify')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Verify a Paystack transaction reference and activate the subscription',
+  })
+  @ApiResponse({ status: 200, description: 'Subscription activated' })
+  @ApiResponse({ status: 400, description: 'Transaction could not be verified' })
+  @ApiResponse({ status: 404, description: 'Business/branch not found' })
+  async verify(
+    @Request() req: any,
+    @Body() dto: VerifySubscriptionDto,
+  ) {
+    return this.subscriptionService.verifyByReference(
+      req.user.branchId,
+      dto.reference,
+    );
   }
 
   @Get('plans')

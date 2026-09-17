@@ -163,6 +163,43 @@ describe('BranchController', () => {
       );
     });
 
+    it('should merge reservation settings', async () => {
+      const existingSettings = { delivery: { enabled: true } };
+      branchService.findOne.mockResolvedValue({
+        id: 'branch-1',
+        business_id: 'biz-1',
+        settings: existingSettings,
+      });
+      branchRepo.save.mockResolvedValue({
+        id: 'branch-1',
+        settings: {
+          ...existingSettings,
+          reservation: { enabled: true, allow_online: true, max_party_size: 12 },
+        },
+      });
+
+      await controller.updateSettings(
+        'branch-1',
+        { user: { businessId: 'biz-1' } },
+        {
+          reservation: { enabled: true, allow_online: true, max_party_size: 12 },
+        },
+      );
+
+      expect(branchRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          settings: expect.objectContaining({
+            delivery: { enabled: true },
+            reservation: expect.objectContaining({
+              enabled: true,
+              allow_online: true,
+              max_party_size: 12,
+            }),
+          }),
+        }),
+      );
+    });
+
     it('should throw NotFoundException for unknown branch', async () => {
       branchService.findOne.mockResolvedValue(null);
 

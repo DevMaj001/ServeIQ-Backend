@@ -6,7 +6,7 @@ services:
     # causing ~60s cold starts — unacceptable mid-service at a bar.
     plan: starter
     buildCommand: cd apps/api && npm install && npm run build
-    startCommand: cd apps/api && npm run migration:run:prod; node dist/main.js
+    startCommand: cd apps/api && node dist/main.js
     envVars:
       - key: NODE_ENV
         value: production

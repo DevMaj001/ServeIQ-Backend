@@ -78,23 +78,30 @@ export class ReviewService {
     if (reviews.length === 0) return [];
 
     const branchIds = [...new Set(reviews.map((r) => r.branch_id).filter(Boolean))];
-    const tabIds = reviews.map((r) => r.tab_id);
+    const tabIds = reviews
+      .map((r) => r.tab_id)
+      .filter((t): t is string => Boolean(t));
 
     const [branches, tabs, ordersArray] = await Promise.all([
       branchIds.length > 0
         ? this.branchRepo.find({ where: { id: In(branchIds) } })
         : Promise.resolve([]),
-      this.tabRepo.find({ where: { id: In(tabIds) } }),
-      this.orderRepo.find({ where: { tab_id: In(tabIds) } }),
+      tabIds.length > 0
+        ? this.tabRepo.find({ where: { id: In(tabIds) } })
+        : Promise.resolve([]),
+      this.orderRepo.find({
+        where: tabIds.length > 0 ? { tab_id: In(tabIds) } : { id: In([]) },
+      }),
     ]);
 
     const branchMap = new Map(branches.map((b) => [b.id, b.name]));
     const tabMap = new Map(tabs.map((t) => [t.id, t]));
     const ordersByTab = new Map<string, Order[]>();
     for (const o of ordersArray) {
-      const list = ordersByTab.get(o.tab_id) || [];
+      const key = o.tab_id ?? '';
+      const list = ordersByTab.get(key) || [];
       list.push(o);
-      ordersByTab.set(o.tab_id, list);
+      ordersByTab.set(key, list);
     }
 
     const menuIds = [...new Set(ordersArray.map((o) => o.menu_item_id))];
@@ -105,8 +112,8 @@ export class ReviewService {
     const menuMap = new Map(menuItems.map((m) => [m.id, m.name]));
 
     return reviews.map((r) => {
-      const tab = tabMap.get(r.tab_id);
-      const orders = ordersByTab.get(r.tab_id) || [];
+      const tab = r.tab_id ? tabMap.get(r.tab_id) : undefined;
+      const orders = ordersByTab.get(r.tab_id ?? '') || [];
       return {
         id: r.id,
         rating: r.rating,

@@ -125,37 +125,14 @@ export class WaiterCallService {
         throw new BadRequestException('This table already has an active waiter request');
       }
 
-      const eligible = await this.getEligibleWaiters(branchId);
-      if (eligible.length === 0) {
-        const waiterCall = queryRunner.manager.create(WaiterCall, {
-          branch_id: branchId,
-          table_id: tableId,
-          customer_session_id: customerSessionId,
-          status: WaiterCallStatus.QUEUED,
-          reason: 'All waiters are currently at maximum capacity',
-        });
-        const saved = await queryRunner.manager.save(waiterCall);
-        await queryRunner.commitTransaction();
-        this.realtimeService.emitWaiterCall(branchId, 'waiter.request.queued', {
-          id: saved.id,
-          tableId,
-          status: saved.status,
-        });
-        return {
-          waiterCall: saved,
-          assignedWaiter: null,
-          status: WaiterCallStatus.QUEUED,
-          message:
-            'All waiters are currently assisting other guests. Your request has been queued.',
-        };
-      }
-
-      const selectedWaiter = eligible[0].user;
+      // Broadcast model: create the call unassigned so every waiter in the
+      // branch sees it, and the first waiter to accept claims it (like a ride
+      // request). Capacity is enforced at accept time, not here.
       const waiterCall = queryRunner.manager.create(WaiterCall, {
         branch_id: branchId,
         table_id: tableId,
-        assigned_waiter_id: selectedWaiter.id,
         customer_session_id: customerSessionId,
+        assigned_waiter_id: null,
         status: WaiterCallStatus.PENDING,
       });
       const savedWaiterCall = await queryRunner.manager.save(waiterCall);
@@ -165,21 +142,15 @@ export class WaiterCallService {
         id: savedWaiterCall.id,
         tableId,
         status: savedWaiterCall.status,
-        assignedWaiterId: selectedWaiter.id,
-      });
-      this.realtimeService.emitWaiterCall(branchId, 'waiter.request.assigned', {
-        id: savedWaiterCall.id,
-        tableId,
-        status: savedWaiterCall.status,
-        assignedWaiterId: selectedWaiter.id,
+        assignedWaiterId: null,
       });
       this.logger.log(
-        `Waiter call created: table=${tableId}, assigned=${selectedWaiter.id}, status=PENDING`,
+        `Waiter call created: table=${tableId}, status=PENDING (awaiting a waiter to accept)`,
       );
 
       return {
         waiterCall: savedWaiterCall,
-        assignedWaiter: selectedWaiter,
+        assignedWaiter: null,
         status: WaiterCallStatus.PENDING,
         message: 'A waiter has been notified.',
       };
@@ -199,12 +170,12 @@ export class WaiterCallService {
       where: { id: waiterCallId, deleted_at: null } as any,
     });
     if (!call) throw new Error('Waiter call not found');
-    if (call.assigned_waiter_id !== waiterId) {
-      throw new Error('This waiter call is not assigned to you');
-    }
     if (call.status !== WaiterCallStatus.PENDING) {
-      throw new Error('This request is no longer in pending state');
+      throw new Error('This request is no longer awaiting a waiter');
     }
+    // Any waiter can claim a pending call; accepting assigns it to them so it
+    // leaves the other waiters' queues.
+    call.assigned_waiter_id = waiterId;
     call.status = WaiterCallStatus.ACCEPTED;
     call.accepted_at = new Date();
     const saved = await this.waiterCallRepository.save(call);
@@ -396,9 +367,33 @@ export class WaiterCallService {
     status?: WaiterCallStatus,
     branchId?: string,
   ): Promise<WaiterCall[]> {
-    const where: any = { assigned_waiter_id: waiterId, deleted_at: null };
-    if (status) where.status = status;
-    if (branchId) where.branch_id = branchId;
+    // Broadcast model for waiters: show every open (unassigned, awaiting a
+    // waiter) call in the branch, plus this waiter's own in-progress calls.
+    // Assigned/accepted calls taken by another waiter drop out of this list,
+    // mirroring a ride-hailing queue.
+    const where: any[] = [];
+    const branch: any = branchId ? { branch_id: branchId } : {};
+    if (status) {
+      where.push({ ...branch, deleted_at: null, status });
+      where.push({
+        ...branch,
+        deleted_at: null,
+        assigned_waiter_id: waiterId,
+        status: In([status]),
+      });
+    } else {
+      where.push({ ...branch, deleted_at: null, status: WaiterCallStatus.PENDING });
+      where.push({
+        ...branch,
+        deleted_at: null,
+        assigned_waiter_id: waiterId,
+        status: In([
+          WaiterCallStatus.PENDING,
+          WaiterCallStatus.ACCEPTED,
+          WaiterCallStatus.ARRIVED,
+        ]),
+      });
+    }
     return this.waiterCallRepository.find({
       where,
       order: { created_at: 'ASC' },
