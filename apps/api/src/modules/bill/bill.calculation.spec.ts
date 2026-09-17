@@ -57,7 +57,7 @@ describe('BillService â€” Billing Calculation Accuracy (50 scenarios)', () 
         updated_at: new Date(),
       };
     }),
-    update: jest.fn(),
+    update: jest.fn().mockResolvedValue({ affected: 1 }),
   });
 
   beforeEach(async () => {
@@ -94,7 +94,7 @@ describe('BillService â€” Billing Calculation Accuracy (50 scenarios)', () 
             if (_entity === Table)
               return {
                 findOne: jest.fn().mockResolvedValue(null),
-                update: jest.fn(),
+                update: jest.fn().mockResolvedValue({ affected: 1 }),
               };
             return mockRepo();
           }),
@@ -751,7 +751,7 @@ describe('BillService â€” Tab State Machine Transitions', () => {
       await Promise.resolve();
       return { ...entity, id: 'bill-1' };
     }),
-    update: jest.fn(),
+    update: jest.fn().mockResolvedValue({ affected: 1 }),
   });
 
   beforeEach(async () => {
@@ -788,13 +788,13 @@ describe('BillService â€” Tab State Machine Transitions', () => {
             if (_entity === Table)
               return {
                 findOne: jest.fn().mockResolvedValue(null),
-                update: jest.fn(),
+                update: jest.fn().mockResolvedValue({ affected: 1 }),
               };
             return {
               find: jest.fn().mockResolvedValue([]),
               save: jest.fn((e: unknown) => Promise.resolve(e)),
               findOne: jest.fn(),
-              update: jest.fn(),
+              update: jest.fn().mockResolvedValue({ affected: 1 }),
             };
           }),
         }),

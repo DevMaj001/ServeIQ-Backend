@@ -48,6 +48,16 @@ describe('PaymentController', () => {
   let branchRepo: any;
   let billService: any;
 
+  beforeAll(() => {
+    // Dev sandbox: let the x-simulate header bypass provider signatures in
+    // tests, mirroring a staging environment with the flag switched on.
+    process.env.ENABLE_WEBHOOK_SIMULATION = 'true';
+  });
+
+  afterAll(() => {
+    delete process.env.ENABLE_WEBHOOK_SIMULATION;
+  });
+
   beforeEach(async () => {
     billRepo = mockRepo();
     tabRepo = mockRepo();
@@ -188,7 +198,7 @@ describe('PaymentController', () => {
       expect(result.error).toBe('Bill not found');
     });
 
-    it('should reject invalid HMAC signature', async () => {
+    it('rejects an invalid HMAC signature', async () => {
       billRepo.findOne.mockResolvedValue({ tab_id: 'tab-1', paid_at: null });
       tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
       branchRepo.findOne.mockResolvedValue({
@@ -210,6 +220,58 @@ describe('PaymentController', () => {
           data: { reference: 'ref-1', amount: 100, status: 'SUCCESSFUL' },
         }),
       ).rejects.toThrow('Invalid Moniepoint signature');
+      expect(billService.processPayment).not.toHaveBeenCalled();
+    });
+
+    it('ignores the x-simulate header unless ENABLE_WEBHOOK_SIMULATION is set', async () => {
+      const prev = process.env.ENABLE_WEBHOOK_SIMULATION;
+      delete process.env.ENABLE_WEBHOOK_SIMULATION;
+      try {
+        billRepo.findOne.mockResolvedValue({
+          tab_id: 'tab-1',
+          paid_at: null,
+          payment_reference: 'ref-1',
+          total_kobo: 150000,
+        });
+        tabRepo.findOne.mockResolvedValue({
+          id: 'tab-1',
+          branch_id: 'branch-1',
+        });
+        branchRepo.findOne.mockResolvedValue({
+          settings: {
+            payment_providers: [
+              {
+                name: 'monniepoint',
+                type: 'webhook',
+                label: 'Moniepoint',
+                verification_method: 'hmac-sha512',
+                config: { webhook_secret: 'secret123' },
+              },
+            ],
+          },
+        });
+
+        // x-simulate present but flag off: the sim bypass must not apply, so
+        // the request is treated as a genuine webhook and the bad signature is
+        // rejected outright instead of being honoured as a simulation.
+        await expect(
+          controller.monniepointWebhook(mockSimReq, 'wrong-sig', {
+            data: {
+              reference: 'ref-1',
+              amount: 150000,
+              status: 'SUCCESSFUL',
+              terminalId: 'term-1',
+            },
+          }),
+        ).rejects.toThrow('Invalid Moniepoint signature');
+        expect(billService.processPayment).not.toHaveBeenCalled();
+      } finally {
+        if (prev === undefined) {
+          delete process.env.ENABLE_WEBHOOK_SIMULATION;
+        } else {
+          process.env.ENABLE_WEBHOOK_SIMULATION = prev;
+        }
+      }
     });
 
     it('should call processPayment on valid webhook', async () => {
@@ -284,6 +346,236 @@ describe('PaymentController', () => {
         data: { reference: 'ref-1', amount: 100, status: 'SUCCESSFUL' },
       });
       expect(result.status).toBe('already_paid');
+    });
+
+    it('verifies the signature BEFORE any bill lookup for terminal-anchored webhooks', async () => {
+      posTerminalRepo.findOne.mockResolvedValue({
+        id: 'term-uuid-1',
+        branch_id: 'branch-1',
+        label: 'term-1',
+      });
+      branchRepo.findOne.mockResolvedValue({
+        settings: {
+          payment_providers: [
+            {
+              name: 'monniepoint',
+              type: 'webhook',
+              verification_method: 'hmac-sha512',
+              config: { webhook_secret: 'secret123' },
+            },
+          ],
+        },
+      });
+      billRepo.findOne.mockClear();
+      billRepo.findOne.mockResolvedValue({ tab_id: 'tab-1', paid_at: null });
+
+      await expect(
+        controller.monniepointWebhook(mockReq, 'wrong-sig', {
+          data: {
+            reference: 'ref-1',
+            amount: 100,
+            status: 'SUCCESSFUL',
+            terminalId: 'term-1',
+          },
+        }),
+      ).rejects.toThrow('Invalid Moniepoint signature');
+
+      // Because the branch resolves from the terminal alone, the bill lookup
+      // must never run before signature verification turns the request away.
+      expect(billRepo.findOne).not.toHaveBeenCalled();
+    });
+
+    it('rejects stale sha256-signed webhooks outside the freshness window', async () => {
+      const secret = 'whsec_test';
+      billRepo.findOne.mockResolvedValue({
+        tab_id: 'tab-1',
+        paid_at: null,
+        total_kobo: 50000,
+        payment_reference: 'ref-1',
+      });
+      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
+      branchRepo.findOne.mockResolvedValue({
+        settings: {
+          payment_providers: [
+            {
+              name: 'monniepoint',
+              type: 'webhook',
+              verification_method: 'hmac-sha512',
+              config: { webhook_secret: secret },
+            },
+          ],
+        },
+      });
+
+      const payload = {
+        data: {
+          reference: 'ref-1',
+          amount: 50000,
+          status: 'SUCCESSFUL',
+          terminalId: 'term-1',
+        },
+      };
+      const webhookId = 'wh_' + Date.now();
+      const timestamp = Math.floor(Date.now() / 1000) - 3600; // 1 hour old
+      const rawBody = JSON.stringify(payload);
+      const signature = crypto
+        .createHmac('sha256', secret)
+        .update(`${webhookId}__${timestamp}__${rawBody}`)
+        .digest('base64');
+      const req = {
+        rawBody,
+        headers: {
+          'moniepoint-webhook-id': webhookId,
+          'moniepoint-webhook-timestamp': String(timestamp),
+        },
+      } as any;
+
+      await expect(
+        controller.monniepointWebhook(req, signature, payload),
+      ).rejects.toThrow('Expired Moniepoint signature');
+      expect(billService.processPayment).not.toHaveBeenCalled();
+    });
+
+    it('accepts a fresh sha256-signed webhook within the freshness window', async () => {
+      const secret = 'whsec_test';
+      billRepo.findOne.mockResolvedValue({
+        tab_id: 'tab-1',
+        paid_at: null,
+        total_kobo: 50000,
+        payment_reference: 'ref-1',
+      });
+      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
+      branchRepo.findOne.mockResolvedValue({
+        settings: {
+          payment_providers: [
+            {
+              name: 'monniepoint',
+              type: 'webhook',
+              verification_method: 'hmac-sha512',
+              config: { webhook_secret: secret },
+            },
+          ],
+        },
+      });
+
+      const payload = {
+        data: {
+          reference: 'ref-1',
+          amount: 50000,
+          status: 'SUCCESSFUL',
+          terminalId: 'term-1',
+        },
+      };
+      const webhookId = 'wh_' + Date.now();
+      const timestamp = Math.floor(Date.now() / 1000) - 60; // 60 seconds old
+      const rawBody = JSON.stringify(payload);
+      const signature = crypto
+        .createHmac('sha256', secret)
+        .update(`${webhookId}__${timestamp}__${rawBody}`)
+        .digest('base64');
+      const req = {
+        rawBody,
+        headers: {
+          'moniepoint-webhook-id': webhookId,
+          'moniepoint-webhook-timestamp': String(timestamp),
+        },
+      } as any;
+
+      const result = await controller.monniepointWebhook(
+        req,
+        signature,
+        payload,
+      );
+      expect(result.status).toBe('processed');
+      expect(billService.processPayment).toHaveBeenCalledTimes(1);
+    });
+
+    it('treats a millisecond Moniepoint timestamp as fresh', async () => {
+      const secret = 'whsec_test';
+      billRepo.findOne.mockResolvedValue({
+        tab_id: 'tab-1',
+        paid_at: null,
+        total_kobo: 50000,
+        payment_reference: 'ref-1',
+      });
+      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
+      branchRepo.findOne.mockResolvedValue({
+        settings: {
+          payment_providers: [
+            {
+              name: 'monniepoint',
+              type: 'webhook',
+              verification_method: 'hmac-sha512',
+              config: { webhook_secret: secret },
+            },
+          ],
+        },
+      });
+
+      const payload = {
+        data: {
+          reference: 'ref-1',
+          amount: 50000,
+          status: 'SUCCESSFUL',
+          terminalId: 'term-1',
+        },
+      };
+      const webhookId = 'wh_' + Date.now();
+      const timestamp = Date.now() - 60 * 1000; // 60 seconds old, in ms as sent by Moniepoint
+      const rawBody = JSON.stringify(payload);
+      const signature = crypto
+        .createHmac('sha256', secret)
+        .update(`${webhookId}__${timestamp}__${rawBody}`)
+        .digest('base64');
+      const req = {
+        rawBody,
+        headers: {
+          'moniepoint-webhook-id': webhookId,
+          'moniepoint-webhook-timestamp': String(timestamp),
+        },
+      } as any;
+
+      const result = await controller.monniepointWebhook(
+        req,
+        signature,
+        payload,
+      );
+      expect(result.status).toBe('processed');
+      expect(billService.processPayment).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns Amount mismatch for an unmatched deposit', async () => {
+      billRepo.findOne.mockResolvedValue({
+        tab_id: 'tab-1',
+        paid_at: null,
+        payment_reference: 'ref-1',
+        total_kobo: 150000,
+      });
+      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
+      branchRepo.findOne.mockResolvedValue({
+        id: 'branch-1',
+        settings: {
+          payment_providers: [
+            {
+              name: 'monniepoint',
+              type: 'webhook',
+              verification_method: 'none',
+              config: {},
+            },
+          ],
+        },
+      });
+
+      const result = await controller.monniepointWebhook(mockReq, 'sig', {
+        data: {
+          reference: 'ref-1',
+          amount: 123,
+          status: 'SUCCESSFUL',
+          terminalId: 'term-1',
+        },
+      });
+      expect(result.error).toBe('Amount mismatch');
+      expect(result.received).toBe(true);
     });
   });
 
@@ -636,7 +928,7 @@ describe('PaymentController', () => {
       expect(result.status).toBe('processed');
     });
 
-    it('should reject an invalid raw-body signature', async () => {
+    it('rejects an invalid raw-body signature', async () => {
       configureBranch();
       const req = { rawBody, headers: {} } as any;
       await expect(
@@ -697,7 +989,10 @@ describe('PaymentController', () => {
       });
 
       const result = await controller.monniepointWebhook(
-        { rawBody: JSON.stringify(monnifyPayload), headers: { 'x-simulate': '1' } } as any,
+        {
+          rawBody: JSON.stringify(monnifyPayload),
+          headers: { 'x-simulate': '1' },
+        } as any,
         'any-sig',
         monnifyPayload,
       );

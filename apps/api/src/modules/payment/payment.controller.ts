@@ -432,35 +432,33 @@ export class PaymentController {
       `[monniepoint][arrive] ref=${reference} amount=${amount} status=${rawStatus} terminal=${terminalId} account=${account_number}`,
     );
 
-    // Resolve the bill first (reference, else branch-scoped amount). We must
-    // have a real target before enforcing provider config/signature so that
-    // unknown references return gracefully instead of throwing.
-    const resolved = await this.resolveWebhookBill({
+    // ── Step 1: Resolve branch from payload metadata (pre-auth) ──
+    // Terminal, account number, and payment reference each identify the branch
+    // that configured the provider. We resolve this FIRST so signature
+    // verification can run before any settlement-oriented queries.
+    const branch = await this.resolveWebhookBranch({
+      provider: 'monniepoint',
       reference,
-      amount,
       terminalId,
       accountNumber: account_number,
-      provider: 'monniepoint',
     });
-    if (!resolved) {
+    if (!branch) {
       this.logger.warn(
-        `[monniepoint][unresolved] no bill/branch for ref=${reference} terminal=${terminalId} account=${account_number}`,
+        `[monniepoint][unresolved] no branch for ref=${reference} terminal=${terminalId} account=${account_number}`,
       );
       return { received: true, error: 'Bill not found' };
     }
-    const { bill, tab, branch } = resolved;
-    this.logger.log(
-      `[monniepoint][resolved] bill=${bill?.id} tab=${tab?.id ?? '(standalone)'} branch=${branch?.id}`,
-    );
 
-    const providerConfig = branch
-      ? this.findProviderConfig(branch.settings, 'monniepoint')
-      : null;
+    // ── Step 2: Verify signature against the branch's config ──
     const isTestSimulation = this.isTestSimulation(req);
+    const providerConfig = this.findProviderConfig(
+      branch.settings,
+      'monniepoint',
+    );
 
     if (!isTestSimulation && !providerConfig) {
       this.logger.warn(
-        `[monniepoint][misconfig] branch=${branch?.id} has no monniepoint provider configured`,
+        `[monniepoint][misconfig] branch=${branch.id} has no monniepoint provider configured`,
       );
       throw new ForbiddenException('Moniepoint webhook not configured');
     }
@@ -473,20 +471,59 @@ export class PaymentController {
         providerConfig.config?.webhook_secret || providerConfig.config?.secret;
       if (!secret) {
         this.logger.warn(
-          `[monniepoint][misconfig] branch=${branch?.id} configured hmac-sha512 but has no webhook_secret`,
+          `[monniepoint][misconfig] branch=${branch.id} configured hmac-sha512 but has no webhook_secret`,
         );
         throw new ForbiddenException(
           'Moniepoint webhook secret not configured',
         );
       }
-      if (!this.verifyMoniepointSignature(req, payload, signature, secret)) {
+      const sigFormat = this.verifyMoniepointSignature(
+        req,
+        payload,
+        signature,
+        secret,
+      );
+      if (!sigFormat) {
         this.logger.warn(
-          `[monniepoint][bad-signature] branch=${branch?.id} signature rejected against configured secret`,
+          `[monniepoint][bad-signature] branch=${branch.id} signature rejected against configured secret`,
         );
         throw new ForbiddenException('Invalid Moniepoint signature');
       }
-      this.logger.log(`[monniepoint][verified] signature ok for branch=${branch?.id}`);
+      // Replay protection: reject stale sha256-signed payloads whose
+      // timestamp is outside the acceptable window. Only applies to the
+      // sha256 format which carries a timestamp; the sha512 format does
+      // not include a timestamp and is unaffected.
+      if (sigFormat === 'sha256' && !this.isFreshMoniepointTimestamp(req)) {
+        this.logger.warn(
+          `[monniepoint][stale] branch=${branch.id} timestamp outside acceptable window`,
+        );
+        // Replay guard: once the signature is proven genuine, an aged timestamp
+        // is the only signal a replayed capture can be caught on — reject.
+        throw new ForbiddenException('Expired Moniepoint signature');
+      }
+      this.logger.log(
+        `[monniepoint][verified] signature ok for branch=${branch.id}`,
+      );
     }
+
+    // ── Step 3: Resolve the bill (post-auth confirmed) ──
+    const resolved = await this.resolveWebhookBill({
+      reference,
+      amount,
+      terminalId,
+      accountNumber: account_number,
+      provider: 'monniepoint',
+    });
+    if (!resolved) {
+      this.logger.warn(
+        `[monniepoint][unresolved] no bill for ref=${reference} terminal=${terminalId} account=${account_number}`,
+      );
+      return { received: true, error: 'Bill not found' };
+    }
+    const { bill, tab } = resolved;
+    this.logger.log(
+      `[monniepoint][resolved] bill=${bill?.id} tab=${tab?.id ?? '(standalone)'} branch=${branch.id}`,
+    );
 
     if (bill.paid_at) return { received: true, status: 'already_paid' };
 
@@ -598,9 +635,14 @@ export class PaymentController {
   /** Test mode: a dev-only header that bypasses provider signature
    *  verification so the sandbox "Simulate Payment" works before real
    *  keys are configured. Shared by both webhook paths.
-   *  Hard-disabled in production regardless of headers. */
+   *  Hard-disabled in production regardless of headers, and inert unless
+   *  ENABLE_WEBHOOK_SIMULATION=true is explicitly set so an environment that
+   *  simply omitted NODE_ENV cannot be bypassed with a single header. */
   private isTestSimulation(req: Request): boolean {
     if (process.env.NODE_ENV === 'production') {
+      return false;
+    }
+    if (process.env.ENABLE_WEBHOOK_SIMULATION !== 'true') {
       return false;
     }
     return req.headers['x-simulate'] === '1';
@@ -668,14 +710,14 @@ export class PaymentController {
     payload: any,
     signature: string,
     secret: string,
-  ): boolean {
+  ): 'sha512' | 'sha256' | null {
     const sig =
       signature ||
       String(req.headers['moniepoint-webhook-signature'] || '') ||
       String(req.headers['monniepoint-webhook-signature'] || '') ||
       String(req.headers['monnify-signature'] || '') ||
       String(req.headers['x-monnify-signature'] || '');
-    if (!sig) return false;
+    if (!sig) return null;
     const rawBody: Buffer = (req as any).rawBody
       ? Buffer.from((req as any).rawBody)
       : Buffer.from(JSON.stringify(payload));
@@ -684,7 +726,8 @@ export class PaymentController {
       .createHmac('sha512', secret)
       .update(rawBody)
       .digest('hex');
-    if (this.safeEqual(sig.replace(/^sha512=/i, ''), hmacSha512)) return true;
+    if (this.safeEqual(sig.replace(/^sha512=/i, ''), hmacSha512))
+      return 'sha512';
 
     const webhookId = req.headers['moniepoint-webhook-id'];
     const timestamp = req.headers['moniepoint-webhook-timestamp'];
@@ -694,9 +737,29 @@ export class PaymentController {
         .createHmac('sha256', secret)
         .update(signed)
         .digest('base64');
-      if (this.safeEqual(sig, hmacSha256)) return true;
+      if (this.safeEqual(sig, hmacSha256)) return 'sha256';
     }
-    return false;
+    return null;
+  }
+
+  /** Reject stale webhooks whose signed timestamp is outside the acceptable
+   *  window. Only applied to the sha256 format which carries a webhook-timestamp
+   *  header; the sha512 format has no timestamp and passes unconditionally.
+   *  Window defaults to 5 minutes and is configurable via
+   *  MONIEPOINT_MAX_WEBHOOK_AGE_SECONDS. A small negative skew (~60s) is
+   *  tolerated so a sender clock slightly ahead of ours is not rejected.
+   *  Moniepoint sends the timestamp in epoch MILLISECONDS; values >= 1e12 are
+   *  normalized to seconds before the age check. */
+  private isFreshMoniepointTimestamp(req: Request): boolean {
+    const raw = req.headers['moniepoint-webhook-timestamp'];
+    if (!raw) return true;
+    const rawTs = Number(raw);
+    if (!Number.isFinite(rawTs)) return false;
+    const ts = rawTs >= 1e12 ? rawTs / 1000 : rawTs;
+    const maxAgeSec =
+      Number(process.env.MONIEPOINT_MAX_WEBHOOK_AGE_SECONDS) || 300;
+    const ageSec = Date.now() / 1000 - ts;
+    return ageSec >= -60 && ageSec <= maxAgeSec;
   }
 
   /** Convert a provider webhook amount (naira or kobo) to kobo using the bill's

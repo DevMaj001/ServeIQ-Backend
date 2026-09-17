@@ -98,7 +98,7 @@ async function buildService(overrides: {
         getRepository: () => ({
           find: jest.fn().mockResolvedValue(overrides.orders ?? []),
           save: jest.fn(async (e: any) => e),
-          update: jest.fn(),
+          update: jest.fn().mockResolvedValue({ affected: 1 }),
           findOne: jest.fn().mockResolvedValue(undefined),
           createQueryBuilder: () => ({
             update: () => ({
