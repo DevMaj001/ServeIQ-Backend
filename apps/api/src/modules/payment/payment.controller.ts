@@ -44,6 +44,7 @@ import {
   buildPaymentMethods,
   PaymentProviderConfig,
 } from './payment-provider.util';
+import { NotificationService } from '../notification/notification.service';
 import * as crypto from 'crypto';
 
 const UUID_RE =
@@ -68,6 +69,7 @@ export class PaymentController {
     @InjectRepository(Business)
     private businessRepo: Repository<Business>,
     private billService: BillService,
+    private notificationService: NotificationService,
   ) {}
 
   @Post('initialize')
@@ -102,7 +104,7 @@ export class PaymentController {
         throw new BadRequestException('Tab is not payable');
 
       // Dine-in is waiter-served only. When the waiter has created a split /
-      // payment plan, the guests settle each share with the waiter — the public
+      // payment plan, the guests settle each share with the waiter ΓÇö the public
       // tracking page must not let a customer self-pay a wholesale amount that
       // bears no relation to the plan (and would create a spurious pending bill).
       if (tab.tab_type === TabType.DINE_IN) {
@@ -115,7 +117,7 @@ export class PaymentController {
         });
         if (activeSplit) {
           throw new BadRequestException(
-            'This dine-in bill is collected by your waiter — please pay them directly.',
+            'This dine-in bill is collected by your waiter ΓÇö please pay them directly.',
           );
         }
       }
@@ -305,13 +307,13 @@ export class PaymentController {
         payment_status: existingBill.payment_status,
         payment_method: existingBill.payment_method,
         amount_kobo: existingBill.total_kobo,
-        amount_formatted: `₦${(existingBill.total_kobo / 100).toFixed(2)}`,
+        amount_formatted: `Γéª${(existingBill.total_kobo / 100).toFixed(2)}`,
         message: 'Payment already confirmed',
       };
     }
 
     // Idempotency: if this tab already has a pending-cash request, return the
-    // current state instead of re-creating/re-flipping — prevents a customer
+    // current state instead of re-creating/re-flipping ΓÇö prevents a customer
     // spamming the button from stacking up duplicate supervisor requests.
     if (
       existingBill?.payment_status === 'pending_cash' &&
@@ -322,7 +324,7 @@ export class PaymentController {
         payment_status: existingBill.payment_status,
         payment_method: existingBill.payment_method,
         amount_kobo: existingBill.total_kobo,
-        amount_formatted: `₦${(existingBill.total_kobo / 100).toFixed(2)}`,
+        amount_formatted: `Γéª${(existingBill.total_kobo / 100).toFixed(2)}`,
         message: 'Cash payment request already awaiting confirmation',
       };
     }
@@ -372,12 +374,12 @@ export class PaymentController {
       payment_status: bill.payment_status,
       payment_method: bill.payment_method,
       amount_kobo: bill.total_kobo,
-      amount_formatted: `₦${(bill.total_kobo / 100).toFixed(2)}`,
+      amount_formatted: `Γéª${(bill.total_kobo / 100).toFixed(2)}`,
       message: 'Waiting for cash confirmation at the counter',
     };
   }
 
-  // ─── Webhook Endpoints ───
+  // ΓöÇΓöÇΓöÇ Webhook Endpoints ΓöÇΓöÇΓöÇ
 
   @Post(['webhooks/monniepoint', 'webhooks/moniepoint'])
   @SkipThrottle()
@@ -432,7 +434,7 @@ export class PaymentController {
       `[monniepoint][arrive] ref=${reference} amount=${amount} status=${rawStatus} terminal=${terminalId} account=${account_number}`,
     );
 
-    // ── Step 1: Resolve branch from payload metadata (pre-auth) ──
+    // ΓöÇΓöÇ Step 1: Resolve branch from payload metadata (pre-auth) ΓöÇΓöÇ
     // Terminal, account number, and payment reference each identify the branch
     // that configured the provider. We resolve this FIRST so signature
     // verification can run before any settlement-oriented queries.
@@ -458,7 +460,7 @@ export class PaymentController {
       return { received: true, error: 'Bill not found' };
     }
 
-    // ── Step 2: Verify signature against the branch's config ──
+    // ΓöÇΓöÇ Step 2: Verify signature against the branch's config ΓöÇΓöÇ
     const providerConfig = this.findProviderConfig(
       branch.settings,
       'monniepoint',
@@ -506,7 +508,7 @@ export class PaymentController {
           `[monniepoint][stale] branch=${branch.id} timestamp outside acceptable window`,
         );
         // Replay guard: once the signature is proven genuine, an aged timestamp
-        // is the only signal a replayed capture can be caught on — reject.
+        // is the only signal a replayed capture can be caught on ΓÇö reject.
         throw new ForbiddenException('Expired Moniepoint signature');
       }
       this.logger.log(
@@ -514,7 +516,7 @@ export class PaymentController {
       );
     }
 
-    // ── Step 3: Resolve the bill (post-auth confirmed) ──
+    // ΓöÇΓöÇ Step 3: Resolve the bill (post-auth confirmed) ΓöÇΓöÇ
     const resolved = await this.resolveWebhookBill({
       reference,
       amount,
@@ -526,6 +528,12 @@ export class PaymentController {
       this.logger.warn(
         `[monniepoint][unresolved] no bill for ref=${reference} terminal=${terminalId} account=${account_number}`,
       );
+      await this.alertPaymentReconciliation(branch, 'unresolved', {
+        reference,
+        amount,
+        terminalId,
+        account_number,
+      });
       return { received: true, error: 'Bill not found' };
     }
     const { bill, tab } = resolved;
@@ -542,6 +550,12 @@ export class PaymentController {
       this.logger.warn(
         `[monniepoint][amount-mismatch] sent=${amount} bill_total=${bill.total_kobo}`,
       );
+      await this.alertPaymentReconciliation(branch, 'amount-mismatch', {
+        reference,
+        amount,
+        bill_total_kobo: bill.total_kobo,
+        bill_id: bill.id,
+      });
       return { received: true, error: 'Amount mismatch' };
     }
 
@@ -768,6 +782,49 @@ export class PaymentController {
       Number(process.env.MONIEPOINT_MAX_WEBHOOK_AGE_SECONDS) || 300;
     const ageSec = Date.now() / 1000 - ts;
     return ageSec >= -60 && ageSec <= maxAgeSec;
+  }
+
+  /** Write a structured alert to the notifications table so branch staff
+   *  can see unresolved or mismatched deposits. Falls back to a warn-level
+   *  log when no branch anchor is available (unresolvable webhook).
+   *  Never throws — alert failures must not block the webhook response. */
+  private async alertPaymentReconciliation(
+    branch: Branch | null,
+    reason: 'unresolved' | 'amount-mismatch',
+    data: Record<string, any>,
+  ): Promise<void> {
+    try {
+      const amountNaira = ((data.amount ?? 0) / 100).toFixed(2);
+      if (branch) {
+        const title =
+          reason === 'unresolved'
+            ? 'Unresolved Payment Deposit'
+            : 'Payment Amount Mismatch';
+        const message =
+          reason === 'unresolved'
+            ? `A deposit of ₦${amountNaira} (ref: ${data.reference}) could not be matched to any bill.`
+            : `Deposit of ₦${amountNaira} (ref: ${data.reference}) does not match bill total of ₦${((data.bill_total_kobo ?? 0) / 100).toFixed(2)}.`;
+        await this.notificationService.create({
+          branch_id: branch.id,
+          user_id: null,
+          type: 'payment_reconciliation',
+          title,
+          message,
+          data: { ...data, reason, detected_at: new Date().toISOString() },
+        });
+      } else {
+        this.logger.warn(
+          `[monniepoint][${reason}] no branch anchor — manual review required: ` +
+            JSON.stringify(data),
+        );
+      }
+    } catch (err) {
+      this.logger.error(
+        `[monniepoint] Failed to create reconciliation alert: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
   }
 
   /** Convert a provider webhook amount (naira or kobo) to kobo using the bill's

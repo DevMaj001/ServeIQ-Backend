@@ -13,6 +13,7 @@ import { Business } from '../business/entities/business.entity';
 import { Repository } from 'typeorm';
 import { PaymentMethod } from '../../common/shared';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { NotificationService } from '../notification/notification.service';
 import * as crypto from 'crypto';
 
 const mockRepo = () => ({
@@ -47,6 +48,7 @@ describe('PaymentController', () => {
   let posTerminalRepo: any;
   let branchRepo: any;
   let billService: any;
+  let notificationService: any;
 
   beforeAll(() => {
     // Dev sandbox: let the x-simulate header bypass provider signatures in
@@ -67,6 +69,9 @@ describe('PaymentController', () => {
     billService = {
       processPayment: jest.fn().mockResolvedValue({}),
     };
+    notificationService = {
+      create: jest.fn().mockResolvedValue(undefined),
+    };
 
     module = await Test.createTestingModule({
       controllers: [PaymentController],
@@ -78,6 +83,7 @@ describe('PaymentController', () => {
         { provide: getRepositoryToken(Branch), useValue: branchRepo },
         { provide: getRepositoryToken(Business), useValue: mockRepo() },
         { provide: BillService, useValue: billService },
+        { provide: NotificationService, useValue: notificationService },
       ],
     })
       .overrideGuard(PermissionsGuard)
@@ -939,6 +945,45 @@ describe('PaymentController', () => {
       });
       expect(result.error).toBe('Amount mismatch');
       expect(billService.processPayment).not.toHaveBeenCalled();
+    });
+
+    it('writes a reconciliation alert when an amount mismatches', async () => {
+      billRepo.findOne.mockResolvedValue({
+        tab_id: 'tab-1',
+        paid_at: null,
+        payment_reference: 'ref-1',
+        total_kobo: 150000,
+      });
+      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
+      branchRepo.findOne.mockResolvedValue({
+        id: 'branch-1',
+        settings: {
+          payment_providers: [
+            {
+              name: 'monniepoint',
+              type: 'webhook',
+              verification_method: 'none',
+              config: {},
+            },
+          ],
+        },
+      });
+
+      const result = await controller.monniepointWebhook(mockReq, 'sig', {
+        data: {
+          reference: 'ref-1',
+          amount: 123,
+          status: 'SUCCESSFUL',
+          terminalId: 'term-1',
+        },
+      });
+      expect(result.error).toBe('Amount mismatch');
+      expect(notificationService.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          branch_id: 'branch-1',
+          type: 'payment_reconciliation',
+        }),
+      );
     });
   });
 
