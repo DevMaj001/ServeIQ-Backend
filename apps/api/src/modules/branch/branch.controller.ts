@@ -198,7 +198,10 @@ export class BranchController {
     const branch = await this.branchService.findOne(id, req.user.businessId);
     if (!branch) throw new NotFoundException('Branch not found');
     const currentSettings = branch.settings || {};
-    const newSettings = { ...currentSettings, ...dto.settings };
+    const newSettings = this.mergeBranchSettings(
+      currentSettings,
+      dto.settings,
+    );
     if (dto.delivery) {
       newSettings.delivery = {
         ...(currentSettings.delivery || {}),
