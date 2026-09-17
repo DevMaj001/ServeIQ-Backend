@@ -16,9 +16,13 @@ import { MenuItem } from '../menu/entities/menu-item.entity';
 import { User } from '../user/entities/user.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { Business } from '../business/entities/business.entity';
-import { OrderStatus, PaymentMethod, isBillable, statusBlocksPayment } from '../../common/shared';
-import { AllocationType } from './entities/bill.entity';
-import { IsNull, Not } from 'typeorm';
+import {
+  OrderStatus,
+  PaymentMethod,
+  isBillable,
+  statusBlocksPayment,
+} from '../../common/shared';
+import { IsNull, Not, In } from 'typeorm';
 import { GenerateBillDto } from './dto/generate-bill.dto';
 import { ProcessPaymentDto } from './dto/process-payment.dto';
 import { ApplyDiscountDto } from './dto/apply-discount.dto';
@@ -27,8 +31,6 @@ import { ReceiptService } from './receipt.service';
 import { CloudinaryService } from '../../cloudinary/cloudinary.service';
 import { RealtimeService } from '../gateway/realtime.service';
 import { getPublicServer } from '../gateway/gateway.constants';
-import { Department } from '../department/entities/department.entity';
-import { OrderService } from '../order/order.service';
 
 @Injectable()
 export class BillService {
@@ -49,15 +51,12 @@ export class BillService {
     private branchRepository: Repository<Branch>,
     @InjectRepository(Business)
     private businessRepository: Repository<Business>,
-    @InjectRepository(Department)
-    private departmentRepository: Repository<Department>,
     @Inject(DataSource)
     private dataSource: DataSource,
     private ingredientService: IngredientService,
     private receiptService: ReceiptService,
     private cloudinaryService: CloudinaryService,
     private realtimeService: RealtimeService,
-    private orderService: OrderService,
   ) {}
 
   async generateBill(
@@ -91,22 +90,13 @@ export class BillService {
       });
     }
 
-    // The "running" bill to recompute is the newest live, non-split row. Voided
-    // rows and guest-share (split_group) rows must never be treated as the main
-    // bill — recomputing a split would corrupt the payment plan, and unvoiding
-    // is never desired.
-    let existing = await this.billRepository.findOne({
+    // The "running" bill to recompute is the newest live, non-voided row.
+    const existing = await this.billRepository.findOne({
       where: { tab_id: tabId, voided_at: IsNull() },
       order: { created_at: 'DESC' },
     });
     if (existing?.paid_at) {
       return existing;
-    }
-    if (existing && existing.split_group) {
-      existing = await this.billRepository.findOne({
-        where: { tab_id: tabId, split_group: IsNull(), voided_at: IsNull() },
-        order: { created_at: 'DESC' },
-      });
     }
 
     const orders = await this.orderRepository.find({
@@ -137,7 +127,10 @@ export class BillService {
       generateBillDto?.tax_rate_percent ?? Number(business?.tax_rate ?? 7.5);
     const tax = Math.round(subtotal * (effectiveTaxRate / 100));
 
-    let total = subtotal + serviceCharge + tax - discount;
+    const deliveryFee =
+      tab.pickup_mode === 'dispatch' ? Number(tab.delivery_fee_kobo || 0) : 0;
+
+    let total = subtotal + serviceCharge + tax + deliveryFee - discount;
     if (total < 0) total = 0;
 
     if (existing) {
@@ -146,9 +139,14 @@ export class BillService {
       existing.subtotal_kobo = subtotal;
       existing.service_charge_kobo = serviceCharge;
       existing.tax_kobo = tax;
+      existing.delivery_fee_kobo = deliveryFee;
       existing.total_kobo = Math.max(
         0,
-        subtotal + serviceCharge + tax - (existing.discount_kobo ?? 0),
+        subtotal +
+          serviceCharge +
+          tax +
+          deliveryFee -
+          (existing.discount_kobo ?? 0),
       );
       const updated = await this.billRepository.save(existing);
 
@@ -165,6 +163,7 @@ export class BillService {
       service_charge_kobo: serviceCharge,
       tax_kobo: tax,
       discount_kobo: discount,
+      delivery_fee_kobo: deliveryFee,
       total_kobo: total,
       issued_by: userId,
     });
@@ -232,7 +231,8 @@ export class BillService {
     bill.total_kobo =
       bill.subtotal_kobo +
       bill.service_charge_kobo +
-      bill.tax_kobo -
+      bill.tax_kobo +
+      (bill.delivery_fee_kobo ?? 0) -
       bill.discount_kobo;
     if (bill.total_kobo < 0) bill.total_kobo = 0;
 
@@ -250,57 +250,73 @@ export class BillService {
       ZAR: 'R',
       XOF: 'CFA',
     };
-    return `${symbolMap[currency] ?? currency}${((kobo ?? 0) / 100).toLocaleString(
-      'en-US',
-      { minimumFractionDigits: 2, maximumFractionDigits: 2 },
-    )}`;
+    return `${symbolMap[currency] ?? currency}${(
+      (kobo ?? 0) / 100
+    ).toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
   }
 
   async processPayment(
-    tabId: string,
+    tabId: string | null,
     branchId: string,
     userId: string,
     userRole: string,
     paymentDto: ProcessPaymentDto,
+    opts?: { bill?: Bill },
   ) {
-    const tab = await this.tabRepository.findOne({ where: { id: tabId } });
-    if (!tab) throw new NotFoundException('Tab not found');
-    if (tab.branch_id !== branchId)
-      throw new ForbiddenException('Tab does not belong to your branch');
-
-    if (
-      tab.waiter_id &&
-      userId &&
-      tab.waiter_id !== userId &&
-      userRole !== 'owner' &&
-      userRole !== 'manager' &&
-      userRole !== 'cashier'
-    ) {
-      throw new ForbiddenException('This tab belongs to another waiter');
-    }
-
-    // Prefer the tab's main bill — the one not created as a split/plan allocation.
-    // When a payment plan exists, the individual split rows are meant to be settled
-    // through the per-split endpoint; a wholesale confirmation ("Confirm Payment")
-    // settles the main bill and voids pending split rows below. Settling the last
-    // created split row instead would close the tab while only a fraction of the
-    // real total has actually been paid (and would undercount dashboard revenue).
+    // Standalone (tabless) online order groups are settled via the bill that a
+    // webhook already resolved; the caller hands it over so we don't re-query.
     const bill =
+      opts?.bill ??
       (await this.billRepository.findOne({
-        where: { tab_id: tabId, split_group: IsNull() },
-        order: { created_at: 'DESC' },
-      })) ||
-      (await this.billRepository.findOne({
-        where: { tab_id: tabId },
+        where: { tab_id: tabId!, voided_at: IsNull() },
         order: { created_at: 'DESC' },
       }));
     if (!bill) throw new NotFoundException('Bill not found');
 
-    // Payment gateway: a tab must not be settled while it still has undelivered
-    // billable orders. Declined/cancelled items are excluded, and prepaid-takeaway
-    // orders HELD in PENDING_PAYMENT_APPROVAL are exempt (they are paid up front and
-    // released to the kitchen at processPayment).
-    const orders = await this.orderRepository.find({ where: { tab_id: tabId } });
+    // Identify the orders this settlement covers. Tabs scope by tab_id;
+    // standalone online orders share their group's unique tracking_code.
+    const scope = tabId
+      ? ({ tab_id: tabId } as const)
+      : ({ tracking_code: bill.tracking_code } as const);
+
+    let tab: Tab | null = null;
+    if (tabId) {
+      tab = await this.tabRepository.findOne({ where: { id: tabId } });
+      if (!tab) throw new NotFoundException('Tab not found');
+      if (tab.branch_id !== branchId)
+        throw new ForbiddenException('Tab does not belong to your branch');
+
+      // For standalone groups the bill carries the branch, but waiter ownership
+      // only exists for dine-in tabs.
+      if (
+        tab.waiter_id &&
+        userId &&
+        tab.waiter_id !== userId &&
+        userRole !== 'owner' &&
+        userRole !== 'manager' &&
+        userRole !== 'cashier'
+      ) {
+        throw new ForbiddenException('This tab belongs to another waiter');
+      }
+    }
+
+    // Takeaway / self-service orders are prepaid online — cash is not accepted
+    // for them. Dine-in keeps the cash-at-counter flow.
+    if (
+      (tab?.tab_type === 'takeaway' || !tabId) &&
+      paymentDto.method === PaymentMethod.CASH
+    ) {
+      throw new BadRequestException(
+        'Cash payment is not available for takeaway orders. Please use transfer or a card terminal.',
+      );
+    }
+
+    const orders = await this.orderRepository.find({
+      where: scope as any,
+    });
     const blockingOrders = orders.filter((o) =>
       statusBlocksPayment(o.order_status),
     );
@@ -338,13 +354,19 @@ export class BillService {
     // In this business's pay-at-order-time workflow, payment = fulfillment, so
     // processing deduction here is correct. In a traditional restaurant (pay-at-end)
     // the deduction would move to a kitchen status transition instead.
+    const branchIdForDeduction = tab?.branch_id ?? bill.branch_id ?? branchId;
     await this.dataSource.transaction(async (manager) => {
-      const orders = await manager
-        .getRepository(Order)
-        .find({ where: { tab_id: tabId } });
+      const orders = await manager.getRepository(Order).find({
+        where: scope as any,
+      });
 
+      // Standalone groups record stock movements against the bill id, which is
+      // stable for the life of the settlement and unique to the group.
       await this.ingredientService.deductByTab(
-        { id: tabId, branch_id: tab.branch_id },
+        {
+          id: tab?.id ?? bill.id,
+          branch_id: branchIdForDeduction,
+        },
         orders.map((o) => ({
           menu_item_id: o.menu_item_id,
           quantity: o.quantity,
@@ -368,12 +390,12 @@ export class BillService {
 
       await manager.getRepository(Bill).save(bill);
 
-      // Wholesale settlement supersedes any pending split/plan rows for the tab:
-      // void them so they cannot be settled later, double-counted in revenue, or
-      // show as outstanding splits after the tab is already closed as paid.
+      // Wholesale settlement supersedes any pending split/plan rows for the same
+      // scope: void them so they cannot be settled later, double-counted in revenue,
+      // or show as outstanding splits after the tab/group is already closed as paid.
       await manager.getRepository(Bill).update(
         {
-          tab_id: tabId,
+          ...(scope as any),
           id: Not(bill.id),
           paid_at: IsNull(),
           voided_at: IsNull(),
@@ -381,42 +403,95 @@ export class BillService {
         { voided_at: new Date() },
       );
 
-      await manager.getRepository(Tab).update(tabId, {
-        status: 'paid',
-        closed_at: new Date(),
-        cashier_id: userId,
-      });
+      if (tabId && tab) {
+        await manager.getRepository(Tab).update(tabId, {
+          status: 'paid',
+          closed_at: new Date(),
+          cashier_id: userId,
+        });
+      } else if (!tabId && bill.tracking_code) {
+        // Standalone groups carry the group status denormalized on each order.
+        await manager.getRepository(Order).update(
+          {
+            ...(scope as any),
+            status: Not('paid'),
+          },
+          { status: 'paid' },
+        );
+      }
 
       // Release prepaid takeaway orders (held on payment approval) to the kitchen now
-      // that payment is confirmed.
-      await manager
-        .getRepository(Order)
-        .createQueryBuilder()
-        .update(Order)
-        .set({ order_status: OrderStatus.PENDING_SUPERVISOR_APPROVAL })
-        .where('tab_id = :tabId', { tabId })
-        .andWhere('order_status = :held', {
-          held: OrderStatus.PENDING_PAYMENT_APPROVAL,
-        })
-        .execute();
+      // that payment is confirmed. KDS-enabled branches send them straight to the
+      // kitchen queue (bypassing supervisor approval); other branches keep the legacy
+      // supervisor pipeline.
+      const heldOrders = await manager.getRepository(Order).find({
+        where: {
+          ...(scope as any),
+          order_status: OrderStatus.PENDING_PAYMENT_APPROVAL,
+        },
+      });
+      if (heldOrders.length > 0) {
+        const releaseBranch = await manager
+          .getRepository(Branch)
+          .findOne({ where: { id: branchIdForDeduction } });
+        const releaseKdsEnabled =
+          (
+            releaseBranch?.settings?.feature_flags as
+              Record<string, boolean> | undefined
+          )?.kds_enabled === true;
+        const kdsDefaultDepartment = releaseKdsEnabled
+          ? (releaseBranch?.settings?.kds_default_department_id as string) ||
+            null
+          : null;
 
-      // Virtual tables never participate in occupancy logic — they are system records, not seatable tables.
-      const payTable = await manager
-        .getRepository(Table)
-        .findOne({ where: { id: tab.table_id } });
-      if (payTable && !payTable.is_virtual) {
-        await manager
+        // Self-service orders carry no waiter-selected department/prep time, so fill
+        // them from the branch default + each item's own prep time default.
+        const releaseMenuItems = await manager.getRepository(MenuItem).find({
+          where: {
+            id: In(heldOrders.map((o) => o.menu_item_id)),
+          },
+        });
+        const releaseMenuMap = new Map(releaseMenuItems.map((m) => [m.id, m]));
+
+        for (const heldOrder of heldOrders) {
+          await manager.getRepository(Order).update(heldOrder.id, {
+            order_status: releaseKdsEnabled
+              ? OrderStatus.ASSIGNED_TO_DEPARTMENT
+              : OrderStatus.PENDING_SUPERVISOR_APPROVAL,
+            assigned_department: releaseKdsEnabled
+              ? heldOrder.assigned_department || kdsDefaultDepartment
+              : heldOrder.assigned_department,
+            estimated_preparation_time_seconds:
+              heldOrder.estimated_preparation_time_seconds ??
+              releaseMenuMap.get(heldOrder.menu_item_id)?.prep_time_seconds ??
+              heldOrder.estimated_preparation_time_seconds,
+          });
+        }
+      }
+
+      // Release the physical table for dine-in tabs (takeaway tabs have none).
+      if (tabId && tab && tab.table_id) {
+        const payTable = await manager
           .getRepository(Table)
-          .update(tab.table_id, { status: TableStatus.AVAILABLE });
+          .findOne({ where: { id: tab.table_id } });
+        if (payTable) {
+          await manager
+            .getRepository(Table)
+            .update(tab.table_id, { status: TableStatus.AVAILABLE });
+        }
       }
     });
 
-    // Emit real-time events
-    this.realtimeService.emitBillUpdate(tab.branch_id, tabId, {
-      status: 'paid',
-      bill,
-    });
-    this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+    // Emit real-time events. Standalone groups are addressed by tracking_code.
+    this.realtimeService.emitBillUpdate(
+      branchIdForDeduction,
+      tabId ?? bill.tracking_code ?? '',
+      {
+        status: 'paid',
+        bill,
+      },
+    );
+    this.realtimeService.emitDashboardUpdate(branchIdForDeduction, {
       type: 'payment_received',
       tabId,
       bill,
@@ -424,30 +499,66 @@ export class BillService {
 
     // Push payment confirmation to the public customer tracking page so it does
     // not need to poll (poll-free). Covers cash, card and transfer payments.
-    getPublicServer()?.to(`tab:${tabId}`).emit('paymentConfirmed', {
-      tabId,
-      status: 'paid',
-    });
+    if (tabId) {
+      getPublicServer()
+        ?.to(`tab:${tabId}`)
+        .emit('paymentConfirmed', {
+          tabId,
+          status: 'paid',
+        });
+    } else if (bill.tracking_code) {
+      getPublicServer()
+        ?.to(`tracking:${bill.tracking_code}`)
+        .emit('paymentConfirmed', {
+          tabId: bill.tracking_code,
+          status: 'paid',
+        });
+    }
 
     // Generate PDF receipt and upload to Cloudinary
-    try {
-      const receiptData = await this.buildReceiptData(tabId);
-      if (!receiptData) return bill;
-      const pdfBuffer = this.receiptService.generatePdf(receiptData);
-      const uploadResult = await this.cloudinaryService.uploadFile(
-        pdfBuffer,
-        `receipts/${tabId}`,
-        'raw',
-      );
-      if (uploadResult?.secure_url) {
-        bill.receipt_url = uploadResult.secure_url;
-        await this.billRepository.save(bill);
+    if (tabId) {
+      try {
+        const receiptData = await this.buildReceiptData({ tabId });
+        if (!receiptData) return bill;
+        const pdfBuffer = this.receiptService.generatePdf(receiptData);
+        const uploadResult = await this.cloudinaryService.uploadFile(
+          pdfBuffer,
+          `receipts/${tabId}`,
+          'raw',
+        );
+        if (uploadResult?.secure_url) {
+          bill.receipt_url = uploadResult.secure_url;
+          await this.billRepository.save(bill);
+        }
+      } catch (err) {
+        console.error(
+          'PDF receipt generation failed (non-blocking):',
+          err instanceof Error ? err.message : String(err),
+        );
       }
-    } catch (err) {
-      console.error(
-        'PDF receipt generation failed (non-blocking):',
-        err instanceof Error ? err.message : String(err),
-      );
+    } else if (bill.tracking_code) {
+      try {
+        const receiptData = await this.buildReceiptData({
+          trackingCode: bill.tracking_code,
+        });
+        if (receiptData) {
+          const pdfBuffer = this.receiptService.generatePdf(receiptData);
+          const uploadResult = await this.cloudinaryService.uploadFile(
+            pdfBuffer,
+            `receipts/${bill.tracking_code}`,
+            'raw',
+          );
+          if (uploadResult?.secure_url) {
+            bill.receipt_url = uploadResult.secure_url;
+            await this.billRepository.save(bill);
+          }
+        }
+      } catch (err) {
+        console.error(
+          'PDF receipt generation failed (non-blocking):',
+          err instanceof Error ? err.message : String(err),
+        );
+      }
     }
 
     return bill;
@@ -485,49 +596,9 @@ export class BillService {
         idempotency_key: `cash-confirm-${tabId}`,
       });
     }
-
-    // After processPayment, held takeaway orders are now PENDING_SUPERVISOR_APPROVAL.
-    // Auto-approve them so the supervisor's single action releases the order to the kitchen.
-    const heldOrders = await this.orderRepository.find({
-      where: { tab_id: tabId, order_status: OrderStatus.PENDING_SUPERVISOR_APPROVAL },
-    });
-
-    let approvedCount = 0;
-    if (heldOrders.length > 0) {
-      const branch = await this.branchRepository.findOne({
-        where: { id: branchId },
-      });
-      const dept = await this.departmentRepository.findOne({
-        where: { branch_id: branchId },
-      });
-      const settings = (branch?.settings as any) || {};
-      const prep =
-        Number(settings?.takeaway_estimated_prep_seconds) > 0
-          ? Number(settings.takeaway_estimated_prep_seconds)
-          : 600;
-
-      if (dept) {
-        for (const order of heldOrders) {
-          try {
-            await this.orderService.approve(
-              order.id,
-              userId,
-              {
-                department: dept.id,
-                estimated_preparation_time_seconds: prep,
-              },
-              branchId,
-            );
-            approvedCount++;
-          } catch (err) {
-            console.error(
-              `confirmCashPayment: failed to approve order ${order.id}:`,
-              err instanceof Error ? err.message : String(err),
-            );
-          }
-        }
-      }
-    }
+    // processPayment releases held takeaway orders to PENDING_SUPERVISOR_APPROVAL,
+    // so they land back in the supervisor's Pending queue for manual approval
+    // (department + prep time) before they can reach the kitchen.
 
     const refreshed = await this.billRepository.findOne({
       where: { tab_id: tabId },
@@ -538,59 +609,99 @@ export class BillService {
       tab_id: tabId,
       payment_status: refreshed?.payment_status,
       payment_method: refreshed?.payment_method,
-      approved_orders: approvedCount,
-      requires_manual_approval: Math.max(0, heldOrders.length - approvedCount),
       message:
-        approvedCount === heldOrders.length
-          ? 'Cash confirmed and order released to kitchen'
-          : 'Cash confirmed; some orders need manual supervisor approval (no department configured)',
+        'Cash confirmed - order returned to pending for supervisor approval',
     };
   }
 
-  private async buildReceiptData(tabId: string) {
+  /**
+   * Supervisor removes a pending-cash request (e.g. customer abandoned the order
+   * or spammed the cash button). Voids the awaiting-cash bill and releases any
+   * orders held in PENDING_PAYMENT_APPROVAL back to PENDING_SUPERVISOR_APPROVAL,
+   * leaving the tab open so the customer can re-pay another way. Idempotent: a
+   * second call for an already-voided/paid request is a safe no-op.
+   */
+  async removeCashRequest(tabId: string, branchId: string, userId: string) {
     const tab = await this.tabRepository.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
+    if (tab.branch_id !== branchId)
+      throw new ForbiddenException('Tab does not belong to your branch');
+    if (tab.status === 'paid')
+      throw new BadRequestException('Tab is already paid');
+
+    const bill = await this.billRepository.findOne({
+      where: { tab_id: tabId, voided_at: IsNull() },
+      order: { created_at: 'DESC' },
+    });
+
+    let removed = false;
+    if (bill) {
+      if (bill.paid_at) {
+        throw new BadRequestException(
+          'Payment was already confirmed for this order; use Confirm Cash instead',
+        );
+      }
+      bill.voided_at = new Date();
+      bill.payment_status = 'voided';
+      await this.billRepository.save(bill);
+      removed = true;
+    }
+
+    // When a cash request is rejected, keep orders in PENDING_PAYMENT_APPROVAL
+    // so the customer can retry with another payment method (transfer/POS).
+    // Do NOT move them to PENDING_SUPERVISOR_APPROVAL.
+
+    if (removed) {
+      this.realtimeService.emitDashboardUpdate(tab.branch_id, {
+        type: 'cash_request_removed',
+        tabId,
+        userId,
+      });
+    }
+
+    return {
+      tab_id: tabId,
+      removed,
+      message: removed
+        ? 'Cash payment request removed. Customer can retry payment.'
+        : 'No pending cash request found for this order.',
+    };
+  }
+
+  private async buildReceiptData(opts: {
+    tabId?: string;
+    trackingCode?: string;
+  }) {
+    const { tabId, trackingCode } = opts;
+    const tab = tabId
+      ? await this.tabRepository.findOne({ where: { id: tabId } })
+      : null;
+    if (tabId && !tab) throw new NotFoundException('Tab not found');
 
     const allBills = (await this.billRepository.find({
-      where: { tab_id: tabId },
+      where: tabId ? { tab_id: tabId } : { tracking_code: trackingCode },
       order: { created_at: 'ASC' },
     })) ?? [];
 
-    // A payment-plan tab splits ONE tab total across guest-share bills that are
-    // settled piecemeal. The receipt/most of the payment screen must reflect the
-    // FULL tab total — never a single guest's share — otherwise it reads wrong
-    // (zero or one guest's portion) mid-collection.
-    const planBills = allBills.filter((b) => b.split_group && !b.voided_at);
-    const mainBills = allBills.filter((b) => !b.split_group && !b.voided_at);
-    const paidBills = allBills.filter((b) => b.paid_at && !b.voided_at);
+    // The receipt reflects the single full-tab bill. Prefer the most recently
+    // paid bill so a settled tab shows the bill actually paid (method and amount),
+    // falling back to the latest non-voided bill otherwise.
+    const nonVoided = allBills.filter((b) => !b.voided_at);
+    const paidBills = nonVoided.filter((b) => b.paid_at);
 
-    let sourceBill: Bill | null = null;
-    if (planBills.length > 0) {
-      sourceBill =
-        mainBills[mainBills.length - 1] ??
-        paidBills[paidBills.length - 1] ??
-        planBills[planBills.length - 1];
-      const sum = (pick: (b: Bill) => number) =>
-        planBills.reduce((acc, b) => acc + pick(b), 0);
-      sourceBill = this.billRepository.merge(sourceBill, {
-        subtotal_kobo: sum((b) => b.subtotal_kobo ?? 0),
-        service_charge_kobo: sum((b) => b.service_charge_kobo ?? 0),
-        tax_kobo: sum((b) => b.tax_kobo ?? 0),
-        discount_kobo: sum((b) => b.discount_kobo ?? 0),
-        total_kobo: sum((b) => b.total_kobo ?? 0),
-      } as Partial<Bill>);
-    } else {
-      // Prefer the paid bill (latest first) so a receipt after settling a tab
-      // shows the bill that was actually paid — including its payment method and
-      // the settled amount — rather than an arbitrary older row.
-      sourceBill = paidBills[paidBills.length - 1] ?? allBills[allBills.length - 1] ?? null;
-    }
+    const bill =
+      paidBills[paidBills.length - 1] ??
+      nonVoided[nonVoided.length - 1] ??
+      allBills[allBills.length - 1] ??
+      null;
 
-    const bill = sourceBill;
-
-    const orders = await this.orderRepository.find({
-      where: { tab_id: tabId },
-    });
+    const orders = tabId
+      ? await this.orderRepository.find({
+          where: { tab_id: tabId },
+        })
+      : await this.orderRepository.find({
+          where: { tracking_code: trackingCode },
+        });
 
     const orderItems = [];
     for (const order of orders) {
@@ -603,15 +714,23 @@ export class BillService {
       });
     }
 
-    const table = await this.tableRepository.findOne({
-      where: { id: tab.table_id },
-    });
-    const waiter = tab.waiter_id
+    const table = tab?.table_id
+      ? await this.tableRepository.findOne({
+          where: { id: tab.table_id },
+        })
+      : null;
+    const waiter = tab?.waiter_id
       ? await this.userRepository.findOne({ where: { id: tab.waiter_id } })
       : null;
-    const branch = await this.branchRepository.findOne({
-      where: { id: tab.branch_id },
-    });
+    const branch = tab
+      ? await this.branchRepository.findOne({
+          where: { id: tab.branch_id },
+        })
+      : orders[0]?.branch_id
+        ? await this.branchRepository.findOne({
+            where: { id: orders[0].branch_id },
+          })
+        : null;
     const business = branch
       ? await this.businessRepository.findOne({
           where: { id: branch.business_id },
@@ -621,7 +740,7 @@ export class BillService {
     return {
       business,
       branch,
-      tab,
+      tab: tab as Tab | null,
       table,
       waiter,
       bill,
@@ -630,495 +749,13 @@ export class BillService {
     };
   }
 
-  // ── Split Checks ──
-
-  async splitEvenly(
-    tabId: string,
-    branchId: string,
-    userId: string,
-    userRole: string,
-    numSplits: number,
-  ) {
-    const tab = await this.tabRepository.findOne({ where: { id: tabId } });
-    if (!tab) throw new NotFoundException('Tab not found');
-    if (tab.branch_id !== branchId)
-      throw new ForbiddenException('Tab does not belong to your branch');
-
-    const orders = await this.orderRepository.find({
-      where: { tab_id: tabId },
-    });
-    if (orders.length === 0)
-      throw new BadRequestException('No items on this tab');
-
-    const billableOrders = orders.filter((o) => isBillable(o.order_status));
-    if (billableOrders.length === 0)
-      throw new BadRequestException('No billable items on this tab');
-
-    const total = billableOrders.reduce((sum, o) => sum + o.subtotal_kobo, 0);
-    const baseAmount = Math.floor(total / numSplits);
-    const remainder = total - baseAmount * numSplits;
-
-    const splitGroup = `split_${Date.now()}_${tabId.slice(0, 8)}`;
-    const bills = [];
-
-    for (let i = 0; i < numSplits; i++) {
-      const amount = baseAmount + (i < remainder ? 1 : 0);
-      bills.push(
-        await this.billRepository.save(
-          this.billRepository.create({
-            tab_id: tabId,
-            split_group: splitGroup,
-            subtotal_kobo: amount,
-            service_charge_kobo: 0,
-            tax_kobo: 0,
-            discount_kobo: 0,
-            total_kobo: amount,
-            payment_status: 'pending',
-            issued_by: userId,
-          }),
-        ),
-      );
-    }
-
-    await this.tabRepository.update(tabId, { status: 'billed' });
-
-    // Emit real-time events
-    this.realtimeService.emitBillUpdate(tab.branch_id, tabId, {
-      status: 'billed',
-      splitBills: bills,
-    });
-    this.realtimeService.emitDashboardUpdate(tab.branch_id, {
-      type: 'bill_split',
-      tabId,
-      splitBills: bills,
-    });
-
-    return bills;
-  }
-
-  async splitByItem(
-    tabId: string,
-    branchId: string,
-    userId: string,
-    userRole: string,
-    allocations: { order_ids: string[]; label?: string }[],
-  ) {
-    const tab = await this.tabRepository.findOne({ where: { id: tabId } });
-    if (!tab) throw new NotFoundException('Tab not found');
-    if (tab.branch_id !== branchId)
-      throw new ForbiddenException('Tab does not belong to your branch');
-
-    const allOrders = await this.orderRepository.find({
-      where: { tab_id: tabId },
-    });
-    const orderMap = new Map(allOrders.map((o) => [o.id, o]));
-    const splitGroup = `split_${Date.now()}_${tabId.slice(0, 8)}`;
-    const bills = [];
-
-    for (const allocation of allocations) {
-      let subtotal = 0;
-      for (const oid of allocation.order_ids) {
-        const order = orderMap.get(oid);
-        // Never charge a declined/cancelled item on a split.
-        if (order && isBillable(order.order_status)) {
-          subtotal += order.subtotal_kobo;
-        }
-      }
-      if (subtotal === 0) continue;
-
-      bills.push(
-        await this.billRepository.save(
-          this.billRepository.create({
-            tab_id: tabId,
-            split_group: splitGroup,
-            subtotal_kobo: subtotal,
-            service_charge_kobo: 0,
-            tax_kobo: 0,
-            discount_kobo: 0,
-            total_kobo: subtotal,
-            payment_status: 'pending',
-            issued_by: userId,
-          }),
-        ),
-      );
-    }
-
-    await this.tabRepository.update(tabId, { status: 'billed' });
-
-    // Emit real-time events
-    this.realtimeService.emitBillUpdate(tab.branch_id, tabId, {
-      status: 'billed',
-      splitBills: bills,
-    });
-    this.realtimeService.emitDashboardUpdate(tab.branch_id, {
-      type: 'bill_split',
-      tabId,
-      splitBills: bills,
-    });
-
-    return bills;
-  }
-
-  async createPaymentPlan(
-    tabId: string,
-    branchId: string,
-    userId: string,
-    userRole: string,
-    dto: any,
-  ) {
-    const tab = await this.tabRepository.findOne({ where: { id: tabId } });
-    if (!tab) throw new NotFoundException('Tab not found');
-    if (tab.branch_id !== branchId)
-      throw new ForbiddenException('Tab does not belong to your branch');
-
-    const allOrders = await this.orderRepository.find({
-      where: { tab_id: tabId },
-    });
-    const orderMap = new Map(allOrders.map((o) => [o.id, o]));
-    const billableOrders = allOrders.filter((o) => isBillable(o.order_status));
-
-    const subtotalKobo = billableOrders.reduce(
-      (sum, o) => sum + o.subtotal_kobo,
-      0,
-    );
-
-    // Guests collectively cover the FULL tab amount. If a live main bill exists
-    // its total (service charge/VAT/discount included) is the budget; otherwise
-    // fall back to the raw order subtotal. Shares are computed on the subtotal
-    // basis and then scaled up to the budget so the surcharges are shared
-    // proportionally and the plan always balances with the amount shown to the
-    // cashier — otherwise an item-based split would leave charges uncollected.
-    const mainBill = await this.billRepository.findOne({
-      where: { tab_id: tabId, split_group: IsNull(), voided_at: IsNull() },
-      order: { created_at: 'DESC' },
-    });
-    const budgetKobo =
-      typeof mainBill?.total_kobo === 'number' && mainBill.total_kobo >= 0
-        ? mainBill.total_kobo
-        : subtotalKobo;
-
-    const splitGroup = `plan_${Date.now()}_${tabId.slice(0, 8)}`;
-    const bills = [];
-    const allocationTotals: { alloc: any; baseKobo: number }[] = [];
-    let remainingSubtotal = subtotalKobo;
-
-    for (let i = 0; i < dto.allocations.length; i++) {
-      const alloc = dto.allocations[i];
-      let amountKobo = 0;
-
-      switch (alloc.type) {
-        case AllocationType.ITEM: {
-          for (const oid of alloc.order_ids || []) {
-            const order = orderMap.get(oid);
-            if (order && isBillable(order.order_status)) {
-              amountKobo += order.subtotal_kobo;
-            }
-          }
-          break;
-        }
-        case AllocationType.AMOUNT: {
-          amountKobo = alloc.amount_kobo || 0;
-          break;
-        }
-        case AllocationType.PERCENTAGE: {
-          amountKobo = Math.round(
-            (subtotalKobo * (alloc.percentage || 0)) / 100,
-          );
-          break;
-        }
-        case AllocationType.REMAINING: {
-          amountKobo = remainingSubtotal;
-          break;
-        }
-      }
-
-      amountKobo = Math.min(amountKobo, remainingSubtotal);
-      if (amountKobo <= 0) continue;
-      remainingSubtotal -= amountKobo;
-      allocationTotals.push({ alloc, baseKobo: amountKobo });
-    }
-
-    // Largest-remainder scaling to the budget keeps the kobo sum exact.
-    const scaleK =
-      subtotalKobo > 0 && allocationTotals.length > 0
-        ? budgetKobo / subtotalKobo
-        : 0;
-    const scaled = allocationTotals.map((a) =>
-      Math.floor(a.baseKobo * scaleK + 0.000001),
-    );
-    const scaleRemainder =
-      budgetKobo - scaled.reduce((s, v) => s + v, 0);
-    for (let i = 0; i < scaleRemainder; i++) {
-      scaled[(i * 7) % scaled.length] += 1;
-    }
-
-    for (let i = 0; i < allocationTotals.length; i++) {
-      const { alloc, baseKobo } = allocationTotals[i];
-      const amountKobo = scaled[i];
-      if (amountKobo <= 0) continue;
-
-      const bill = await this.billRepository.save(
-        this.billRepository.create({
-          tab_id: tabId,
-          split_group: splitGroup,
-          sequence: i,
-          allocation_type: alloc.type,
-          allocation_config: alloc,
-          subtotal_kobo: baseKobo,
-          service_charge_kobo: 0,
-          tax_kobo: 0,
-          discount_kobo: 0,
-          total_kobo: amountKobo,
-          payment_status: 'pending',
-          issued_by: userId,
-        }),
-      );
-      bills.push(bill);
-    }
-
-    await this.tabRepository.update(tabId, { status: 'billed' });
-
-    this.realtimeService.emitBillUpdate(tab.branch_id, tabId, {
-      status: 'billed',
-      splitBills: bills,
-    });
-    this.realtimeService.emitDashboardUpdate(tab.branch_id, {
-      type: 'payment_plan_created',
-      tabId,
-      splitBills: bills,
-    });
-
-    return bills;
-  }
-
-  async recalculatePlan(tabId: string, branchId: string, paidBillId: string) {
-    const tab = await this.tabRepository.findOne({ where: { id: tabId } });
-    if (!tab) throw new NotFoundException('Tab not found');
-    if (tab.branch_id !== branchId)
-      throw new ForbiddenException('Tab does not belong to your branch');
-
-    const allBills = await this.billRepository.find({
-      where: { tab_id: tabId, split_group: Not(IsNull()) },
-      order: { sequence: 'ASC' },
-    });
-
-    const paidBill = allBills.find((b) => b.id === paidBillId);
-    if (!paidBill || !paidBill.split_group) return [];
-
-    const groupBills = allBills.filter(
-      (b) => b.split_group === paidBill.split_group && !b.paid_at,
-    );
-
-    const paidBills = allBills.filter(
-      (b) => b.split_group === paidBill.split_group && b.paid_at,
-    );
-    const paidTotal = paidBills.reduce((sum, b) => sum + (b.payment_amount_kobo || b.total_kobo), 0);
-
-    const allOrders = await this.orderRepository.find({ where: { tab_id: tabId } });
-    const orderMap = new Map(allOrders.map((o) => [o.id, o]));
-
-    // The group's recoverable headroom is the sum of every share ever planned
-    // (paid + still-pending) — NOT the live order subtotal. Plans are built over
-    // the full tab total (service charge/VAT included), so recomputing from the
-    // order subtotal after a partial settlement would re-introduce a stale
-    // balance for the remaining guests.
-    const totalKobo = allBills
-      .filter((b) => b.split_group === paidBill.split_group)
-      .reduce((sum, b) => sum + (b.total_kobo ?? 0), 0);
-
-    let remaining = totalKobo - paidTotal;
-
-    const updated = [];
-    for (const bill of groupBills) {
-      if (remaining <= 0) {
-        bill.total_kobo = 0;
-        bill.subtotal_kobo = 0;
-        await this.billRepository.save(bill);
-        updated.push(bill);
-        continue;
-      }
-
-      let amount = 0;
-      const config = bill.allocation_config as any;
-
-      if (config?.type === AllocationType.REMAINING || !config) {
-        amount = remaining;
-      } else if (config.type === AllocationType.PERCENTAGE) {
-        amount = Math.round((totalKobo * (config.percentage || 0)) / 100);
-      } else if (config.type === AllocationType.AMOUNT) {
-        amount = config.amount_kobo || 0;
-      } else if (config.type === AllocationType.ITEM) {
-        for (const oid of config.order_ids || []) {
-          const order = orderMap.get(oid);
-          if (order && isBillable(order.order_status)) {
-            amount += order.subtotal_kobo;
-          }
-        }
-      }
-
-      amount = Math.min(amount, remaining);
-      bill.total_kobo = amount;
-      bill.subtotal_kobo = amount;
-      await this.billRepository.save(bill);
-      remaining -= amount;
-      updated.push(bill);
-    }
-
-    return updated;
-  }
-
-  async getSplitBills(tabId: string, branchId: string) {
-    const tab = await this.tabRepository.findOne({ where: { id: tabId } });
-    if (!tab) throw new NotFoundException('Tab not found');
-    if (tab.branch_id !== branchId)
-      throw new ForbiddenException('Tab does not belong to your branch');
-
-    return this.billRepository.find({
-      where: { tab_id: tabId },
-      order: { created_at: 'ASC' },
-    });
-  }
-
-  async processSplitPayment(
-    tabId: string,
-    billId: string,
-    branchId: string,
-    userId: string,
-    userRole: string,
-    paymentDto: ProcessPaymentDto,
-  ) {
-    const tab = await this.tabRepository.findOne({ where: { id: tabId } });
-    if (!tab) throw new NotFoundException('Tab not found');
-    if (tab.branch_id !== branchId)
-      throw new ForbiddenException('Tab does not belong to your branch');
-
-    const bill = await this.billRepository.findOne({
-      where: { id: billId, tab_id: tabId },
-    });
-    if (!bill) throw new NotFoundException('Split bill not found');
-    if (bill.paid_at)
-      throw new BadRequestException('This split bill is already paid');
-
-    // Same payment gate as full settlement: no undelivered billable orders may be
-    // outstanding when a split is being settled (declined/cancelled excluded,
-    // prepaid-takeaway held orders exempt).
-    const openOrders = await this.orderRepository.find({
-      where: { tab_id: tabId },
-    });
-    const blockingOrders = openOrders.filter((o) =>
-      statusBlocksPayment(o.order_status),
-    );
-    if (blockingOrders.length > 0) {
-      throw new ConflictException(
-        'Complete delivery of all orders before proceeding to payment. ' +
-          `Undelivered item(s): ${blockingOrders
-            .map((o) => o.menu_item_id.slice(0, 8))
-            .join(', ')}`,
-      );
-    }
-
-    if (paymentDto.idempotency_key) {
-      const dup = await this.billRepository.findOne({
-        where: { idempotency_key: paymentDto.idempotency_key },
-      });
-      if (dup?.paid_at) return dup;
-    }
-
-    bill.payment_method = paymentDto.method;
-    bill.payment_amount_kobo = paymentDto.amount;
-    if (paymentDto.reference) bill.payment_reference = paymentDto.reference;
-    if (paymentDto.terminal_id) bill.terminal_id = paymentDto.terminal_id;
-    if (paymentDto.idempotency_key)
-      bill.idempotency_key = paymentDto.idempotency_key;
-    bill.paid_at = new Date();
-    bill.payment_status = 'paid';
-    const saved = await this.billRepository.save(bill);
-
-    if (bill.split_group) {
-      await this.recalculatePlan(tabId, branchId, bill.id);
-    }
-
-    const allBills = await this.billRepository.find({
-      where: { tab_id: tabId },
-    });
-    const splitBills = allBills.filter((b) => b.split_group);
-    const anyPaid = allBills.some((b) => b.paid_at);
-    const allSplitPaid =
-      splitBills.length > 0 && splitBills.every((b) => b.paid_at);
-
-    if (allSplitPaid) {
-      // Every guest share has been collected — close the tab. Any standalone
-      // main bill still pending is a stale artifact of an earlier generate;
-      // void it so it can never be settled later or double-counted in revenue.
-      await this.billRepository.update(
-        {
-          tab_id: tabId,
-          split_group: IsNull(),
-          paid_at: IsNull(),
-          voided_at: IsNull(),
-        },
-        { voided_at: new Date() },
-      );
-      const tab = await this.tabRepository.findOne({ where: { id: tabId } });
-      if (tab) {
-        await this.tabRepository.update(tabId, {
-          status: 'paid',
-          closed_at: new Date(),
-          cashier_id: userId,
-        });
-        if (tab.table_id) {
-          const splitTable = await this.tableRepository.findOne({
-            where: { id: tab.table_id },
-          });
-          if (splitTable && !splitTable.is_virtual) {
-            await this.tableRepository.update(tab.table_id, {
-              status: TableStatus.AVAILABLE,
-            });
-          }
-        }
-        this.realtimeService.emitBillUpdate(tab.branch_id, tabId, {
-          status: 'paid',
-          bill: saved,
-        });
-        this.realtimeService.emitDashboardUpdate(tab.branch_id, {
-          type: 'payment_received',
-          tabId,
-          bill: saved,
-        });
-        getPublicServer()?.to(`tab:${tabId}`).emit('paymentConfirmed', {
-          tabId,
-          status: 'paid',
-        });
-      }
-    } else {
-      // A partial split settlement keeps the tab open; surface the refreshed
-      // splits and the remaining balance to live dashboard/waiter views.
-      this.realtimeService.emitBillUpdate(tab.branch_id, tabId, {
-        status: 'billed',
-        splitBills: allBills,
-        bill: saved,
-      });
-      this.realtimeService.emitDashboardUpdate(tab.branch_id, {
-        type: 'split_payment_received',
-        tabId,
-        bill: saved,
-        splitBills: allBills,
-      });
-      if (!anyPaid) {
-        await this.tabRepository.update(tabId, { status: 'billed' });
-      }
-    }
-
-    return saved;
-  }
-
   async getReceipt(tabId: string, branchId: string) {
     const tab = await this.tabRepository.findOne({ where: { id: tabId } });
     if (!tab) throw new NotFoundException('Tab not found');
     if (tab.branch_id !== branchId)
       throw new ForbiddenException('Tab does not belong to your branch');
 
-    return this.buildReceiptData(tabId);
+    return this.buildReceiptData({ tabId });
   }
 
   async getReceiptPdf(tabId: string, branchId: string): Promise<Buffer> {
@@ -1127,7 +764,7 @@ export class BillService {
     if (tab.branch_id !== branchId)
       throw new ForbiddenException('Tab does not belong to your branch');
 
-    const data = await this.buildReceiptData(tabId);
+    const data = await this.buildReceiptData({ tabId });
     if (!data) throw new NotFoundException('Bill not found');
     return this.receiptService.generatePdf(data);
   }

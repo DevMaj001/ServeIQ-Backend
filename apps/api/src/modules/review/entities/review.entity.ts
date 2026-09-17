@@ -20,7 +20,11 @@ export class Review {
   branch_id?: string | null;
 
   @Column({ type: 'uuid' })
-  tab_id: string;
+  tab_id: string | null;
+
+  @Index()
+  @Column({ type: 'varchar', length: 12, nullable: true })
+  tracking_code: string | null;
 
   @Column({ type: 'int' })
   rating: number;

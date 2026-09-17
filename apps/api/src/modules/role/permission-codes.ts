@@ -74,6 +74,13 @@ export const PERMISSIONS = {
   MANAGE_RESERVATIONS: 'manage_reservations',
   VIEW_FEEDBACK: 'view_feedback',
 
+  // Deliveries / Riders
+  MANAGE_RIDERS: 'manage_riders',
+  VIEW_RIDERS: 'view_riders',
+  ACCEPT_DELIVERY: 'accept_delivery',
+  COMPLETE_DELIVERY: 'complete_delivery',
+  VIEW_DELIVERIES: 'view_deliveries',
+
   // System
   MANAGE_SUBSCRIPTION: 'manage_subscription',
   PAYMENT_GATEWAY: 'payment_gateway',

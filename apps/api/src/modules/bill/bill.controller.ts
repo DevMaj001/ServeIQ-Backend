@@ -26,11 +26,6 @@ import {
 import { ProcessPaymentDto } from './dto/process-payment.dto';
 import { GenerateBillDto } from './dto/generate-bill.dto';
 import { ApplyDiscountDto } from './dto/apply-discount.dto';
-import {
-  BillSplitEvenlyDto,
-  BillSplitByItemDto,
-  CreatePaymentPlanDto,
-} from './dto/split-bill.dto';
 
 @ApiTags('Bills')
 @ApiBearerAuth('access-token')
@@ -41,12 +36,7 @@ export class BillController {
 
   @Post('tab/:tabId/generate')
   @UseGuards(RolesGuard)
-  @Roles(
-    UserRole.WAITER,
-    UserRole.SUPERVISOR,
-    UserRole.MANAGER,
-    UserRole.OWNER,
-  )
+  @Roles(UserRole.WAITER, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.OWNER)
   @ApiOperation({ summary: 'Generate a bill for an open tab' })
   @ApiParam({
     name: 'tabId',
@@ -131,10 +121,7 @@ export class BillController {
   @ApiParam({ name: 'tabId', description: 'Tab UUID' })
   @ApiResponse({ status: 200, description: 'Cash confirmed, order released.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
-  async confirmCash(
-    @Param('tabId') tabId: string,
-    @Request() req: any,
-  ) {
+  async confirmCash(@Param('tabId') tabId: string, @Request() req: any) {
     return this.billService.confirmCashPayment(
       tabId,
       req.user.branchId,
@@ -143,125 +130,25 @@ export class BillController {
     );
   }
 
-  @Post('tab/:tabId/split-evenly')
+  @Post('tab/:tabId/remove-cash-request')
   @UseGuards(RolesGuard)
-  @Roles(
-    UserRole.WAITER,
-    UserRole.CASHIER,
-    UserRole.SUPERVISOR,
-    UserRole.MANAGER,
-    UserRole.OWNER,
-  )
-  @ApiOperation({ summary: 'Split the bill evenly among N ways' })
-  @ApiParam({ name: 'tabId' })
-  @ApiResponse({ status: 200, description: 'OK' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async splitEvenly(
-    @Param('tabId') tabId: string,
-    @Request() req: any,
-    @Body() dto: BillSplitEvenlyDto,
-  ) {
-    return this.billService.splitEvenly(
-      tabId,
-      req.user.branchId,
-      req.user.userId,
-      req.user.role,
-      dto.splits,
-    );
-  }
-
-  @Post('tab/:tabId/split-by-item')
-  @UseGuards(RolesGuard)
-  @Roles(
-    UserRole.WAITER,
-    UserRole.CASHIER,
-    UserRole.SUPERVISOR,
-    UserRole.MANAGER,
-    UserRole.OWNER,
-  )
-  @ApiOperation({ summary: 'Split the bill by assigning items to each split' })
-  @ApiParam({ name: 'tabId' })
-  @ApiResponse({ status: 200, description: 'OK' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async splitByItem(
-    @Param('tabId') tabId: string,
-    @Request() req: any,
-    @Body() dto: BillSplitByItemDto,
-  ) {
-    return this.billService.splitByItem(
-      tabId,
-      req.user.branchId,
-      req.user.userId,
-      req.user.role,
-      dto.allocations,
-    );
-  }
-
-  @Post('tab/:tabId/payment-plan')
-  @UseGuards(RolesGuard)
-  @Roles(
-    UserRole.WAITER,
-    UserRole.CASHIER,
-    UserRole.SUPERVISOR,
-    UserRole.MANAGER,
-    UserRole.OWNER,
-  )
+  @Roles(UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.OWNER)
   @ApiOperation({
-    summary: 'Create a payment plan with ordered allocations (auto-recalculates on each payment)',
+    summary:
+      'Supervisor removes/clears a pending-cash request (customer abandoned or spammed), voids the awaiting-cash bill and releases held orders back to pending.',
   })
-  @ApiParam({ name: 'tabId' })
-  @ApiResponse({ status: 201, description: 'Payment plan created.' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async createPaymentPlan(
-    @Param('tabId') tabId: string,
-    @Request() req: any,
-    @Body() dto: CreatePaymentPlanDto,
-  ) {
-    return this.billService.createPaymentPlan(
+  @ApiParam({ name: 'tabId', description: 'Tab UUID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Cash request removed, orders released.',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized.' })
+  @ApiResponse({ status: 400, description: 'Tab already paid.' })
+  async removeCashRequest(@Param('tabId') tabId: string, @Request() req: any) {
+    return this.billService.removeCashRequest(
       tabId,
       req.user.branchId,
       req.user.userId,
-      req.user.role,
-      dto,
-    );
-  }
-
-  @Get('tab/:tabId/splits')
-  @ApiOperation({ summary: 'Get all split bills for a tab' })
-  @ApiParam({ name: 'tabId' })
-  @ApiResponse({ status: 200, description: 'OK' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getSplitBills(@Param('tabId') tabId: string, @Request() req: any) {
-    return this.billService.getSplitBills(tabId, req.user.branchId);
-  }
-
-  @Post('tab/:tabId/splits/:billId/pay')
-  @UseGuards(RolesGuard)
-  @Roles(
-    UserRole.WAITER,
-    UserRole.CASHIER,
-    UserRole.SUPERVISOR,
-    UserRole.MANAGER,
-    UserRole.OWNER,
-  )
-  @ApiOperation({ summary: 'Pay an individual split bill' })
-  @ApiParam({ name: 'tabId' })
-  @ApiParam({ name: 'billId' })
-  @ApiResponse({ status: 200, description: 'OK' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async paySplit(
-    @Param('tabId') tabId: string,
-    @Param('billId') billId: string,
-    @Request() req: any,
-    @Body() paymentDto: ProcessPaymentDto,
-  ) {
-    return this.billService.processSplitPayment(
-      tabId,
-      billId,
-      req.user.branchId,
-      req.user.userId,
-      req.user.role,
-      paymentDto,
     );
   }
 

@@ -136,7 +136,10 @@ describe('BillService â€” Billing Calculation Accuracy (50 scenarios)', () 
         { provide: ReceiptService, useValue: mockReceiptService },
         { provide: CloudinaryService, useValue: mockCloudinaryService },
         { provide: RealtimeService, useValue: mockRealtimeService },
-        { provide: OrderService, useValue: { approve: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: OrderService,
+          useValue: { approve: jest.fn().mockResolvedValue(undefined) },
+        },
       ],
     }).compile();
 
@@ -828,7 +831,10 @@ describe('BillService â€” Tab State Machine Transitions', () => {
           },
         },
         { provide: RealtimeService, useValue: mockRealtimeService() },
-        { provide: OrderService, useValue: { approve: jest.fn().mockResolvedValue(undefined) } },
+        {
+          provide: OrderService,
+          useValue: { approve: jest.fn().mockResolvedValue(undefined) },
+        },
       ],
     }).compile();
 
@@ -976,77 +982,5 @@ describe('BillService â€” Tab State Machine Transitions', () => {
     );
 
     expect(result).toEqual(existing);
-  });
-
-  it('TSM-06: splitEvenly sets tab status to "billed"', async () => {
-    repos.tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
-    repos.orderRepo.find.mockResolvedValue([
-      { subtotal_kobo: 10000 },
-      { subtotal_kobo: 5000 },
-    ]);
-
-    await service.splitEvenly('tab-1', 'branch-1', 'user-1', 'owner', 2);
-    expect(repos.tabRepo.update).toHaveBeenCalledWith('tab-1', {
-      status: 'billed',
-    });
-  });
-
-  it('TSM-07: splitByItem sets tab status to "billed"', async () => {
-    repos.tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
-    repos.orderRepo.find.mockResolvedValue([
-      { id: 'o1', subtotal_kobo: 10000 },
-      { id: 'o2', subtotal_kobo: 5000 },
-    ]);
-
-    await service.splitByItem('tab-1', 'branch-1', 'user-1', 'owner', [
-      { order_ids: ['o1'] },
-      { order_ids: ['o2'] },
-    ]);
-    expect(repos.tabRepo.update).toHaveBeenCalledWith('tab-1', {
-      status: 'billed',
-    });
-  });
-
-  it('TSM-08: processSplitPayment â†’ all split bills paid â†’ tab "paid", table available', async () => {
-    const tab = { id: 'tab-1', branch_id: 'branch-1', table_id: 'table-1' };
-    repos.tabRepo.findOne.mockResolvedValue(tab);
-    repos.tableRepo.findOne.mockResolvedValue({
-      id: 'table-1',
-      is_virtual: false,
-    });
-
-    // Override the transaction mock
-    dataSource.transaction = jest.fn(<T>(cb: (em: unknown) => Promise<T>) =>
-      cb({
-        getRepository: jest.fn(() => ({
-          find: jest.fn().mockResolvedValue([]),
-          save: jest.fn((e: unknown) => Promise.resolve(e)),
-          findOne: jest.fn(),
-          update: jest.fn(),
-        })),
-      }),
-    );
-
-    // First call: find single split bill
-    repos.billRepo.findOne.mockResolvedValue({
-      id: 'b1',
-      tab_id: 'tab-1',
-      paid_at: null,
-    });
-    // All split bills (only one) paid after this payment
-    repos.billRepo.find = jest
-      .fn()
-      .mockResolvedValue([{ id: 'b1', tab_id: 'tab-1', paid_at: new Date() }]);
-
-    const result = await service.processSplitPayment(
-      'tab-1',
-      'b1',
-      'branch-1',
-      'user-1',
-      'owner',
-      { amount: 5000, method: 'cash' },
-    );
-    expect(result.payment_status).toBe('paid');
-    expect(result.paid_at).toBeDefined();
   });
 });

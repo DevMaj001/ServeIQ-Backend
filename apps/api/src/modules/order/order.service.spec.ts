@@ -1,4 +1,6 @@
 import { OrderService } from './order.service';
+import { Bill } from '../bill/entities/bill.entity';
+import { In, IsNull } from 'typeorm';
 import { OrderStatus } from '../../common/shared';
 
 const mockRealtimeService = () => ({
@@ -6,6 +8,10 @@ const mockRealtimeService = () => ({
   emitOrderUpdated: jest.fn(),
   emitOrderStatusChange: jest.fn(),
   emitDashboardUpdate: jest.fn(),
+});
+
+const mockDeliveryService = () => ({
+  ensureOnOrdersReady: jest.fn().mockResolvedValue(undefined),
 });
 
 describe('OrderService', () => {
@@ -48,6 +54,19 @@ describe('OrderService', () => {
     query: jest.fn(),
   });
 
+  const mockBillRepository = () => {
+    const qb = {
+      update: jest.fn().mockReturnThis(),
+      set: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue(undefined),
+    };
+    return {
+      createQueryBuilder: jest.fn(() => qb),
+    };
+  };
+
   const mockIngredientService = () => ({
     deductByTab: jest.fn().mockResolvedValue(undefined),
   });
@@ -68,6 +87,13 @@ describe('OrderService', () => {
         create: jest.fn((dto) => dto),
         save: jest.fn(async (order) => ({ ...order, id: 'order-1' })),
         findOne: jest.fn(),
+        createQueryBuilder: jest.fn(() => ({
+          update: jest.fn().mockReturnThis(),
+          set: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          andWhere: jest.fn().mockReturnThis(),
+          execute: jest.fn().mockResolvedValue(undefined),
+        })),
       }),
     };
   });
@@ -88,6 +114,8 @@ describe('OrderService', () => {
     const notificationService =
       overrides.notificationService ?? mockNotificationService();
     const realtimeService = overrides.realtimeService ?? mockRealtimeService();
+    const billRepository = overrides.billRepository ?? mockBillRepository();
+    const deliveryService = overrides.deliveryService ?? mockDeliveryService();
 
     return new OrderService(
       orderRepo,
@@ -97,11 +125,13 @@ describe('OrderService', () => {
       branchRepo,
       businessRepo,
       deptRepo,
+      billRepository,
       dataSource,
       ingredientService,
       auditService,
       notificationService,
       realtimeService,
+      deliveryService,
     );
   };
 
@@ -228,6 +258,13 @@ describe('OrderService', () => {
               create: jest.fn((dto) => dto),
               save: jest.fn(async (order) => ({ ...order, id: 'order-1' })),
               findOne: jest.fn(),
+              createQueryBuilder: jest.fn(() => ({
+                update: jest.fn().mockReturnThis(),
+                set: jest.fn().mockReturnThis(),
+                where: jest.fn().mockReturnThis(),
+                andWhere: jest.fn().mockReturnThis(),
+                execute: jest.fn().mockResolvedValue(undefined),
+              })),
             },
           };
           if (entity?.name === 'Table') return repos.table;
@@ -288,6 +325,13 @@ describe('OrderService', () => {
               create: jest.fn((dto) => dto),
               save: jest.fn(async (order) => ({ ...order, id: 'order-1' })),
               findOne: jest.fn(),
+              createQueryBuilder: jest.fn(() => ({
+                update: jest.fn().mockReturnThis(),
+                set: jest.fn().mockReturnThis(),
+                where: jest.fn().mockReturnThis(),
+                andWhere: jest.fn().mockReturnThis(),
+                execute: jest.fn().mockResolvedValue(undefined),
+              })),
             },
           };
           if (entity?.name === 'Table') return repos.table;
@@ -380,6 +424,13 @@ describe('OrderService', () => {
         create: jest.fn((dto) => dto),
         save: jest.fn(async (order) => ({ ...order, id: 'order-1' })),
         findOne: jest.fn(),
+        createQueryBuilder: jest.fn(() => ({
+          update: jest.fn().mockReturnThis(),
+          set: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          andWhere: jest.fn().mockReturnThis(),
+          execute: jest.fn().mockResolvedValue(undefined),
+        })),
       });
 
       const service = buildService({
@@ -423,6 +474,13 @@ describe('OrderService', () => {
         create: jest.fn((dto) => dto),
         save: jest.fn(async (order) => ({ ...order, id: 'order-1' })),
         findOne: jest.fn(),
+        createQueryBuilder: jest.fn(() => ({
+          update: jest.fn().mockReturnThis(),
+          set: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          andWhere: jest.fn().mockReturnThis(),
+          execute: jest.fn().mockResolvedValue(undefined),
+        })),
       });
 
       const service = buildService({
@@ -467,6 +525,13 @@ describe('OrderService', () => {
         create: jest.fn((dto) => dto),
         save: jest.fn(async (order) => ({ ...order, id: 'order-1' })),
         findOne: jest.fn(),
+        createQueryBuilder: jest.fn(() => ({
+          update: jest.fn().mockReturnThis(),
+          set: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          andWhere: jest.fn().mockReturnThis(),
+          execute: jest.fn().mockResolvedValue(undefined),
+        })),
       });
 
       const service = buildService({
@@ -487,6 +552,205 @@ describe('OrderService', () => {
       expect(result[0].order_status).toBe(
         OrderStatus.PENDING_SUPERVISOR_APPROVAL,
       );
+    });
+
+    it('bypasses supervisor and dispatches to the department when branch kds_enabled', async () => {
+      const tabRepo = mockTabRepository();
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        status: 'open',
+      });
+
+      const menuRepo = mockMenuRepository();
+      menuRepo.find.mockResolvedValue([
+        {
+          id: 'menu-1',
+          name: 'Jollof Rice',
+          price_kobo: 5000,
+          track_stock: false,
+          prep_type: 'cook',
+          prep_time_seconds: 900,
+        },
+      ]);
+
+      const kdsManager: any = {
+        getRepository: jest.fn().mockReturnValue({
+          create: jest.fn((dto) => dto),
+          save: jest.fn(async (order) => ({ ...order, id: 'order-1' })),
+          findOne: jest.fn(({ where }: any) =>
+            where.id === 'branch-1'
+              ? Promise.resolve({
+                  id: 'branch-1',
+                  settings: {
+                    feature_flags: { kds_enabled: true },
+                    kds_default_department_id: 'dept-default',
+                  },
+                })
+              : Promise.resolve({ status: 'open' }),
+          ),
+          createQueryBuilder: jest.fn(() => ({
+            update: jest.fn().mockReturnThis(),
+            set: jest.fn().mockReturnThis(),
+            where: jest.fn().mockReturnThis(),
+            andWhere: jest.fn().mockReturnThis(),
+            execute: jest.fn().mockResolvedValue(undefined),
+          })),
+        }),
+      };
+
+      const service = buildService({
+        tabRepository: tabRepo,
+        menuRepository: menuRepo,
+        dataSource: {
+          transaction: jest.fn(async (cb) => cb(kdsManager)),
+          query: jest.fn(),
+        },
+      });
+
+      const result = await service.addOrderItems(
+        'tab-1',
+        [
+          {
+            menu_item_id: 'menu-1',
+            quantity: 1,
+            department: 'dept-1',
+            estimated_preparation_time_seconds: 600,
+          },
+        ],
+        'user-1',
+      );
+
+      expect(result[0].order_status).toBe(OrderStatus.ASSIGNED_TO_DEPARTMENT);
+      expect(result[0].assigned_department).toBe('dept-1');
+      expect(result[0].estimated_preparation_time_seconds).toBe(600);
+    });
+
+    it('falls back to the branch default department and menu prep time', async () => {
+      const tabRepo = mockTabRepository();
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        status: 'open',
+      });
+
+      const menuRepo = mockMenuRepository();
+      menuRepo.find.mockResolvedValue([
+        {
+          id: 'menu-1',
+          name: 'Jollof Rice',
+          price_kobo: 5000,
+          track_stock: false,
+          prep_type: 'cook',
+          prep_time_seconds: 900,
+        },
+      ]);
+
+      const kdsManager: any = {
+        getRepository: jest.fn().mockReturnValue({
+          create: jest.fn((dto) => dto),
+          save: jest.fn(async (order) => ({ ...order, id: 'order-1' })),
+          findOne: jest.fn(({ where }: any) =>
+            where.id === 'branch-1'
+              ? Promise.resolve({
+                  id: 'branch-1',
+                  settings: {
+                    feature_flags: { kds_enabled: true },
+                    kds_default_department_id: 'dept-default',
+                  },
+                })
+              : Promise.resolve({ status: 'open' }),
+          ),
+          createQueryBuilder: jest.fn(() => ({
+            update: jest.fn().mockReturnThis(),
+            set: jest.fn().mockReturnThis(),
+            where: jest.fn().mockReturnThis(),
+            andWhere: jest.fn().mockReturnThis(),
+            execute: jest.fn().mockResolvedValue(undefined),
+          })),
+        }),
+      };
+
+      const service = buildService({
+        tabRepository: tabRepo,
+        menuRepository: menuRepo,
+        dataSource: {
+          transaction: jest.fn(async (cb) => cb(kdsManager)),
+          query: jest.fn(),
+        },
+      });
+
+      const result = await service.addOrderItems(
+        'tab-1',
+        [{ menu_item_id: 'menu-1', quantity: 1 }],
+        'user-1',
+      );
+
+      expect(result[0].order_status).toBe(OrderStatus.ASSIGNED_TO_DEPARTMENT);
+      expect(result[0].assigned_department).toBe('dept-default');
+      expect(result[0].estimated_preparation_time_seconds).toBe(900);
+    });
+
+    it('keeps the supervisor flow when kds_enabled is false', async () => {
+      const tabRepo = mockTabRepository();
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        status: 'open',
+      });
+
+      const menuRepo = mockMenuRepository();
+      menuRepo.find.mockResolvedValue([
+        {
+          id: 'menu-1',
+          name: 'Jollof Rice',
+          price_kobo: 5000,
+          track_stock: false,
+          prep_type: 'cook',
+        },
+      ]);
+
+      const nonKdsManager: any = {
+        getRepository: jest.fn().mockReturnValue({
+          create: jest.fn((dto) => dto),
+          save: jest.fn(async (order) => ({ ...order, id: 'order-1' })),
+          findOne: jest.fn(({ where }: any) =>
+            where.id === 'branch-1'
+              ? Promise.resolve({
+                  id: 'branch-1',
+                  settings: { feature_flags: { kds_enabled: false } },
+                })
+              : Promise.resolve({ status: 'open' }),
+          ),
+          createQueryBuilder: jest.fn(() => ({
+            update: jest.fn().mockReturnThis(),
+            set: jest.fn().mockReturnThis(),
+            where: jest.fn().mockReturnThis(),
+            andWhere: jest.fn().mockReturnThis(),
+            execute: jest.fn().mockResolvedValue(undefined),
+          })),
+        }),
+      };
+
+      const service = buildService({
+        tabRepository: tabRepo,
+        menuRepository: menuRepo,
+        dataSource: {
+          transaction: jest.fn(async (cb) => cb(nonKdsManager)),
+          query: jest.fn(),
+        },
+      });
+
+      const result = await service.addOrderItems(
+        'tab-1',
+        [{ menu_item_id: 'menu-1', quantity: 1 }],
+        'user-1',
+      );
+
+      expect(result[0].order_status).toBe(
+        OrderStatus.PENDING_SUPERVISOR_APPROVAL,
+      );
+      expect(result[0].assigned_department).toBeNull();
     });
   });
 
@@ -553,6 +817,32 @@ describe('OrderService', () => {
 
       expect(result.subtotal_kobo).toBe(15000);
     });
+
+    it('voids an active unpaid split plan after the order changes', async () => {
+      const orderRepo = mockOrderRepository();
+      orderRepo.findOne.mockResolvedValue({
+        id: 'o1',
+        tab_id: 'tab-1',
+        quantity: 2,
+        unit_price_kobo: 5000,
+        subtotal_kobo: 10000,
+        modifiers: [],
+      });
+      orderRepo.save.mockImplementation(async (o) => o);
+      const billRepository = mockBillRepository();
+
+      const service = buildService({
+        orderRepository: orderRepo,
+        billRepository,
+      });
+      await service.updateOrder('o1', { quantity: 3 });
+
+      const qb = billRepository.createQueryBuilder();
+      expect(qb.update).toHaveBeenCalledWith(Bill);
+      expect(qb.set).toHaveBeenCalledWith({ voided_at: expect.any(Date) });
+      expect(qb.andWhere).toHaveBeenCalledWith('split_group IS NOT NULL');
+      expect(qb.andWhere).toHaveBeenCalledWith('paid_at IS NULL');
+    });
   });
 
   describe('removeOrder', () => {
@@ -571,6 +861,25 @@ describe('OrderService', () => {
 
       expect(orderRepo.remove).toHaveBeenCalledWith(order);
       expect(result.message).toBe('Order item removed successfully');
+    });
+
+    it('voids an active unpaid split plan when an order is removed', async () => {
+      const orderRepo = mockOrderRepository();
+      orderRepo.findOne.mockResolvedValue({
+        id: 'o1',
+        tab_id: 'tab-1',
+        order_status: OrderStatus.PENDING_SUPERVISOR_APPROVAL,
+      });
+      orderRepo.remove.mockResolvedValue(undefined);
+      const billRepository = mockBillRepository();
+
+      const service = buildService({
+        orderRepository: orderRepo,
+        billRepository,
+      });
+      await service.removeOrder('o1');
+
+      expect(billRepository.createQueryBuilder).toHaveBeenCalled();
     });
   });
 
@@ -634,7 +943,7 @@ describe('OrderService', () => {
       expect(result.order_status).toBe(OrderStatus.APPROVED);
       expect(result.approved_by).toBe('user-1');
       expect(auditService.log).toHaveBeenCalled();
-        expect(notificationService.create).toHaveBeenCalledWith(
+      expect(notificationService.create).toHaveBeenCalledWith(
         expect.objectContaining({
           message: expect.stringContaining('Tracking: SVQ-ABCD-123'),
         }),
@@ -791,53 +1100,63 @@ describe('OrderService', () => {
 
   describe('bump', () => {
     it('bumps a preparing order to ready for pickup and notifies', async () => {
-      const orderRepo = mockOrderRepository();
-      orderRepo.findOne.mockResolvedValue({ id: 'o1', tab_id: 'tab-1' });
+      jest.useFakeTimers();
+      try {
+        const orderRepo = mockOrderRepository();
+        orderRepo.findOne.mockResolvedValue({ id: 'o1', tab_id: 'tab-1' });
 
-      const tabRepo = mockTabRepository();
-      tabRepo.findOne.mockResolvedValue({
-        id: 'tab-1',
-        branch_id: 'branch-1',
-        status: 'open',
-        waiter_id: 'waiter-1',
-        tracking_code: 'SVQ-ABCD-123',
-      });
+        const tabRepo = mockTabRepository();
+        tabRepo.findOne.mockResolvedValue({
+          id: 'tab-1',
+          branch_id: 'branch-1',
+          status: 'open',
+          waiter_id: 'waiter-1',
+          tracking_code: 'SVQ-ABCD-123',
+        });
 
-      const notificationService = mockNotificationService();
+        const notificationService = mockNotificationService();
 
-      const dataSource: any = {
-        transaction: jest.fn(async (cb) => {
-          const m = {
-            getRepository: jest.fn().mockReturnValue({
-              findOne: jest.fn().mockResolvedValue({
-                id: 'o1',
-                tab_id: 'tab-1',
-                order_status: OrderStatus.PREPARING,
+        const dataSource: any = {
+          transaction: jest.fn(async (cb) => {
+            const m = {
+              getRepository: jest.fn().mockReturnValue({
+                findOne: jest.fn().mockResolvedValue({
+                  id: 'o1',
+                  tab_id: 'tab-1',
+                  order_status: OrderStatus.PREPARING,
+                }),
+                save: jest.fn(async (order) => order),
               }),
-              save: jest.fn(async (order) => order),
-            }),
-          };
-          return cb(m);
-        }),
-      };
+            };
+            return cb(m);
+          }),
+        };
 
-      const service = buildService({
-        orderRepository: orderRepo,
-        tabRepository: tabRepo,
-        dataSource,
-        notificationService,
-      });
+        const service = buildService({
+          orderRepository: orderRepo,
+          tabRepository: tabRepo,
+          dataSource,
+          notificationService,
+        });
 
-      const result = await service.bump('o1', 'user-1');
+        const result = await service.bump('o1', 'user-1');
 
-      expect(result.order_status).toBe(OrderStatus.READY_FOR_PICKUP);
-      expect(result.actual_ready_time).toBeInstanceOf(Date);
-      expect(notificationService.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          user_id: 'waiter-1',
-          type: 'order_ready',
-        }),
-      );
+        expect(result.order_status).toBe(OrderStatus.READY_FOR_PICKUP);
+        expect(result.actual_ready_time).toBeInstanceOf(Date);
+
+        await jest.advanceTimersByTimeAsync(5000);
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(notificationService.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            user_id: 'waiter-1',
+            type: 'order_ready',
+          }),
+        );
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('throws when order is already terminal', async () => {
@@ -878,7 +1197,6 @@ describe('OrderService', () => {
       );
     });
   });
-
 
   describe('decline', () => {
     it('declines a pending order', async () => {
@@ -925,6 +1243,76 @@ describe('OrderService', () => {
       expect(result.declined_by).toBe('user-1');
       expect(result.decline_reason).toBe('Out of stock');
       expect(auditService.log).toHaveBeenCalled();
+    });
+  });
+
+  describe('findPendingCashByBranch', () => {
+    it('returns only orders whose tab has an active pending-cash bill', async () => {
+      const dataSource = {
+        query: jest.fn().mockResolvedValue([
+          { tabId: '11111111-1111-1111-1111-111111111111', totalKobo: 5000, items: [] },
+          { tabId: '22222222-2222-2222-2222-222222222222', totalKobo: 7000, items: [] },
+        ]),
+      };
+      const billRepository = {
+        find: jest.fn().mockResolvedValue([
+          {
+            tab_id: '11111111-1111-1111-1111-111111111111',
+            payment_status: 'pending_cash',
+            voided_at: null,
+          },
+        ]),
+      };
+
+      const service = buildService({ dataSource, billRepository });
+      const result = await service.findPendingCashByBranch('branch-1');
+
+      expect(billRepository.find).toHaveBeenCalledWith({
+        where: [
+          {
+            tab_id: In([
+              '11111111-1111-1111-1111-111111111111',
+              '22222222-2222-2222-2222-222222222222',
+            ]),
+            payment_status: 'pending_cash',
+            voided_at: IsNull(),
+          },
+        ],
+      });
+      expect(result).toHaveLength(1);
+      expect(result[0].tabId).toBe('11111111-1111-1111-1111-111111111111');
+    });
+
+    it('returns empty when a takeaway order is held without a cash choice', async () => {
+      const dataSource = {
+        query: jest
+          .fn()
+          .mockResolvedValue([{ tabId: 'tab-1', totalKobo: 5000, items: [] }]),
+      };
+      // Customer placed the order but has NOT committed to cash -> no cash bill.
+      const billRepository = {
+        find: jest.fn().mockResolvedValue([]),
+      };
+
+      const service = buildService({ dataSource, billRepository });
+      const result = await service.findPendingCashByBranch('branch-1');
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('returns empty immediately when there are no held orders', async () => {
+      const dataSource = {
+        query: jest.fn().mockResolvedValue([]),
+      };
+      const billRepository = {
+        find: jest.fn(),
+      };
+
+      const service = buildService({ dataSource, billRepository });
+      const result = await service.findPendingCashByBranch('branch-1');
+
+      expect(billRepository.find).not.toHaveBeenCalled();
+      expect(result).toEqual([]);
     });
   });
 

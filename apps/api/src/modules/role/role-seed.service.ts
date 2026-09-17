@@ -383,6 +383,38 @@ const ALL_PERMISSIONS: PermissionDef[] = [
     category: 'Customers',
   },
 
+  // Deliveries / Riders
+  {
+    code: PERMISSIONS.MANAGE_RIDERS,
+    name: 'Manage Riders',
+    description: 'Create, edit and remove delivery riders',
+    category: 'Deliveries',
+  },
+  {
+    code: PERMISSIONS.VIEW_RIDERS,
+    name: 'View Riders',
+    description: 'View the rider list',
+    category: 'Deliveries',
+  },
+  {
+    code: PERMISSIONS.ACCEPT_DELIVERY,
+    name: 'Accept Delivery',
+    description: 'Accept an available dispatch delivery',
+    category: 'Deliveries',
+  },
+  {
+    code: PERMISSIONS.COMPLETE_DELIVERY,
+    name: 'Complete Delivery',
+    description: 'Mark a delivery as handed to the customer',
+    category: 'Deliveries',
+  },
+  {
+    code: PERMISSIONS.VIEW_DELIVERIES,
+    name: 'View Deliveries',
+    description: 'View delivery dispatch history',
+    category: 'Deliveries',
+  },
+
   // System
   {
     code: PERMISSIONS.MANAGE_SUBSCRIPTION,
@@ -475,12 +507,15 @@ const DEFAULT_ROLES: RoleDef[] = [
       PERMISSIONS.VIEW_ANALYTICS,
       PERMISSIONS.VIEW_BRANCH_ANALYTICS,
       PERMISSIONS.VIEW_REPORTS,
-PERMISSIONS.VIEW_SHIFTS,
-PERMISSIONS.MANAGE_SHIFTS,
+      PERMISSIONS.VIEW_SHIFTS,
+      PERMISSIONS.MANAGE_SHIFTS,
       PERMISSIONS.MANAGE_DEVICES,
       PERMISSIONS.VIEW_POS,
       PERMISSIONS.VIEW_PULSE,
       PERMISSIONS.VIEW_PREMIUM_DASHBOARD,
+      PERMISSIONS.MANAGE_RIDERS,
+      PERMISSIONS.VIEW_RIDERS,
+      PERMISSIONS.VIEW_DELIVERIES,
       PERMISSIONS.VIEW_INVENTORY,
       PERMISSIONS.UPDATE_INVENTORY,
       PERMISSIONS.ADJUST_STOCK,
@@ -547,6 +582,17 @@ PERMISSIONS.MANAGE_SHIFTS,
       PERMISSIONS.REOPEN_INVOICE,
     ],
   },
+  {
+    name: 'Rider',
+    description: 'Delivers dispatch takeaway orders',
+    isSystem: true,
+    permissions: [
+      PERMISSIONS.ACCEPT_DELIVERY,
+      PERMISSIONS.COMPLETE_DELIVERY,
+      PERMISSIONS.VIEW_DELIVERIES,
+      PERMISSIONS.VIEW_TRACKING,
+    ],
+  },
 ];
 
 @Injectable()
@@ -563,26 +609,41 @@ export class RoleSeedService implements OnApplicationBootstrap {
   }
 
   async seed() {
-    const existing = await this.permissionRepo.count();
-    if (existing > 0) return;
+    // Idempotent: upsert missing permissions, then ensure every default role
+    // exists with its permissions. Previously this bailed out entirely when
+    // any permission row existed, which meant new roles (e.g. Rider) were
+    // never created on already-seeded production databases.
+    const existingPerms = (await this.permissionRepo.find()) ?? [];
+    const existingCodes = new Set(existingPerms.map((p) => p.code));
 
-    // Seed permissions
-    const permissionEntities = this.permissionRepo.create(
-      ALL_PERMISSIONS.map((p) => ({
-        code: p.code,
-        name: p.name,
-        description: p.description,
-        category: p.category,
-      })),
+    const missingPermissions = ALL_PERMISSIONS.filter(
+      (p) => !existingCodes.has(p.code),
     );
-    await this.permissionRepo.save(permissionEntities);
+    if (missingPermissions.length > 0) {
+      await this.permissionRepo.save(
+        this.permissionRepo.create(
+          missingPermissions.map((p) => ({
+            code: p.code,
+            name: p.name,
+            description: p.description,
+            category: p.category,
+          })),
+        ),
+      );
+    }
 
+    const allPermissions = (await this.permissionRepo.find()) ?? [];
     const codeToPermission = new Map(
-      permissionEntities.map((p) => [p.code, p]),
+      allPermissions.map((p) => [p.code, p]),
     );
 
-    // Seed roles
+    // Ensure every default role exists; leave pre-existing roles untouched.
     for (const def of DEFAULT_ROLES) {
+      const existingRole = await this.roleRepo.findOne({
+        where: { name: def.name },
+      });
+      if (existingRole) continue;
+
       const role = this.roleRepo.create({
         name: def.name,
         description: def.description,
@@ -594,6 +655,6 @@ export class RoleSeedService implements OnApplicationBootstrap {
       await this.roleRepo.save(role);
     }
 
-    console.log('[Seed] Permissions and default roles seeded successfully');
+    console.log('[Seed] Permissions and default roles are up to date');
   }
 }

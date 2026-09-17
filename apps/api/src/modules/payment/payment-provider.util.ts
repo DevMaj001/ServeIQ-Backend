@@ -23,13 +23,17 @@ export interface CustomerPaymentMethod {
 }
 
 export function getConfiguredProviders(settings: any): PaymentProviderConfig[] {
-  return Array.isArray(settings?.payment_providers) ? settings.payment_providers : [];
+  return Array.isArray(settings?.payment_providers)
+    ? settings.payment_providers
+    : [];
 }
 
 export function getActiveProvider(settings: any): PaymentProviderConfig | null {
   const active = settings?.payment_provider;
   if (!active || active === 'manual') return null;
-  return getConfiguredProviders(settings).find((p) => p?.name === active) || null;
+  return (
+    getConfiguredProviders(settings).find((p) => p?.name === active) || null
+  );
 }
 
 /** Providers the owner has enabled. Falls back to the legacy single
@@ -44,7 +48,9 @@ export function getEnabledProviders(settings: any): PaymentProviderConfig[] {
   return configured.filter((p) => enabledNames.includes(p?.name));
 }
 
-export function isProviderConfigured(provider?: PaymentProviderConfig | null): boolean {
+export function isProviderConfigured(
+  provider?: PaymentProviderConfig | null,
+): boolean {
   if (!provider) return false;
   const cfg = provider.config || {};
   if (provider.type === 'webhook') {
@@ -56,7 +62,9 @@ export function isProviderConfigured(provider?: PaymentProviderConfig | null): b
   return true;
 }
 
-export function providerTransferAccount(provider?: PaymentProviderConfig | null): string | null {
+export function providerTransferAccount(
+  provider?: PaymentProviderConfig | null,
+): string | null {
   if (!provider) return null;
   const cfg = provider.config || {};
   return cfg.account_number || cfg.accountNumber || cfg.account || null;
@@ -65,9 +73,11 @@ export function providerTransferAccount(provider?: PaymentProviderConfig | null)
 export function buildPaymentMethods(
   activeTerminals: PosTerminal[],
   settings: any,
+  allowCash: boolean = true,
 ): CustomerPaymentMethod[] {
   const enabledProviders = getEnabledProviders(settings);
-  const terminalProvider = enabledProviders.find((p) => p?.name === POS_TERMINAL_PROVIDER) || null;
+  const terminalProvider =
+    enabledProviders.find((p) => p?.name === POS_TERMINAL_PROVIDER) || null;
 
   const methods: CustomerPaymentMethod[] = activeTerminals.map((t) => ({
     type: 'terminal',
@@ -76,7 +86,9 @@ export function buildPaymentMethods(
     account_number: t.account_number || null,
     has_transfer: !!t.account_number,
     provider: POS_TERMINAL_PROVIDER,
-    auto_confirm: isEnabledProvider(settings, POS_TERMINAL_PROVIDER) && isProviderConfigured(terminalProvider),
+    auto_confirm:
+      isEnabledProvider(settings, POS_TERMINAL_PROVIDER) &&
+      isProviderConfigured(terminalProvider),
   }));
 
   // Every enabled webhook provider with a transfer account gets its own
@@ -102,12 +114,23 @@ export function buildPaymentMethods(
     });
   }
 
-  methods.push({ type: 'cash', requires_counter_confirmation: true });
+  // Dine-in can settle with cash at the counter. Takeaway / self-service orders
+  // are prepaid online, so cash is not offered there.
+  if (allowCash) {
+    methods.push({
+      type: 'cash',
+      label: 'Cash',
+      requires_counter_confirmation: true,
+    });
+  }
   return methods;
 }
 
 /** Whether a provider name is present in the branch's enabled list. */
-export function isEnabledProvider(settings: any, providerName: string): boolean {
+export function isEnabledProvider(
+  settings: any,
+  providerName: string,
+): boolean {
   const enabledNames: string[] = Array.isArray(settings?.enabled_providers)
     ? settings.enabled_providers
     : settings?.payment_provider && settings.payment_provider !== 'manual'

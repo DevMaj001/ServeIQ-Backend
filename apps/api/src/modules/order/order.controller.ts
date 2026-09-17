@@ -41,12 +41,7 @@ export class OrderController {
 
   @Post('tab/:tabId')
   @UseGuards(RolesGuard)
-  @Roles(
-    UserRole.WAITER,
-    UserRole.SUPERVISOR,
-    UserRole.MANAGER,
-    UserRole.OWNER,
-  )
+  @Roles(UserRole.WAITER, UserRole.SUPERVISOR, UserRole.MANAGER, UserRole.OWNER)
   @ApiOperation({
     summary:
       'Add order items to an open tab (creates as PENDING_SUPERVISOR_APPROVAL)',
@@ -125,6 +120,17 @@ export class OrderController {
   @ApiResponse({ status: 200, description: 'Ready for pickup orders list.' })
   async findReadyForPickup(@Request() req: any) {
     return this.orderService.findReadyForPickupByBranch(req.user.branchId);
+  }
+
+  @Get('pending-cash')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPERVISOR, UserRole.OWNER, UserRole.MANAGER, UserRole.WAITER)
+  @ApiOperation({
+    summary: 'Get held orders awaiting cash confirmation at the counter',
+  })
+  @ApiResponse({ status: 200, description: 'Pending cash orders list.' })
+  async findPendingCash(@Request() req: any) {
+    return this.orderService.findPendingCashByBranch(req.user.branchId);
   }
 
   @Get('tab/:tabId')
@@ -324,7 +330,10 @@ export class OrderController {
   })
   @ApiParam({ name: 'id', description: 'Order item UUID' })
   @ApiResponse({ status: 200, description: 'Order marked ready for pickup.' })
-  @ApiResponse({ status: 400, description: 'Order cannot be bumped in this state.' })
+  @ApiResponse({
+    status: 400,
+    description: 'Order cannot be bumped in this state.',
+  })
   @ApiResponse({ status: 404, description: 'Order not found.' })
   async bump(@Param('id') id: string, @Request() req: any) {
     return this.orderService.bump(id, req.user.userId, req.user.branchId);

@@ -7,16 +7,72 @@ import {
   VersionColumn,
   Index,
 } from 'typeorm';
-import { OrderStatus, FulfillmentType } from '../../../common/shared';
+import {
+  OrderStatus,
+  FulfillmentType,
+  TabType,
+  PickupMode,
+} from '../../../common/shared';
 
 @Entity('orders')
 export class Order {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  // Dine-in orders are attached to a Tab (waiter flow). Online/self-service
+  // orders are standalone: tab_id is null and the branch/session fields below
+  // carry the order's own context.
   @Index()
-  @Column({ type: 'uuid' })
-  tab_id: string;
+  @Column({ type: 'uuid', nullable: true })
+  tab_id: string | null;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  branch_id: string | null;
+
+  @Index({ unique: true })
+  @Column({ type: 'varchar', length: 12, nullable: true })
+  tracking_code: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  tracking_generated_at: Date | null;
+
+  @Column({
+    type: 'varchar',
+    length: 20,
+    default: PickupMode.SELF,
+  })
+  pickup_mode: string;
+
+  @Column({ type: 'jsonb', nullable: true })
+  delivery_details: any;
+
+  @Column({ type: 'integer', default: 0 })
+  delivery_fee_kobo: number;
+
+  @Column({ type: 'varchar', nullable: true })
+  customer_name: string | null;
+
+  @Column({ default: 1 })
+  party_size: number;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  table_id: string | null;
+
+  @Column({
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+  })
+  tab_type: TabType | null;
+
+  @Column({
+    type: 'varchar',
+    length: 20,
+    default: 'open',
+  })
+  status: string;
 
   @Index()
   @Column({ type: 'uuid' })

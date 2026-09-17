@@ -197,10 +197,24 @@ export class BranchController {
   ) {
     const branch = await this.branchService.findOne(id, req.user.businessId);
     if (!branch) throw new NotFoundException('Branch not found');
-    branch.settings = this.mergeBranchSettings(
-      branch.settings || {},
-      dto.settings,
-    );
+    const currentSettings = branch.settings || {};
+    const newSettings = { ...currentSettings, ...dto.settings };
+    if (dto.delivery) {
+      newSettings.delivery = {
+        ...(currentSettings.delivery || {}),
+        ...dto.delivery,
+      };
+    }
+    if (dto.reservation) {
+      newSettings.reservation = {
+        ...(currentSettings.reservation || {}),
+        ...dto.reservation,
+      };
+    }
+    if (dto.kds_default_department_id !== undefined) {
+      newSettings.kds_default_department_id = dto.kds_default_department_id;
+    }
+    branch.settings = newSettings;
     return this.branchRepository.save(branch);
   }
 

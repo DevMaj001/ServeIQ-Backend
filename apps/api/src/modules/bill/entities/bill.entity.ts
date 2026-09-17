@@ -21,8 +21,16 @@ export class Bill {
   id: string;
 
   @Index()
-  @Column({ type: 'uuid' })
-  tab_id: string;
+  @Column({ type: 'uuid', nullable: true })
+  tab_id: string | null;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  branch_id: string | null;
+
+  @Index()
+  @Column({ type: 'varchar', length: 12, nullable: true })
+  tracking_code: string | null;
 
   @Column({ type: 'varchar', length: 20, default: 'pending' })
   payment_status: string;
@@ -54,6 +62,9 @@ export class Bill {
 
   @Column({ type: 'integer', default: 0 })
   tax_kobo: number;
+
+  @Column({ type: 'integer', default: 0 })
+  delivery_fee_kobo: number;
 
   @Column({ type: 'integer' })
   total_kobo: number;

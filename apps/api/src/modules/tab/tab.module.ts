@@ -10,6 +10,7 @@ import { StockMovement } from '../ingredient/entities/stock-movement.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Shift } from '../shift/entities/shift.entity';
 import { Bill } from '../bill/entities/bill.entity';
+import { Reservation } from '../reservations/entities/reservation.entity';
 import { TrackingModule } from '../tracking/tracking.module';
 import { GatewayModule } from '../gateway/gateway.module';
 
@@ -24,6 +25,7 @@ import { GatewayModule } from '../gateway/gateway.module';
       MenuItem,
       Shift,
       Bill,
+      Reservation,
     ]),
     TrackingModule,
     GatewayModule,

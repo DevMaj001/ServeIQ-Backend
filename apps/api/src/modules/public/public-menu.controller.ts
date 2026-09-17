@@ -1,11 +1,25 @@
-import { Controller, Get, Param, Query, NotFoundException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Query,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+  ApiQuery,
+} from '@nestjs/swagger';
+import { isUUID } from 'class-validator';
 import { Branch } from '../branch/entities/branch.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Advertisement } from '../advertisement/entities/advertisement.entity';
 import { Table } from '../table/entities/table.entity';
+import { getDeliveryConfig } from '../delivery/delivery-config';
 
 @ApiTags('Public')
 @Controller('public')
@@ -27,16 +41,30 @@ export class PublicMenuController {
   @ApiResponse({ status: 200, description: 'Public menu items.' })
   @ApiResponse({ status: 404, description: 'Branch not found.' })
   async getPublicMenu(@Param('branchId') branchId: string) {
-    const branch = await this.branchRepo.findOne({
-      where: { id: branchId },
-      relations: { business: true },
-    });
-    if (!branch) {
+    // The menu app redirects its bare root path to /public/menu/default.
+    // Resolve that to a real branch instead of erroring on the UUID cast.
+    let branch: Branch | null;
+    if (branchId === 'default') {
+      branch =
+        (await this.branchRepo.find({
+          relations: { business: true },
+          order: { created_at: 'ASC' },
+          take: 1,
+        }))[0] ?? null;
+    } else if (isUUID(branchId)) {
+      branch = await this.branchRepo.findOne({
+        where: { id: branchId },
+        relations: { business: true },
+      });
+    } else {
+      branch = null;
+    }
+    if (!branch || !branch.business) {
       throw new NotFoundException('Branch not found');
     }
 
     const items = await this.menuItemRepo.find({
-      where: { branch_id: branchId, is_available: true },
+      where: { branch_id: branch.id, is_available: true },
       order: { category: 'ASC', name: 'ASC' },
     });
 
@@ -51,12 +79,23 @@ export class PublicMenuController {
         item.track_stock === true && Number(item.quantity_in_stock) <= 0,
     }));
 
+    const config = getDeliveryConfig(branch);
+
     return {
       business_name: branch.business.name,
       branch_name: branch.name,
       logo_url: branch.business.logo_url || null,
       brand_primary_color: branch.business.brand_primary_color || null,
       brand_accent_color: branch.business.brand_accent_color || null,
+      currency: branch.business.currency ?? 'NGN',
+      tax_rate: Number(branch.business.tax_rate ?? 7.5),
+      service_charge_percent: Number(
+        branch.business.service_charge_percent ?? 10,
+      ),
+      delivery: {
+        enabled: config.enabled,
+        fee_kobo: config.fee_kobo,
+      },
       items: mapped,
     };
   }
@@ -98,10 +137,15 @@ export class PublicMenuController {
 
   @Get('tables/:branchId/resolve')
   @ApiOperation({
-    summary: 'Resolve a table number/label to its UUID within a branch (public)',
+    summary:
+      'Resolve a table number/label to its UUID within a branch (public)',
   })
   @ApiParam({ name: 'branchId', description: 'Branch UUID' })
-  @ApiQuery({ name: 'number', required: true, description: 'Table number or label (e.g. "5", "A1", "Table 5")' })
+  @ApiQuery({
+    name: 'number',
+    required: true,
+    description: 'Table number or label (e.g. "5", "A1", "Table 5")',
+  })
   @ApiResponse({ status: 200, description: 'Table found.' })
   @ApiResponse({ status: 404, description: 'Table not found.' })
   async resolveTable(
