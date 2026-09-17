@@ -612,6 +612,260 @@ describe('PaymentController', () => {
       expect(billService.processPayment).toHaveBeenCalledTimes(1);
     });
 
+    it('accepts a sha256 webhook exactly at the upper freshness edge (300s old)', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-01-01T12:00:00.000Z'));
+      process.env.MONIEPOINT_MAX_WEBHOOK_AGE_SECONDS = '300';
+      try {
+        const secret = 'whsec_test';
+        billRepo.findOne.mockResolvedValue({
+          tab_id: 'tab-1',
+          paid_at: null,
+          total_kobo: 50000,
+          payment_reference: 'ref-1',
+        });
+        tabRepo.findOne.mockResolvedValue({
+          id: 'tab-1',
+          branch_id: 'branch-1',
+        });
+        branchRepo.findOne.mockResolvedValue({
+          settings: {
+            payment_providers: [
+              {
+                name: 'monniepoint',
+                type: 'webhook',
+                verification_method: 'hmac-sha512',
+                config: { webhook_secret: secret },
+              },
+            ],
+          },
+        });
+
+        const payload = {
+          data: {
+            reference: 'ref-1',
+            amount: 50000,
+            status: 'SUCCESSFUL',
+            terminalId: 'term-1',
+          },
+        };
+        const webhookId = 'wh_' + Date.now();
+        const timestamp = Math.floor(Date.now() / 1000) - 300; // exact edge
+        const rawBody = JSON.stringify(payload);
+        const signature = crypto
+          .createHmac('sha256', secret)
+          .update(`${webhookId}__${timestamp}__${rawBody}`)
+          .digest('base64');
+        const req = {
+          rawBody,
+          headers: {
+            'moniepoint-webhook-id': webhookId,
+            'moniepoint-webhook-timestamp': String(timestamp),
+          },
+        } as any;
+
+        const result = await controller.monniepointWebhook(
+          req,
+          signature,
+          payload,
+        );
+        expect(result.status).toBe('processed');
+        expect(billService.processPayment).toHaveBeenCalledTimes(1);
+      } finally {
+        delete process.env.MONIEPOINT_MAX_WEBHOOK_AGE_SECONDS;
+        jest.useRealTimers();
+      }
+    });
+
+    it('rejects a sha256 webhook just past the upper freshness edge (301s old)', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-01-01T12:00:00.000Z'));
+      process.env.MONIEPOINT_MAX_WEBHOOK_AGE_SECONDS = '300';
+      try {
+        const secret = 'whsec_test';
+        billRepo.findOne.mockResolvedValue({
+          tab_id: 'tab-1',
+          paid_at: null,
+          total_kobo: 50000,
+          payment_reference: 'ref-1',
+        });
+        tabRepo.findOne.mockResolvedValue({
+          id: 'tab-1',
+          branch_id: 'branch-1',
+        });
+        branchRepo.findOne.mockResolvedValue({
+          settings: {
+            payment_providers: [
+              {
+                name: 'monniepoint',
+                type: 'webhook',
+                verification_method: 'hmac-sha512',
+                config: { webhook_secret: secret },
+              },
+            ],
+          },
+        });
+
+        const payload = {
+          data: {
+            reference: 'ref-1',
+            amount: 50000,
+            status: 'SUCCESSFUL',
+            terminalId: 'term-1',
+          },
+        };
+        const webhookId = 'wh_' + Date.now();
+        const timestamp = Math.floor(Date.now() / 1000) - 301; // 1s beyond the edge
+        const rawBody = JSON.stringify(payload);
+        const signature = crypto
+          .createHmac('sha256', secret)
+          .update(`${webhookId}__${timestamp}__${rawBody}`)
+          .digest('base64');
+        const req = {
+          rawBody,
+          headers: {
+            'moniepoint-webhook-id': webhookId,
+            'moniepoint-webhook-timestamp': String(timestamp),
+          },
+        } as any;
+
+        await expect(
+          controller.monniepointWebhook(req, signature, payload),
+        ).rejects.toThrow('Expired Moniepoint signature');
+        expect(billService.processPayment).not.toHaveBeenCalled();
+      } finally {
+        delete process.env.MONIEPOINT_MAX_WEBHOOK_AGE_SECONDS;
+        jest.useRealTimers();
+      }
+    });
+
+    it('accepts a sha256 webhook exactly at the lower freshness edge (60s in the future)', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-01-01T12:00:00.000Z'));
+      process.env.MONIEPOINT_MAX_WEBHOOK_AGE_SECONDS = '300';
+      try {
+        const secret = 'whsec_test';
+        billRepo.findOne.mockResolvedValue({
+          tab_id: 'tab-1',
+          paid_at: null,
+          total_kobo: 50000,
+          payment_reference: 'ref-1',
+        });
+        tabRepo.findOne.mockResolvedValue({
+          id: 'tab-1',
+          branch_id: 'branch-1',
+        });
+        branchRepo.findOne.mockResolvedValue({
+          settings: {
+            payment_providers: [
+              {
+                name: 'monniepoint',
+                type: 'webhook',
+                verification_method: 'hmac-sha512',
+                config: { webhook_secret: secret },
+              },
+            ],
+          },
+        });
+
+        const payload = {
+          data: {
+            reference: 'ref-1',
+            amount: 50000,
+            status: 'SUCCESSFUL',
+            terminalId: 'term-1',
+          },
+        };
+        const webhookId = 'wh_' + Date.now();
+        const timestamp = Math.floor(Date.now() / 1000) + 60; // exact skew edge
+        const rawBody = JSON.stringify(payload);
+        const signature = crypto
+          .createHmac('sha256', secret)
+          .update(`${webhookId}__${timestamp}__${rawBody}`)
+          .digest('base64');
+        const req = {
+          rawBody,
+          headers: {
+            'moniepoint-webhook-id': webhookId,
+            'moniepoint-webhook-timestamp': String(timestamp),
+          },
+        } as any;
+
+        const result = await controller.monniepointWebhook(
+          req,
+          signature,
+          payload,
+        );
+        expect(result.status).toBe('processed');
+        expect(billService.processPayment).toHaveBeenCalledTimes(1);
+      } finally {
+        delete process.env.MONIEPOINT_MAX_WEBHOOK_AGE_SECONDS;
+        jest.useRealTimers();
+      }
+    });
+
+    it('rejects a sha256 webhook just past the lower freshness edge (61s in the future)', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-01-01T12:00:00.000Z'));
+      process.env.MONIEPOINT_MAX_WEBHOOK_AGE_SECONDS = '300';
+      try {
+        const secret = 'whsec_test';
+        billRepo.findOne.mockResolvedValue({
+          tab_id: 'tab-1',
+          paid_at: null,
+          total_kobo: 50000,
+          payment_reference: 'ref-1',
+        });
+        tabRepo.findOne.mockResolvedValue({
+          id: 'tab-1',
+          branch_id: 'branch-1',
+        });
+        branchRepo.findOne.mockResolvedValue({
+          settings: {
+            payment_providers: [
+              {
+                name: 'monniepoint',
+                type: 'webhook',
+                verification_method: 'hmac-sha512',
+                config: { webhook_secret: secret },
+              },
+            ],
+          },
+        });
+
+        const payload = {
+          data: {
+            reference: 'ref-1',
+            amount: 50000,
+            status: 'SUCCESSFUL',
+            terminalId: 'term-1',
+          },
+        };
+        const webhookId = 'wh_' + Date.now();
+        const timestamp = Math.floor(Date.now() / 1000) + 61; // 1s beyond the skew edge
+        const rawBody = JSON.stringify(payload);
+        const signature = crypto
+          .createHmac('sha256', secret)
+          .update(`${webhookId}__${timestamp}__${rawBody}`)
+          .digest('base64');
+        const req = {
+          rawBody,
+          headers: {
+            'moniepoint-webhook-id': webhookId,
+            'moniepoint-webhook-timestamp': String(timestamp),
+          },
+        } as any;
+
+        await expect(
+          controller.monniepointWebhook(req, signature, payload),
+        ).rejects.toThrow('Expired Moniepoint signature');
+        expect(billService.processPayment).not.toHaveBeenCalled();
+      } finally {
+        delete process.env.MONIEPOINT_MAX_WEBHOOK_AGE_SECONDS;
+        jest.useRealTimers();
+      }
+    });
+
     it('returns Amount mismatch for an unmatched deposit', async () => {
       billRepo.findOne.mockResolvedValue({
         tab_id: 'tab-1',
