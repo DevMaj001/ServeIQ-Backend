@@ -22,7 +22,7 @@ import {
   ApiBody,
   ApiHeader,
 } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
+import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Not, IsNull } from 'typeorm';
 import { Tab } from '../tab/entities/tab.entity';
@@ -40,19 +40,14 @@ import {
   isBillable,
 } from '../../common/shared';
 import { PaymentVerificationDto } from './dto/payment-verification.dto';
-import { buildPaymentMethods } from './payment-provider.util';
+import {
+  buildPaymentMethods,
+  PaymentProviderConfig,
+} from './payment-provider.util';
 import * as crypto from 'crypto';
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-interface PaymentProviderConfig {
-  name: string;
-  type: 'manual' | 'webhook';
-  label: string;
-  verification_method?: 'hmac-sha512' | 'rsa' | 'none';
-  config: Record<string, string>;
-}
 
 @ApiTags('Customer Payments')
 @Controller('public/payments')
@@ -384,7 +379,8 @@ export class PaymentController {
 
   // ─── Webhook Endpoints ───
 
-  @Post('webhooks/monniepoint')
+  @Post(['webhooks/monniepoint', 'webhooks/moniepoint'])
+  @SkipThrottle()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Moniepoint POS transaction webhook' })
   @ApiHeader({
@@ -474,7 +470,7 @@ export class PaymentController {
       providerConfig?.verification_method === 'hmac-sha512'
     ) {
       const secret =
-        providerConfig.config.webhook_secret || providerConfig.config.secret;
+        providerConfig.config?.webhook_secret || providerConfig.config?.secret;
       if (!secret) {
         this.logger.warn(
           `[monniepoint][misconfig] branch=${branch?.id} configured hmac-sha512 but has no webhook_secret`,
@@ -519,6 +515,7 @@ export class PaymentController {
   }
 
   @Post('webhooks/opay')
+  @SkipThrottle()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'OPay transfer/POS webhook' })
   @ApiHeader({
@@ -566,7 +563,7 @@ export class PaymentController {
       providerConfig.verification_method === 'rsa'
     ) {
       const publicKey =
-        providerConfig.config.public_key || providerConfig.config.publicKey;
+        providerConfig.config?.public_key || providerConfig.config?.publicKey;
       const rawBody: Buffer = (req as any).rawBody
         ? Buffer.from((req as any).rawBody)
         : Buffer.from(JSON.stringify(payload));

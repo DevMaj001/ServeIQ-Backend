@@ -198,7 +198,10 @@ export class BranchController {
     const branch = await this.branchService.findOne(id, req.user.businessId);
     if (!branch) throw new NotFoundException('Branch not found');
     const currentSettings = branch.settings || {};
-    const newSettings = { ...currentSettings, ...dto.settings };
+    const newSettings = this.mergeBranchSettings(
+      currentSettings,
+      dto.settings,
+    );
     if (dto.delivery) {
       newSettings.delivery = {
         ...(currentSettings.delivery || {}),
@@ -216,6 +219,71 @@ export class BranchController {
     }
     branch.settings = newSettings;
     return this.branchRepository.save(branch);
+  }
+
+  /**
+   * Merge a partial settings payload into the branch's existing settings.
+   *
+   * `payment_providers` is UPSERTED per provider name instead of replaced so a
+   * stale/partial save from the admin UI can never wipe a previously
+   * configured webhook secret/key. A provider is disabled by removing it from
+   * `enabled_providers`, not by clearing its config entry here.
+   * `enabled_providers` is sanitized (deduped) to stop duplicate
+   * accumulation like ["manual","manual","manual","monniepoint"].
+   */
+  private mergeBranchSettings(current: any, incoming?: any): any {
+    const merged = { ...(current || {}) };
+
+    if (incoming?.payment_provider !== undefined) {
+      merged.payment_provider = incoming.payment_provider;
+    }
+
+    if (Array.isArray(incoming?.enabled_providers)) {
+      merged.enabled_providers = Array.from(
+        new Set(
+          incoming.enabled_providers.filter(
+            (name: any) => typeof name === 'string' && name.trim() !== '',
+          ),
+        ),
+      );
+    }
+
+    if (Array.isArray(incoming?.payment_providers)) {
+      const existing = Array.isArray(merged.payment_providers)
+        ? merged.payment_providers
+        : [];
+      const mergedProviders = [...existing];
+      for (const provider of incoming.payment_providers) {
+        if (!provider || !provider.name) continue;
+        const index = mergedProviders.findIndex(
+          (p) => p?.name === provider.name,
+        );
+        if (index >= 0) {
+          const current = mergedProviders[index];
+          const next = { ...current, ...provider };
+          if (provider.config && current?.config) {
+            next.config = { ...current.config, ...provider.config };
+          }
+          mergedProviders[index] = next;
+        } else {
+          mergedProviders.push(provider);
+        }
+      }
+      merged.payment_providers = mergedProviders;
+    }
+
+    for (const key of Object.keys(incoming || {})) {
+      if (
+        key === 'payment_provider' ||
+        key === 'enabled_providers' ||
+        key === 'payment_providers'
+      ) {
+        continue;
+      }
+      merged[key] = incoming[key];
+    }
+
+    return merged;
   }
 
   @Get(':id/feature-flags')

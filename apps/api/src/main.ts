@@ -80,7 +80,14 @@ async function bootstrap() {
     origin: allowedOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'x-paystack-signature',
+      'x-moniepoint-signature',
+      'x-opay-signature',
+      'x-simulate',
+    ],
   });
 
   // Swagger / OpenAPI (disabled in production unless SWAGGER_ENABLED=true)

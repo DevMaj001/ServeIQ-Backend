@@ -1,14 +1,7 @@
 import { IsOptional, IsString, IsUUID, ValidateNested } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-
-export interface PaymentProviderConfig {
-  name: string;
-  type: 'manual' | 'webhook';
-  label: string;
-  verification_method?: 'hmac-sha512' | 'rsa' | 'none';
-  config: Record<string, string>;
-}
+import { PaymentProviderConfig } from '../../payment/payment-provider.util';
 
 export class BranchPaymentSettingsDto {
   @ApiProperty({ type: String, example: 'manual', required: false })
