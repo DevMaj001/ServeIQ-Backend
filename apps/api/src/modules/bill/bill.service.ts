@@ -268,13 +268,19 @@ export class BillService {
   ) {
     // Standalone (tabless) online order groups are settled via the bill that a
     // webhook already resolved; the caller hands it over so we don't re-query.
-    const bill =
+    let bill =
       opts?.bill ??
       (await this.billRepository.findOne({
         where: { tab_id: tabId!, voided_at: IsNull() },
         order: { created_at: 'DESC' },
       }));
     if (!bill) throw new NotFoundException('Bill not found');
+
+    // The transaction closure mutates the bill row. Use this non-null alias
+    // inside the closure so TypeScript keeps a static Bill type there; the
+    // outer `bill` is reassigned only when a concurrent delivery already won
+    // the claim and we swap in the winner's fresh state.
+    const billToSettle = bill;
 
     // Identify the orders this settlement covers. Tabs scope by tab_id;
     // standalone online orders share their group's unique tracking_code.
@@ -346,6 +352,13 @@ export class BillService {
       }
     }
 
+    // A concurrent duplicate (e.g. a webhook retry arriving while the first
+    // delivery is still in-flight) can pass the fast-path idempotency check
+    // above because neither has committed yet. Flag so we can short-circuit
+    // after the transaction if the atomic claim below loses to the other
+    // delivery (0 rows affected = the bill is already settled).
+    let alreadyPaidInTx = false;
+
     // Stock deduction, bill finalization, and tab/table state changes are wrapped
     // in a single atomic transaction. If any step fails — deadlock, lock timeout,
     // conversion error — everything rolls back, preventing the "deducted but unpaid"
@@ -356,6 +369,34 @@ export class BillService {
     // the deduction would move to a kitchen status transition instead.
     const branchIdForDeduction = tab?.branch_id ?? bill.branch_id ?? branchId;
     await this.dataSource.transaction(async (manager) => {
+      // ── Atomic idempotency claim: survive concurrent retries ──
+      // A conditional UPDATE marks the bill paid ONLY if it is not already
+      // settled, so exactly one delivery can claim it. A concurrent retry that
+      // slips past the fast-path check above (nothing committed yet) matches
+      // zero rows here: the loser skips deduction/finalization and returns the
+      // winner's just-committed state.
+      const claimed = await manager.getRepository(Bill).update(
+        {
+          id: billToSettle.id,
+          paid_at: IsNull(),
+          idempotency_key: IsNull(),
+        },
+        {
+          paid_at: new Date(),
+          ...(paymentDto.idempotency_key
+            ? { idempotency_key: paymentDto.idempotency_key }
+            : {}),
+        },
+      );
+      if (!claimed.affected) {
+        const freshBill = await manager.getRepository(Bill).findOne({
+          where: { id: billToSettle.id },
+        });
+        if (freshBill) bill = freshBill;
+        alreadyPaidInTx = true;
+        return;
+      }
+
       const orders = await manager.getRepository(Order).find({
         where: scope as any,
       });
@@ -364,7 +405,7 @@ export class BillService {
       // stable for the life of the settlement and unique to the group.
       await this.ingredientService.deductByTab(
         {
-          id: tab?.id ?? bill.id,
+          id: tab?.id ?? billToSettle.id,
           branch_id: branchIdForDeduction,
         },
         orders.map((o) => ({
@@ -374,21 +415,21 @@ export class BillService {
         manager,
       );
 
-      bill.payment_method = paymentDto.method;
-      bill.payment_amount_kobo = paymentDto.amount;
+      billToSettle.payment_method = paymentDto.method;
+      billToSettle.payment_amount_kobo = paymentDto.amount;
       if (paymentDto.reference) {
-        bill.payment_reference = paymentDto.reference;
+        billToSettle.payment_reference = paymentDto.reference;
       }
       if (paymentDto.terminal_id) {
-        bill.terminal_id = paymentDto.terminal_id;
+        billToSettle.terminal_id = paymentDto.terminal_id;
       }
       if (paymentDto.idempotency_key) {
-        bill.idempotency_key = paymentDto.idempotency_key;
+        billToSettle.idempotency_key = paymentDto.idempotency_key;
       }
-      bill.paid_at = new Date();
-      bill.payment_status = 'paid';
+      billToSettle.paid_at = new Date();
+      billToSettle.payment_status = 'paid';
 
-      await manager.getRepository(Bill).save(bill);
+      await manager.getRepository(Bill).save(billToSettle);
 
       // Wholesale settlement supersedes any pending split/plan rows for the same
       // scope: void them so they cannot be settled later, double-counted in revenue,
@@ -396,7 +437,7 @@ export class BillService {
       await manager.getRepository(Bill).update(
         {
           ...(scope as any),
-          id: Not(bill.id),
+          id: Not(billToSettle.id),
           paid_at: IsNull(),
           voided_at: IsNull(),
         },
@@ -409,7 +450,7 @@ export class BillService {
           closed_at: new Date(),
           cashier_id: userId,
         });
-      } else if (!tabId && bill.tracking_code) {
+      } else if (!tabId && billToSettle.tracking_code) {
         // Standalone groups carry the group status denormalized on each order.
         await manager.getRepository(Order).update(
           {
@@ -437,7 +478,8 @@ export class BillService {
         const releaseKdsEnabled =
           (
             releaseBranch?.settings?.feature_flags as
-              Record<string, boolean> | undefined
+              | Record<string, boolean>
+              | undefined
           )?.kds_enabled === true;
         const kdsDefaultDepartment = releaseKdsEnabled
           ? (releaseBranch?.settings?.kds_default_department_id as string) ||
@@ -482,6 +524,10 @@ export class BillService {
       }
     });
 
+    // A concurrent delivery already settled this bill — return its fresh state
+    // without emitting duplicate events or regenerating the receipt.
+    if (alreadyPaidInTx) return bill;
+
     // Emit real-time events. Standalone groups are addressed by tracking_code.
     this.realtimeService.emitBillUpdate(
       branchIdForDeduction,
@@ -500,12 +546,10 @@ export class BillService {
     // Push payment confirmation to the public customer tracking page so it does
     // not need to poll (poll-free). Covers cash, card and transfer payments.
     if (tabId) {
-      getPublicServer()
-        ?.to(`tab:${tabId}`)
-        .emit('paymentConfirmed', {
-          tabId,
-          status: 'paid',
-        });
+      getPublicServer()?.to(`tab:${tabId}`).emit('paymentConfirmed', {
+        tabId,
+        status: 'paid',
+      });
     } else if (bill.tracking_code) {
       getPublicServer()
         ?.to(`tracking:${bill.tracking_code}`)
@@ -678,10 +722,11 @@ export class BillService {
       : null;
     if (tabId && !tab) throw new NotFoundException('Tab not found');
 
-    const allBills = (await this.billRepository.find({
-      where: tabId ? { tab_id: tabId } : { tracking_code: trackingCode },
-      order: { created_at: 'ASC' },
-    })) ?? [];
+    const allBills =
+      (await this.billRepository.find({
+        where: tabId ? { tab_id: tabId } : { tracking_code: trackingCode },
+        order: { created_at: 'ASC' },
+      })) ?? [];
 
     // The receipt reflects the single full-tab bill. Prefer the most recently
     // paid bill so a settled tab shows the bill actually paid (method and amount),

@@ -62,7 +62,7 @@ describe('BillService', () => {
           getRepository: jest.fn(() => ({
             findOne: jest.fn(),
             find: jest.fn().mockResolvedValue([]),
-            update: jest.fn(),
+            update: jest.fn().mockResolvedValue({ affected: 1 }),
             save: jest.fn(async (e) => e),
             createQueryBuilder: () => ({
               update: () => ({
@@ -498,7 +498,7 @@ describe('BillService', () => {
             return {
               findOne: jest.fn(),
               find: jest.fn().mockResolvedValue([]),
-              update: jest.fn(),
+              update: jest.fn().mockResolvedValue({ affected: 1 }),
               save: jest.fn(async (e) => e),
             };
           }),
@@ -568,7 +568,7 @@ describe('BillService', () => {
             return {
               findOne: jest.fn(),
               find: jest.fn().mockResolvedValue([]),
-              update: jest.fn(),
+              update: jest.fn().mockResolvedValue({ affected: 1 }),
               save: jest.fn(async (e) => e),
             };
           }),
@@ -583,6 +583,65 @@ describe('BillService', () => {
 
       expect(releaseUpdate.order_status).toBe('pending_supervisor_approval');
       expect(releaseUpdate.estimated_preparation_time_seconds).toBe(600);
+    });
+
+    it('skips deduction and returns the paid bill when a concurrent delivery already claimed it', async () => {
+      tabRepo.findOne.mockResolvedValue({
+        id: 'tab-1',
+        branch_id: 'branch-1',
+        table_id: 'table-1',
+        waiter_id: null,
+      });
+      billRepo.findOne.mockResolvedValue({
+        id: 'bill-1',
+        tab_id: 'tab-1',
+        total_kobo: 5000,
+      });
+      orderRepo.find.mockResolvedValue([
+        { menu_item_id: 'mi-1', order_status: 'delivered' },
+      ]);
+
+      // What the winner persisted seconds ago; the loser re-fetches this after
+      // losing the claim.
+      const winnerPaidBill = {
+        id: 'bill-1',
+        tab_id: 'tab-1',
+        total_kobo: 5000,
+        paid_at: new Date(),
+        idempotency_key: 'monniepoint-ref-1',
+        payment_method: 'pos',
+        payment_amount_kobo: 5000,
+      };
+
+      // The atomic conditional UPDATE matches zero rows: the OTHER retry
+      // claimed the bill first, so paid_at/idempotency_key are already set.
+      dataSource.transaction = jest.fn(async (cb) =>
+        cb({
+          getRepository: jest.fn(() => ({
+            findOne: jest.fn().mockResolvedValue(winnerPaidBill),
+            find: jest.fn().mockResolvedValue([]),
+            update: jest.fn().mockResolvedValue({ affected: 0 }),
+            save: jest.fn(async (e) => e),
+          })),
+        }),
+      );
+
+      const result = await service.processPayment(
+        'tab-1',
+        'branch-1',
+        'user-1',
+        'owner',
+        {
+          amount: 5000,
+          method: 'pos' as any,
+          idempotency_key: 'monniepoint-ref-1',
+        },
+      );
+
+      // Exactly one delivery wins: the loser must not double-deduct stock,
+      // void siblings, emit duplicate events, or regenerate the receipt.
+      expect(ingredientService.deductByTab).not.toHaveBeenCalled();
+      expect(result).toEqual(winnerPaidBill);
     });
   });
 });
