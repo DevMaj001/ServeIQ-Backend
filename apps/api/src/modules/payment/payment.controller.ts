@@ -21,7 +21,7 @@ import {
   ApiBody,
   ApiHeader,
 } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
+import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Tab } from '../tab/entities/tab.entity';
@@ -34,16 +34,11 @@ import { BillService } from '../bill/bill.service';
 import { ProcessPaymentDto } from '../bill/dto/process-payment.dto';
 import { PaymentMethod, OrderStatus } from '../../common/shared';
 import { PaymentVerificationDto } from './dto/payment-verification.dto';
-import { buildPaymentMethods } from './payment-provider.util';
+import {
+  buildPaymentMethods,
+  PaymentProviderConfig,
+} from './payment-provider.util';
 import * as crypto from 'crypto';
-
-interface PaymentProviderConfig {
-  name: string;
-  type: 'manual' | 'webhook';
-  label: string;
-  verification_method?: 'hmac-sha512' | 'rsa' | 'none';
-  config: Record<string, string>;
-}
 
 @ApiTags('Customer Payments')
 @Controller('public/payments')
@@ -243,7 +238,8 @@ export class PaymentController {
 
   // ─── Webhook Endpoints ───
 
-  @Post('webhooks/monniepoint')
+  @Post(['webhooks/monniepoint', 'webhooks/moniepoint'])
+  @SkipThrottle()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Moniepoint POS transaction webhook' })
   @ApiHeader({
@@ -284,7 +280,7 @@ export class PaymentController {
 
     if (!isTestSimulation && providerConfig.verification_method === 'hmac-sha512') {
       const secret =
-        providerConfig.config.webhook_secret || providerConfig.config.secret;
+        providerConfig.config?.webhook_secret || providerConfig.config?.secret;
       if (!secret) {
         throw new ForbiddenException('Moniepoint webhook secret not configured');
       }
@@ -295,6 +291,12 @@ export class PaymentController {
 
     if (bill.paid_at) return { received: true, status: 'already_paid' };
 
+    // Never record more than the bill total even if the provider reports an
+    // inflated amount (overpayment guard; underpayment is rejected below).
+    const payableAmount = bill.total_kobo
+      ? Math.min(Number(amount), bill.total_kobo)
+      : Number(amount);
+
     await this.billService.processPayment(
       tab.id,
       tab.branch_id,
@@ -302,7 +304,7 @@ export class PaymentController {
       'owner',
       {
         method: PaymentMethod.POS,
-        amount: amount,
+        amount: payableAmount,
         reference: reference,
         terminal_id: terminalId,
         idempotency_key: `monniepoint-${reference}`,
@@ -313,6 +315,7 @@ export class PaymentController {
   }
 
   @Post('webhooks/opay')
+  @SkipThrottle()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'OPay transfer/POS webhook' })
   @ApiHeader({
@@ -362,7 +365,7 @@ export class PaymentController {
       providerConfig.verification_method === 'rsa'
     ) {
       const publicKey =
-        providerConfig.config.public_key || providerConfig.config.publicKey;
+        providerConfig.config?.public_key || providerConfig.config?.publicKey;
       const rawBody: Buffer = (req as any).rawBody
         ? Buffer.from((req as any).rawBody)
         : Buffer.from(JSON.stringify(payload));
@@ -378,6 +381,11 @@ export class PaymentController {
 
     const method =
       transactionType === 'POS' ? PaymentMethod.POS : PaymentMethod.TRANSFER;
+    // Never record more than the bill total even if the provider reports an
+    // inflated amount (overpayment guard; underpayment is rejected below).
+    const payableAmount = bill.total_kobo
+      ? Math.min(Number(amount), bill.total_kobo)
+      : Number(amount);
     await this.billService.processPayment(
       tab.id,
       tab.branch_id,
@@ -385,7 +393,7 @@ export class PaymentController {
       'owner',
       {
         method,
-        amount: amount,
+        amount: payableAmount,
         reference: reference,
         idempotency_key: `opay-${reference}`,
       },

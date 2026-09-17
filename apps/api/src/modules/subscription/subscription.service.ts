@@ -497,10 +497,12 @@ export class SubscriptionService {
     body: string,
   ): Promise<boolean> {
     const secret = this.configService.get<string>('PAYSTACK_SECRET_KEY');
-    if (!secret) return false;
+    if (!secret || !signature) return false;
 
-    const hash = crypto.createHmac('sha512', secret).update(body).digest('hex');
-    return hash === signature;
+    const digest = crypto.createHmac('sha512', secret).update(body).digest();
+    const sigBuf = Buffer.from(signature, 'hex');
+    if (sigBuf.length !== digest.length) return false;
+    return crypto.timingSafeEqual(sigBuf, digest);
   }
 
   private toDateFromPaystack(value: any): number | undefined {

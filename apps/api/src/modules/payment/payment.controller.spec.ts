@@ -1,4 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { INestApplication, VersioningType } from '@nestjs/common';
+import request from 'supertest';
 import { PaymentController } from './payment.controller';
 import { BillService } from '../bill/bill.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
@@ -35,6 +37,7 @@ const mockRepo = () => ({
 
 describe('PaymentController', () => {
   let controller: PaymentController;
+  let module: TestingModule;
   let billRepo: any;
   let tabRepo: any;
   let orderRepo: any;
@@ -50,7 +53,7 @@ describe('PaymentController', () => {
     branchRepo = mockRepo();
     billService = { processPayment: jest.fn().mockResolvedValue({}) };
 
-    const module: TestingModule = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       controllers: [PaymentController],
       providers: [
         { provide: getRepositoryToken(Bill), useValue: billRepo },
@@ -67,6 +70,90 @@ describe('PaymentController', () => {
       .compile();
 
     controller = module.get<PaymentController>(PaymentController);
+  });
+
+  describe('Moniepoint webhook routes', () => {
+    let app: INestApplication;
+    const secret = 'test-webhook-secret';
+    const payload = {
+      data: {
+        reference: 'ref-1',
+        amount: 150000,
+        status: 'SUCCESSFUL',
+        terminalId: 'term-1',
+      },
+    };
+
+    beforeEach(async () => {
+      billRepo.findOne.mockResolvedValue({
+        tab_id: 'tab-1',
+        paid_at: null,
+        total_kobo: 150000,
+        payment_reference: 'ref-1',
+      });
+      tabRepo.findOne.mockResolvedValue({ id: 'tab-1', branch_id: 'branch-1' });
+      branchRepo.findOne.mockResolvedValue({
+        settings: {
+          payment_providers: [
+            {
+              name: 'monniepoint',
+              type: 'webhook',
+              verification_method: 'hmac-sha512',
+              config: { webhook_secret: secret },
+            },
+          ],
+        },
+      });
+      app = module.createNestApplication({ rawBody: true });
+      app.setGlobalPrefix('api');
+      app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
+      await app.init();
+    });
+
+    afterEach(async () => {
+      await app.close();
+    });
+
+    it.each(['monniepoint', 'moniepoint'])(
+      'processes signed requests at /api/v1/public/payments/webhooks/%s',
+      async (provider) => {
+        const signature = crypto
+          .createHmac('sha512', secret)
+          .update(JSON.stringify(payload))
+          .digest('hex');
+
+        await request(app.getHttpServer())
+          .post(`/api/v1/public/payments/webhooks/${provider}`)
+          .set('x-moniepoint-signature', signature)
+          .send(payload)
+          .expect(200)
+          .expect({ received: true, status: 'processed' });
+
+        expect(billService.processPayment).toHaveBeenCalledTimes(1);
+        expect(billService.processPayment).toHaveBeenCalledWith(
+          'tab-1',
+          'branch-1',
+          'system-webhook',
+          'owner',
+          expect.objectContaining({
+            reference: 'ref-1',
+            idempotency_key: 'monniepoint-ref-1',
+          }),
+        );
+      },
+    );
+
+    it.each(['monniepoint', 'moniepoint'])(
+      'preserves signature verification at /api/v1/public/payments/webhooks/%s',
+      async (provider) => {
+        await request(app.getHttpServer())
+          .post(`/api/v1/public/payments/webhooks/${provider}`)
+          .send(payload)
+          .expect(403);
+
+        expect(billService.processPayment).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('monniepointWebhook', () => {
