@@ -400,6 +400,29 @@ export class PaymentController {
     // `paymentStatus: PAID`. Accept all known shapes (`eventData`, `data`,
     // or the flat object) so a real POS deposit is never silently dropped.
     const eventData = payload?.eventData || payload?.data || payload || {};
+    // Blind arrival trace: log EVERY inbound webhook regardless of shape so
+    // provider-side validation/test deliveries (which often carry no
+    // reference/amount) are visible in Render logs. Never log the signature
+    // value itself.
+    const rawArrival = (req as any).rawBody
+      ? (req as any).rawBody.toString('utf8')
+      : '';
+    this.logger.log(
+      `[monniepoint][ping] method=${req.method} ct=${String(
+        req.headers['content-type'] || '',
+      )} sigHeaders=${[
+        'moniepoint-webhook-signature',
+        'monniepoint-webhook-signature',
+        'monnify-signature',
+        'x-monnify-signature',
+        'x-moniepoint-signature',
+      ]
+        .filter((h) => Boolean(req.headers[h]))
+        .join(',') || 'none'} bodyLen=${rawArrival.length} body=${rawArrival.slice(
+        0,
+        400,
+      )}`,
+    );
     const reference =
       eventData.reference ||
       eventData.paymentReference ||
