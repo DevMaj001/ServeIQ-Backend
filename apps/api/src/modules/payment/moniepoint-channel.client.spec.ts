@@ -6,6 +6,7 @@ import {
 const BASE = 'https://channel.example.invalid';
 const CLIENT_ID = 'api-client-test';
 const CLIENT_SECRET = 'secret-test';
+const AUTH_BODY = { clientId: CLIENT_ID, clientSecret: CLIENT_SECRET };
 
 describe('MoniepointChannelClient', () => {
   const fetchMock = jest.fn();
@@ -109,6 +110,103 @@ describe('MoniepointChannelClient', () => {
       status: 401,
     });
   });
+
+  it('reuses the cached bearer token instead of re-authenticating', async () => {
+    fetchMock.mockResolvedValueOnce(authResponse('token-abc'));
+
+    await client.authenticate();
+    await client.authenticate();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls authenticate again after invalidateToken()', async () => {
+    fetchMock.mockResolvedValueOnce(authResponse('token-abc'));
+    await client.authenticate();
+    client.invalidateToken();
+
+    fetchMock.mockResolvedValueOnce(authResponse('token-def'));
+    await client.authenticate();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('pushPayment authenticates once, posts the request with Bearer auth, and accepts 202 with no body', async () => {
+    fetchMock
+      .mockResolvedValueOnce(authResponse('token-abc'))
+      .mockResolvedValueOnce(
+        new Response(null, { status: 202, statusText: 'Accepted' }),
+      );
+
+    await client.pushPayment({
+      terminalSerial: 'P260xyz',
+      amount: 11000,
+      merchantReference: '12345',
+      transactionType: 'PURCHASE',
+      paymentMethod: 'CARD_PURCHASE',
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const [authUrl, authInit] = fetchMock.mock.calls[0];
+    expect(String(authUrl)).toBe(`${BASE}/v1/auth`);
+    expect(JSON.parse((authInit as RequestInit).body as string)).toEqual(
+      AUTH_BODY,
+    );
+
+    const [txUrl, txInit] = fetchMock.mock.calls[1];
+    expect(String(txUrl)).toBe(`${BASE}/v1/transactions`);
+    expect((txInit as RequestInit).method).toBe('POST');
+    expect((txInit as RequestInit).headers).toEqual(
+      expect.objectContaining({
+        Authorization: 'Bearer token-abc',
+        'Content-Type': 'application/json',
+      }),
+    );
+    expect(JSON.parse((txInit as RequestInit).body as string)).toMatchObject({
+      terminalSerial: 'P260xyz',
+      amount: 11000,
+      merchantReference: '12345',
+      transactionType: 'PURCHASE',
+      paymentMethod: 'CARD_PURCHASE',
+    });
+  });
+
+  it('throws MoniepointChannelError when Moniepoint rejects a duplicate merchantReference', async () => {
+    fetchMock
+      .mockResolvedValueOnce(authResponse('token-abc'))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            message: 'Transaction exists',
+            errors: ['Transaction exists'],
+            status: 'BAD_REQUEST',
+          }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+
+    await expect(
+      client.pushPayment({
+        terminalSerial: 'P260xyz',
+        amount: 11000,
+        merchantReference: '12345',
+        transactionType: 'PURCHASE',
+      }),
+    ).rejects.toMatchObject({ name: 'MoniepointChannelError', status: 400 });
+  });
+
+  const authResponse = (accessToken: string) =>
+    new Response(
+      JSON.stringify({
+        accessToken,
+        tokenType: { value: 'bearer' },
+        expiresIn: 3600,
+        scope: 'profile',
+        jti: 'jti-1',
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
 
   const jsonResponse = (body: unknown) =>
     new Response(JSON.stringify(body), {

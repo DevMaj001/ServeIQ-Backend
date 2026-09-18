@@ -12,16 +12,35 @@ import { BillModule } from '../bill/bill.module';
 import { NotificationModule } from '../notification/notification.module';
 import { MoniepointApiClient } from './moniepoint-api.client';
 import { PaymentReconciliationScheduler } from './payment-reconciliation.scheduler';
+import { MoniepointErpCredential } from './entities/moniepoint-erp-credential.entity';
+import { MoniepointErpPush } from './entities/moniepoint-erp-push.entity';
+import { MoniepointErpService } from './moniepoint-erp.service';
+import { MoniepointErpController } from './moniepoint-erp.controller';
+import { EncryptionService } from '../../common/services/encryption.service';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      Tab, Bill, Order, PosTerminal, Branch, Business, Notification,
+      Tab,
+      Bill,
+      Order,
+      PosTerminal,
+      Branch,
+      Business,
+      Notification,
+      MoniepointErpCredential,
+      MoniepointErpPush,
     ]),
     BillModule,
     NotificationModule,
   ],
-  controllers: [PaymentController],
-  providers: [MoniepointApiClient, PaymentReconciliationScheduler],
+  controllers: [PaymentController, MoniepointErpController],
+  providers: [
+    MoniepointApiClient,
+    PaymentReconciliationScheduler,
+    MoniepointErpService,
+    EncryptionService,
+  ],
+  exports: [MoniepointErpService],
 })
 export class PaymentModule {}

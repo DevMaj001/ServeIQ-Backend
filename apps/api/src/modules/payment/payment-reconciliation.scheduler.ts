@@ -8,6 +8,7 @@ import { PosTerminal } from '../pos/entities/pos-terminal.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { Notification } from '../notification/entities/notification.entity';
 import { NotificationService } from '../notification/notification.service';
+import { MoniepointErpPush } from './entities/moniepoint-erp-push.entity';
 import {
   MoniepointApiClient,
   MoniepointEventStatus,
@@ -16,6 +17,27 @@ import {
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Heuristic mapping of Moniepoint transaction `processingStatus`/`responseCode`
+ * values. The primary completion signal for a push is the bill being settled by
+ * the existing webhook path; this lookup is the fallback. The exact status
+ * enum values are only confirmed by a real pushed transaction, so these regexes
+ * are deliberately conservative — an unrecognized status keeps the push pending
+ * instead of risking a wrong settlement.
+ */
+const PROCESSING_SUCCESS_RE = /SUCCESS|COMPLETED|AUTH|PAID/i;
+const PROCESSING_FAILURE_RE = /FAILED|DECLINED|REVERSED|ERROR/i;
+
+const isSuccessfulProcessingStatus = (status?: string): boolean =>
+  !!status && PROCESSING_SUCCESS_RE.test(status);
+
+const isFailedProcessingStatus = (
+  status?: string,
+  responseCode?: string,
+): boolean =>
+  (!!status && PROCESSING_FAILURE_RE.test(status)) ||
+  (!!responseCode && PROCESSING_FAILURE_RE.test(responseCode));
 
 /**
  * Periodically asks Moniepoint which webhook DELIVERIES it could not get to
@@ -52,6 +74,8 @@ export class PaymentReconciliationScheduler {
     private billRepo: Repository<Bill>,
     @InjectRepository(Notification)
     private notificationRepo: Repository<Notification>,
+    @InjectRepository(MoniepointErpPush)
+    private erpPushRepo: Repository<MoniepointErpPush>,
     private moniepointClient: MoniepointApiClient,
     private notificationService: NotificationService,
   ) {}
@@ -82,6 +106,103 @@ export class PaymentReconciliationScheduler {
           err instanceof Error ? err.message : String(err)
         }`,
       );
+    }
+  }
+
+  /**
+   * Resolve the outcome of ERP push-payments (moniepoint_erp_pushes).
+   *
+   * Completion signal model (reuses the existing POS integration surface —
+   * no new webhook/subscription): when the guest pays at the terminal,
+   * Moniepoint emits a POS event that our existing webhook settles the linked
+   * bill with; the platform POS API (`getMerchantTransaction`) is the
+   * directed fallback lookup.
+   *
+   *   - linked bill paid            -> push marked `paid` (webhook settled it)
+   *   - POS lookup reports failure   -> `declined` + branch alert
+   *   - no signal before stale cut-  -> `expired` + branch alert (guest never
+   *     off (MONIEPOINT_PUSH_STALE_    completed; a re-push derives a fresh
+   *     MINUTES, default 60)            reference)
+   *
+   * Note: a branch whose push targets a SANDBOX credential while the platform
+   * MONIEPOINT_API_KEY points at PROD will not resolve via the lookup — the
+   * push stays `pending` until the stale alert (webhook settlement works
+   * either way).
+   */
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async reconcileErpPushes(): Promise<void> {
+    const staleMinutes =
+      Number(process.env.MONIEPOINT_PUSH_STALE_MINUTES) || 60;
+    const lookupDelayMinutes =
+      Number(process.env.MONIEPOINT_PUSH_LOOKUP_DELAY_MINUTES) || 2;
+    const staleCutoff = Date.now() - staleMinutes * 60_000;
+
+    let pending: MoniepointErpPush[];
+    try {
+      pending = await this.erpPushRepo.find({ where: { status: 'pending' } });
+    } catch (err) {
+      this.logger.error(
+        `[monniepoint][erp] could not load pending pushes: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return;
+    }
+
+    for (const push of pending) {
+      try {
+        const pushedAt = push.pushed_at
+          ? new Date(push.pushed_at).getTime()
+          : Date.now();
+        if (pushedAt <= staleCutoff) {
+          push.status = 'expired';
+          push.error =
+            'No completion signal before the push expired — guest never completed the payment';
+          await this.erpPushRepo.save(push);
+          await this.alertErpPush(push, 'expired');
+          continue;
+        }
+        if (Date.now() - pushedAt < lookupDelayMinutes * 60_000) continue;
+
+        if (push.bill_id) {
+          const bill = await this.billRepo.findOne({
+            where: { id: push.bill_id },
+          });
+          if (bill?.paid_at) {
+            push.status = 'paid';
+            push.paid_at = bill.paid_at;
+            await this.erpPushRepo.save(push);
+            continue;
+          }
+        }
+
+        if (this.moniepointClient.isConfigured) {
+          const tx = await this.moniepointClient.getMerchantTransaction(
+            push.merchant_reference,
+          );
+          if (isSuccessfulProcessingStatus(tx.processingStatus)) {
+            push.status = 'paid';
+            push.paid_at = tx.modifiedAt ? new Date(tx.modifiedAt) : new Date();
+            await this.erpPushRepo.save(push);
+          } else if (
+            isFailedProcessingStatus(tx.processingStatus, tx.responseCode)
+          ) {
+            push.status = 'declined';
+            push.error =
+              tx.responseMessage ?? tx.processingStatus ?? 'Declined';
+            await this.erpPushRepo.save(push);
+            await this.alertErpPush(push, 'declined');
+          }
+        }
+      } catch (err) {
+        // Not found yet (404) and transient errors keep the push pending for
+        // the next run — never crash the whole pass.
+        this.logger.debug(
+          `[monniepoint][erp] lookup pending ref=${push.merchant_reference}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
     }
   }
 
@@ -150,7 +271,16 @@ export class PaymentReconciliationScheduler {
       return;
     }
 
-    if (await this.alreadyAlerted(branch.id, event.id)) return;
+    if (
+      await this.alreadyAlerted(
+        branch.id,
+        'payment_reconciliation',
+        'event_id',
+        event.id,
+      )
+    ) {
+      return;
+    }
 
     await this.notificationService.create({
       branch_id: branch.id,
@@ -197,18 +327,75 @@ export class PaymentReconciliationScheduler {
 
   private async alreadyAlerted(
     branchId: string,
-    eventId: string,
+    type: string,
+    dataKey: string,
+    dataValue: string,
   ): Promise<boolean> {
     const existing = await this.notificationRepo.findOne({
       where: {
         branch_id: branchId,
-        type: 'payment_reconciliation',
-        data: Raw((column) => `${column}::jsonb->>'event_id' = :eventId`, {
-          eventId,
+        type,
+        data: Raw((column) => `${column}::jsonb->>'${dataKey}' = :dataValue`, {
+          dataValue,
         }),
       },
     });
     return !!existing;
+  }
+
+  /** Alert the tenant that a push expired without payment or was declined. */
+  private async alertErpPush(
+    push: MoniepointErpPush,
+    outcome: 'expired' | 'declined',
+  ): Promise<void> {
+    const branch = await this.branchRepo.findOne({
+      where: { id: push.branch_id },
+    });
+    if (!branch) {
+      this.logger.warn(
+        `[monniepoint][erp] alert skipped — branch ${push.branch_id} not found for push ${push.id}`,
+      );
+      return;
+    }
+    if (
+      await this.alreadyAlerted(
+        branch.id,
+        'erp_push',
+        'merchant_reference',
+        push.merchant_reference,
+      )
+    ) {
+      return;
+    }
+
+    const message =
+      outcome === 'declined'
+        ? `The pushed payment was declined${push.error ? `: ${push.error}` : ''}. You can retry the push in the app.`
+        : 'The pushed payment expired without the guest completing it. Re-push from the app when ready.';
+
+    await this.notificationService.create({
+      branch_id: branch.id,
+      user_id: null,
+      type: 'erp_push',
+      title:
+        outcome === 'declined'
+          ? 'Declined Moniepoint Push'
+          : 'Expired Moniepoint Push',
+      message,
+      data: {
+        push_id: push.id,
+        merchant_reference: push.merchant_reference,
+        terminal_serial: push.terminal_serial,
+        amount_kobo: push.amount_kobo,
+        bill_id: push.bill_id,
+        status: push.status,
+        outcome,
+        detected_at: new Date().toISOString(),
+      },
+    });
+    this.logger.warn(
+      `[monniepoint][erp] alerted ${outcome} push=${push.id} ref=${push.merchant_reference} branch=${push.branch_id}`,
+    );
   }
 
   private extractPayloadReferences(event: MoniepointSubscriptionEvent): {

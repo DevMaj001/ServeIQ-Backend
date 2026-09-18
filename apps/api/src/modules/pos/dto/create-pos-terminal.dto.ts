@@ -32,4 +32,15 @@ export class CreatePosTerminalDto {
   @IsString()
   @MaxLength(30)
   account_number?: string;
+
+  @ApiProperty({
+    example: 'P260xyz',
+    description:
+      'Moniepoint terminal serial (from dashboard/device), required for ERP push payments',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  serial_number?: string;
 }

@@ -7,10 +7,12 @@ describe('PaymentReconciliationScheduler', () => {
   const branchRepo = { findOne: jest.fn(), find: jest.fn() };
   const billRepo = { findOne: jest.fn() };
   const notificationRepo = { findOne: jest.fn() };
+  const erpPushRepo = { find: jest.fn(), findOne: jest.fn(), save: jest.fn() };
   const notificationService = { create: jest.fn() };
   const client = {
     isConfigured: true,
     listSubscriptionEvents: jest.fn(),
+    getMerchantTransaction: jest.fn(),
   } as unknown as MoniepointApiClient;
 
   const scheduler = new PaymentReconciliationScheduler(
@@ -19,6 +21,7 @@ describe('PaymentReconciliationScheduler', () => {
     branchRepo as any,
     billRepo as any,
     notificationRepo as any,
+    erpPushRepo as any,
     client as unknown as MoniepointApiClient,
     notificationService as any,
   );
@@ -272,5 +275,113 @@ describe('PaymentReconciliationScheduler', () => {
 
     expect(client.listSubscriptionEvents).toHaveBeenCalledTimes(3);
     expect(notificationService.create).not.toHaveBeenCalled();
+  });
+
+  const makePush = (overrides: any = {}) => ({
+    id: 'push-1',
+    branch_id: 'branch-1',
+    business_id: 'biz-1',
+    bill_id: null,
+    merchant_reference: 'BILL-REF-1',
+    terminal_serial: 'P260xyz',
+    amount_kobo: 11000,
+    status: 'pending',
+    error: null,
+    pushed_at: new Date(),
+    paid_at: null,
+    ...overrides,
+  });
+
+  describe('reconcileErpPushes', () => {
+    it('marks a pending push paid when the linked bill was settled by the webhook', async () => {
+      erpPushRepo.find.mockResolvedValue([
+        makePush({
+          bill_id: 'bill-1',
+          pushed_at: new Date(Date.now() - 3 * 60_000),
+        }),
+      ]);
+      billRepo.findOne.mockResolvedValue({ id: 'bill-1', paid_at: new Date() });
+
+      await scheduler.reconcileErpPushes();
+
+      const saved = erpPushRepo.save.mock.calls[0][0];
+      expect(saved.status).toBe('paid');
+      expect(saved.paid_at).toEqual(expect.any(Date));
+      expect(notificationService.create).not.toHaveBeenCalled();
+    });
+
+    it('expires a pending push that never completed and alerts the branch', async () => {
+      erpPushRepo.find.mockResolvedValue([
+        makePush({
+          pushed_at: new Date(Date.now() - 2 * 3600_000),
+        }),
+      ]);
+      branchRepo.findOne.mockResolvedValue({
+        id: 'branch-1',
+        settings: { payment_providers: [] },
+      });
+      notificationRepo.findOne.mockResolvedValue(null);
+      (client.getMerchantTransaction as jest.Mock).mockRejectedValue(
+        new Error('not found'),
+      );
+
+      await scheduler.reconcileErpPushes();
+
+      const saved = erpPushRepo.save.mock.calls[0][0];
+      expect(saved.status).toBe('expired');
+      expect(notificationService.create).toHaveBeenCalledTimes(1);
+      expect(notificationService.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          branch_id: 'branch-1',
+          type: 'erp_push',
+          title: 'Expired Moniepoint Push',
+          data: expect.objectContaining({
+            merchant_reference: 'BILL-REF-1',
+            outcome: 'expired',
+          }),
+        }),
+      );
+    });
+
+    it('marks a push declined when the POS feed reports a failed transaction and alerts', async () => {
+      erpPushRepo.find.mockResolvedValue([
+        makePush({ pushed_at: new Date(Date.now() - 3 * 60_000) }),
+      ]);
+      (client.getMerchantTransaction as jest.Mock).mockResolvedValue({
+        processingStatus: 'DECLINED',
+        responseMessage: 'Insufficient funds',
+      });
+      branchRepo.findOne.mockResolvedValue({
+        id: 'branch-1',
+        settings: { payment_providers: [] },
+      });
+      notificationRepo.findOne.mockResolvedValue(null);
+
+      await scheduler.reconcileErpPushes();
+
+      const saved = erpPushRepo.save.mock.calls[0][0];
+      expect(saved.status).toBe('declined');
+      expect(saved.error).toBe('Insufficient funds');
+      expect(notificationService.create).toHaveBeenCalledTimes(1);
+      expect(notificationService.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'erp_push',
+          title: 'Declined Moniepoint Push',
+          data: expect.objectContaining({
+            outcome: 'declined',
+            bill_id: null,
+          }),
+        }),
+      );
+    });
+
+    it('keeps a young pending push alone (lookup delay not yet reached)', async () => {
+      erpPushRepo.find.mockResolvedValue([makePush({ pushed_at: new Date() })]);
+
+      await scheduler.reconcileErpPushes();
+
+      expect(erpPushRepo.save).not.toHaveBeenCalled();
+      expect(client.getMerchantTransaction).not.toHaveBeenCalled();
+    });
   });
 });
