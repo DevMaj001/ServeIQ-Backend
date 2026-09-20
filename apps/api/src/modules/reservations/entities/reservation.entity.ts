@@ -130,7 +130,9 @@ export class Reservation {
 
   // Computed properties (not persisted)
   get end_time(): Date {
-    return new Date(this.reservation_time.getTime() + this.duration_minutes * 60 * 1000);
+    return new Date(
+      this.reservation_time.getTime() + this.duration_minutes * 60 * 1000,
+    );
   }
 
   get is_active(): boolean {

@@ -12,7 +12,10 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ReservationStatus, ReservationSource } from '../entities/reservation.entity';
+import {
+  ReservationStatus,
+  ReservationSource,
+} from '../entities/reservation.entity';
 
 export class CreateReservationDto {
   @ApiProperty({ example: 'John Doe', description: 'Customer full name' })
@@ -20,12 +23,18 @@ export class CreateReservationDto {
   @IsString()
   customer_name: string;
 
-  @ApiProperty({ example: '+2348012345678', description: 'Customer phone number' })
+  @ApiProperty({
+    example: '+2348012345678',
+    description: 'Customer phone number',
+  })
   @IsNotEmpty()
   @IsString()
   customer_phone: string;
 
-  @ApiPropertyOptional({ example: 'john@example.com', description: 'Customer email (optional)' })
+  @ApiPropertyOptional({
+    example: 'john@example.com',
+    description: 'Customer email (optional)',
+  })
   @IsOptional()
   @IsEmail()
   customer_email?: string;
@@ -37,41 +46,63 @@ export class CreateReservationDto {
   @Max(20)
   party_size: number;
 
-  @ApiProperty({ example: '2026-09-15T19:00:00Z', description: 'Reservation date/time (ISO 8601)' })
+  @ApiProperty({
+    example: '2026-09-15T19:00:00Z',
+    description: 'Reservation date/time (ISO 8601)',
+  })
   @IsNotEmpty()
   @IsDateString()
   reservation_time: string;
 
-  @ApiPropertyOptional({ example: 90, description: 'Duration in minutes (default 90)' })
+  @ApiPropertyOptional({
+    example: 90,
+    description: 'Duration in minutes (default 90)',
+  })
   @IsOptional()
   @IsInt()
   @Min(30)
   @Max(300)
   duration_minutes?: number;
 
-  @ApiPropertyOptional({ example: 'Window seat, birthday celebration', description: 'Special requests' })
+  @ApiPropertyOptional({
+    example: 'Window seat, birthday celebration',
+    description: 'Special requests',
+  })
   @IsOptional()
   @IsString()
   special_requests?: string;
 
-  @ApiPropertyOptional({ enum: ReservationSource, default: ReservationSource.PUBLIC, description: 'Booking source' })
+  @ApiPropertyOptional({
+    enum: ReservationSource,
+    default: ReservationSource.PUBLIC,
+    description: 'Booking source',
+  })
   @IsOptional()
   @IsIn(Object.values(ReservationSource))
   source?: ReservationSource;
 }
 
 export class UpdateReservationDto {
-  @ApiPropertyOptional({ example: 'John Doe', description: 'Customer full name' })
+  @ApiPropertyOptional({
+    example: 'John Doe',
+    description: 'Customer full name',
+  })
   @IsOptional()
   @IsString()
   customer_name?: string;
 
-  @ApiPropertyOptional({ example: '+2348012345678', description: 'Customer phone number' })
+  @ApiPropertyOptional({
+    example: '+2348012345678',
+    description: 'Customer phone number',
+  })
   @IsOptional()
   @IsString()
   customer_phone?: string;
 
-  @ApiPropertyOptional({ example: 'john@example.com', description: 'Customer email' })
+  @ApiPropertyOptional({
+    example: 'john@example.com',
+    description: 'Customer email',
+  })
   @IsOptional()
   @IsEmail()
   customer_email?: string;
@@ -83,7 +114,10 @@ export class UpdateReservationDto {
   @Max(20)
   party_size?: number;
 
-  @ApiPropertyOptional({ example: '2026-09-15T19:00:00Z', description: 'Reservation date/time (ISO 8601)' })
+  @ApiPropertyOptional({
+    example: '2026-09-15T19:00:00Z',
+    description: 'Reservation date/time (ISO 8601)',
+  })
   @IsOptional()
   @IsDateString()
   reservation_time?: string;
@@ -95,17 +129,25 @@ export class UpdateReservationDto {
   @Max(300)
   duration_minutes?: number;
 
-  @ApiPropertyOptional({ enum: ReservationStatus, description: 'Reservation status' })
+  @ApiPropertyOptional({
+    enum: ReservationStatus,
+    description: 'Reservation status',
+  })
   @IsOptional()
   @IsIn(Object.values(ReservationStatus))
   status?: ReservationStatus;
 
-  @ApiPropertyOptional({ example: 'Window seat, birthday celebration', description: 'Special requests' })
+  @ApiPropertyOptional({
+    example: 'Window seat, birthday celebration',
+    description: 'Special requests',
+  })
   @IsOptional()
   @IsString()
   special_requests?: string;
 
-  @ApiPropertyOptional({ description: 'Cancellation reason (required when status=cancelled)' })
+  @ApiPropertyOptional({
+    description: 'Cancellation reason (required when status=cancelled)',
+  })
   @ValidateIf((o) => o.status === ReservationStatus.CANCELLED)
   @IsString()
   cancellation_reason?: string;
@@ -122,7 +164,10 @@ export class ReservationQueryDto {
   @IsString()
   table_id?: string;
 
-  @ApiPropertyOptional({ enum: ReservationStatus, description: 'Filter by status' })
+  @ApiPropertyOptional({
+    enum: ReservationStatus,
+    description: 'Filter by status',
+  })
   @IsOptional()
   @IsIn(Object.values(ReservationStatus))
   status?: ReservationStatus;
@@ -159,7 +204,10 @@ export class ReservationQueryDto {
 }
 
 export class AvailabilityQueryDto {
-  @ApiProperty({ example: '2026-09-15', description: 'Date to check (YYYY-MM-DD)' })
+  @ApiProperty({
+    example: '2026-09-15',
+    description: 'Date to check (YYYY-MM-DD)',
+  })
   @IsNotEmpty()
   @IsDateString()
   date: string;
@@ -172,7 +220,9 @@ export class AvailabilityQueryDto {
   @Max(20)
   party_size: number;
 
-  @ApiPropertyOptional({ description: 'Branch ID (defaults to current branch)' })
+  @ApiPropertyOptional({
+    description: 'Branch ID (defaults to current branch)',
+  })
   @IsOptional()
   @IsString()
   branch_id?: string;
@@ -184,12 +234,18 @@ export class WalkinReservationDto {
   @IsString()
   customer_name: string;
 
-  @ApiProperty({ example: '+2348012345678', description: 'Customer phone number' })
+  @ApiProperty({
+    example: '+2348012345678',
+    description: 'Customer phone number',
+  })
   @IsNotEmpty()
   @IsString()
   customer_phone: string;
 
-  @ApiPropertyOptional({ example: 'john@example.com', description: 'Customer email' })
+  @ApiPropertyOptional({
+    example: 'john@example.com',
+    description: 'Customer email',
+  })
   @IsOptional()
   @IsEmail()
   customer_email?: string;
@@ -208,12 +264,18 @@ export class WalkinReservationDto {
   @Max(300)
   duration_minutes?: number;
 
-  @ApiPropertyOptional({ example: 'Table 5', description: 'Specific table to assign' })
+  @ApiPropertyOptional({
+    example: 'Table 5',
+    description: 'Specific table to assign',
+  })
   @IsOptional()
   @IsString()
   table_id?: string;
 
-  @ApiPropertyOptional({ example: 'Walk-in customer', description: 'Special requests' })
+  @ApiPropertyOptional({
+    example: 'Walk-in customer',
+    description: 'Special requests',
+  })
   @IsOptional()
   @IsString()
   special_requests?: string;
@@ -227,7 +289,10 @@ export class ConfirmReservationDto {
 }
 
 export class CancelReservationDto {
-  @ApiProperty({ example: 'Change of plans', description: 'Reason for cancellation (optional)' })
+  @ApiProperty({
+    example: 'Change of plans',
+    description: 'Reason for cancellation (optional)',
+  })
   @IsOptional()
   @IsString()
   reason?: string;

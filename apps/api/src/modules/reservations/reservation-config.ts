@@ -32,7 +32,9 @@ const DEFAULT_CONFIG: ReservationConfig = {
   closing_time: '22:00',
 };
 
-export function getReservationConfig(branch: { settings?: any } | null | undefined): ReservationConfig {
+export function getReservationConfig(
+  branch: { settings?: any } | null | undefined,
+): ReservationConfig {
   const r = branch?.settings?.reservation;
   if (!r || typeof r !== 'object') return DEFAULT_CONFIG;
 
@@ -40,30 +42,56 @@ export function getReservationConfig(branch: { settings?: any } | null | undefin
     const n = Number(v);
     return Number.isFinite(n) ? n : fallback;
   };
-  const bool = (v: unknown, fallback: boolean): boolean => (typeof v === 'boolean' ? v : fallback);
+  const bool = (v: unknown, fallback: boolean): boolean =>
+    typeof v === 'boolean' ? v : fallback;
 
   return {
     enabled: bool(r.enabled, DEFAULT_CONFIG.enabled),
     advance_days: num(r.advance_days, DEFAULT_CONFIG.advance_days),
     min_party_size: num(r.min_party_size, DEFAULT_CONFIG.min_party_size),
     max_party_size: num(r.max_party_size, DEFAULT_CONFIG.max_party_size),
-    slot_interval_minutes: num(r.slot_interval_minutes, DEFAULT_CONFIG.slot_interval_minutes),
-    default_duration_minutes: num(r.default_duration_minutes, DEFAULT_CONFIG.default_duration_minutes),
-    require_confirmation: bool(r.require_confirmation, DEFAULT_CONFIG.require_confirmation),
+    slot_interval_minutes: num(
+      r.slot_interval_minutes,
+      DEFAULT_CONFIG.slot_interval_minutes,
+    ),
+    default_duration_minutes: num(
+      r.default_duration_minutes,
+      DEFAULT_CONFIG.default_duration_minutes,
+    ),
+    require_confirmation: bool(
+      r.require_confirmation,
+      DEFAULT_CONFIG.require_confirmation,
+    ),
     auto_confirm: bool(r.auto_confirm, DEFAULT_CONFIG.auto_confirm),
-    reminder_minutes_before: num(r.reminder_minutes_before, DEFAULT_CONFIG.reminder_minutes_before),
+    reminder_minutes_before: num(
+      r.reminder_minutes_before,
+      DEFAULT_CONFIG.reminder_minutes_before,
+    ),
     hold_minutes: num(r.hold_minutes, DEFAULT_CONFIG.hold_minutes),
     allow_online: bool(r.allow_online, DEFAULT_CONFIG.allow_online),
-    walkin_buffer_minutes: num(r.walkin_buffer_minutes, DEFAULT_CONFIG.walkin_buffer_minutes),
-    opening_time: typeof r.opening_time === 'string' && r.opening_time ? r.opening_time : DEFAULT_CONFIG.opening_time,
-    closing_time: typeof r.closing_time === 'string' && r.closing_time ? r.closing_time : DEFAULT_CONFIG.closing_time,
+    walkin_buffer_minutes: num(
+      r.walkin_buffer_minutes,
+      DEFAULT_CONFIG.walkin_buffer_minutes,
+    ),
+    opening_time:
+      typeof r.opening_time === 'string' && r.opening_time
+        ? r.opening_time
+        : DEFAULT_CONFIG.opening_time,
+    closing_time:
+      typeof r.closing_time === 'string' && r.closing_time
+        ? r.closing_time
+        : DEFAULT_CONFIG.closing_time,
   };
 }
 
 export function getAvailableSlots(
   config: ReservationConfig,
   date: Date,
-  existingReservations: { reservation_time: Date; duration_minutes: number; table_id: string | null }[],
+  existingReservations: {
+    reservation_time: Date;
+    duration_minutes: number;
+    table_id: string | null;
+  }[],
   tables: { id: string; capacity: number }[],
   partySize: number,
 ): { start: Date; end: Date; availableTables: string[] }[] {
@@ -81,7 +109,11 @@ export function getAvailableSlots(
   const slotMs = config.slot_interval_minutes * 60 * 1000;
   const minDurationMs = config.default_duration_minutes * 60 * 1000;
 
-  for (let slotStart = new Date(dayStart); slotStart < dayEnd; slotStart = new Date(slotStart.getTime() + slotMs)) {
+  for (
+    let slotStart = new Date(dayStart);
+    slotStart < dayEnd;
+    slotStart = new Date(slotStart.getTime() + slotMs)
+  ) {
     const slotEnd = new Date(slotStart.getTime() + minDurationMs);
     if (slotEnd > dayEnd) break;
 
@@ -94,13 +126,19 @@ export function getAvailableSlots(
         (res) =>
           res.table_id === table.id &&
           res.reservation_time < slotEnd &&
-          new Date(res.reservation_time.getTime() + res.duration_minutes * 60 * 1000) > slotStart,
+          new Date(
+            res.reservation_time.getTime() + res.duration_minutes * 60 * 1000,
+          ) > slotStart,
       );
       if (!conflict) availableTables.push(table.id);
     }
 
     if (availableTables.length > 0) {
-      slots.push({ start: new Date(slotStart), end: new Date(slotEnd), availableTables });
+      slots.push({
+        start: new Date(slotStart),
+        end: new Date(slotEnd),
+        availableTables,
+      });
     }
   }
 

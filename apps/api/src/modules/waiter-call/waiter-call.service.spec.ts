@@ -50,7 +50,7 @@ describe('WaiterCallService', () => {
       updated_at: new Date(),
       deleted_at: null,
       ...over,
-    } as WaiterCall);
+    }) as WaiterCall;
 
   beforeEach(async () => {
     waiterCallRepo = {
@@ -66,7 +66,9 @@ describe('WaiterCallService', () => {
       find: jest.fn(),
     };
     branchRepo = {
-      findOne: jest.fn().mockResolvedValue({ settings: { max_tables_per_waiter: 5 } }),
+      findOne: jest
+        .fn()
+        .mockResolvedValue({ settings: { max_tables_per_waiter: 5 } }),
     };
     tabRepo = {
       count: jest.fn().mockResolvedValue(0),
@@ -116,9 +118,9 @@ describe('WaiterCallService', () => {
       makeCall({ status: WaiterCallStatus.PENDING }),
     );
 
-    await expect(service.createWaiterCall('table-1', 'branch-1')).rejects.toThrow(
-      /already has an active waiter request/,
-    );
+    await expect(
+      service.createWaiterCall('table-1', 'branch-1'),
+    ).rejects.toThrow(/already has an active waiter request/);
     expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
   });
 
@@ -149,7 +151,9 @@ describe('WaiterCallService', () => {
   });
 
   it('marks a call as resolved', async () => {
-    waiterCallRepo.findOne.mockResolvedValue(makeCall({ status: WaiterCallStatus.ARRIVED }));
+    waiterCallRepo.findOne.mockResolvedValue(
+      makeCall({ status: WaiterCallStatus.ARRIVED }),
+    );
 
     const call = await service.resolveWaiterCall('call-1');
     expect(call.status).toBe(WaiterCallStatus.RESOLVED);

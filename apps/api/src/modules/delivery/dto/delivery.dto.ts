@@ -14,7 +14,8 @@ export class ProcessRiderPayoutDto {
 
   @ApiPropertyOptional({
     example: 'pay_batch_abc123',
-    description: 'Provider batch reference (required when provider is not manual)',
+    description:
+      'Provider batch reference (required when provider is not manual)',
   })
   @IsOptional()
   @IsString()
@@ -24,7 +25,8 @@ export class ProcessRiderPayoutDto {
 export class CompletePayoutBatchDto {
   @ApiProperty({
     example: 'pay_batch_abc123',
-    description: 'Reference returned by the payout provider after the transfer succeeds',
+    description:
+      'Reference returned by the payout provider after the transfer succeeds',
   })
   @IsString()
   providerBatchId: string;
