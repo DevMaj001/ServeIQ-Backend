@@ -10,6 +10,7 @@ import {
   UseGuards,
   Request,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -144,13 +145,85 @@ export class AdminController {
   @ApiResponse({ status: 404, description: 'Business not found.' })
   async updateBusiness(
     @Param('id') id: string,
+    @Request() req: any,
     @Body() dto: UpdateBusinessDto,
   ) {
-    const updated = await this.adminService.updateBusiness(id, dto);
+    const updated = await this.adminService.updateBusiness(
+      id,
+      dto,
+      req.user.userId,
+    );
     if (!updated) {
       throw new NotFoundException('Business not found');
     }
     return updated;
+  }
+
+  @Post('businesses/:id/force-logout')
+  @ApiOperation({
+    summary:
+      'Kill every live session of a business: bumps token versions, revokes refresh tokens, disconnects sockets (superadmin only)',
+  })
+  @ApiParam({ name: 'id', description: 'Business UUID' })
+  @ApiResponse({ status: 200, description: 'Sessions revoked.' })
+  async forceLogoutBusiness(@Param('id') id: string, @Request() req: any) {
+    return this.adminService.forceLogoutBusiness(id, req.user.userId);
+  }
+
+  @Get('users')
+  @ApiOperation({
+    summary: 'Cross-tenant user search (superadmin only, safe fields)',
+  })
+  @ApiQuery({ name: 'q', required: false })
+  @ApiQuery({ name: 'business_id', required: false })
+  @ApiQuery({ name: 'role', required: false })
+  @ApiQuery({ name: 'limit', required: false, example: '50' })
+  @ApiResponse({ status: 200, description: 'Matching users.' })
+  async searchUsers(
+    @Query('q') q?: string,
+    @Query('business_id') businessId?: string,
+    @Query('role') role?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.adminService.searchUsers({
+      q,
+      businessId,
+      role,
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+
+  @Patch('users/:id/status')
+  @ApiOperation({
+    summary:
+      'Activate/deactivate a user platform-wide; deactivation kills their sessions (superadmin only)',
+  })
+  @ApiParam({ name: 'id', description: 'User UUID' })
+  @ApiResponse({ status: 200, description: 'User status updated.' })
+  async updateUserStatus(
+    @Param('id') id: string,
+    @Request() req: any,
+    @Body() body: { is_active: boolean },
+  ) {
+    if (typeof body?.is_active !== 'boolean') {
+      throw new BadRequestException('is_active (boolean) is required');
+    }
+    return this.adminService.updateUserStatus(
+      id,
+      body.is_active,
+      req.user.userId,
+    );
+  }
+
+  @Post('users/:id/force-logout')
+  @ApiOperation({
+    summary:
+      'Force-logout one user everywhere: bumps token version, revokes refresh tokens (superadmin only)',
+  })
+  @ApiParam({ name: 'id', description: 'User UUID' })
+  @ApiResponse({ status: 200, description: 'Sessions revoked.' })
+  async forceLogoutUser(@Param('id') id: string, @Request() req: any) {
+    return this.adminService.forceLogoutUser(id, req.user.userId);
   }
 
   @Post('businesses/extend')
@@ -213,8 +286,7 @@ export class AdminController {
 
   @Get('businesses/:id/shift-templates')
   @ApiOperation({
-    summary:
-      'List shift templates for a business (superadmin only)',
+    summary: 'List shift templates for a business (superadmin only)',
   })
   @ApiParam({ name: 'id', description: 'Business UUID' })
   @ApiResponse({ status: 200, description: 'Shift templates list.' })
@@ -225,8 +297,7 @@ export class AdminController {
 
   @Post('businesses/:id/shift-templates')
   @ApiOperation({
-    summary:
-      'Create a shift template for a business (superadmin only)',
+    summary: 'Create a shift template for a business (superadmin only)',
   })
   @ApiParam({ name: 'id', description: 'Business UUID' })
   @ApiResponse({ status: 201, description: 'Shift template created.' })
@@ -240,8 +311,7 @@ export class AdminController {
 
   @Patch('businesses/:id/shift-templates/:templateId')
   @ApiOperation({
-    summary:
-      'Update a shift template for a business (superadmin only)',
+    summary: 'Update a shift template for a business (superadmin only)',
   })
   @ApiParam({ name: 'id', description: 'Business UUID' })
   @ApiParam({ name: 'templateId', description: 'Shift template UUID' })
@@ -257,8 +327,7 @@ export class AdminController {
 
   @Delete('businesses/:id/shift-templates/:templateId')
   @ApiOperation({
-    summary:
-      'Delete a shift template for a business (superadmin only)',
+    summary: 'Delete a shift template for a business (superadmin only)',
   })
   @ApiParam({ name: 'id', description: 'Business UUID' })
   @ApiParam({ name: 'templateId', description: 'Shift template UUID' })

@@ -1,3 +1,4 @@
+import { Throttle } from '@nestjs/throttler';
 import {
   Controller,
   Get,
@@ -43,12 +44,16 @@ export class ReservationsController {
   // ===== PUBLIC ENDPOINTS (no auth) =====
 
   @Get('availability')
-  @ApiOperation({ summary: 'Check available time slots for a date/party size (public)' })
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  @ApiOperation({
+    summary: 'Check available time slots for a date/party size (public)',
+  })
   async checkAvailability(@Query() query: AvailabilityQueryDto) {
     return this.reservationsService.checkAvailabilitySlots(query);
   }
 
   @Post('book')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Create a new reservation (public)' })
   async createPublic(@Body() dto: CreateReservationDto, @Request() req: any) {
     // For public booking, branch_id comes from query param or header
@@ -58,19 +63,29 @@ export class ReservationsController {
   }
 
   @Get('confirm/:code')
-  @ApiOperation({ summary: 'Confirm reservation by confirmation code (public)' })
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({
+    summary: 'Confirm reservation by confirmation code (public)',
+  })
   async confirmByCode(@Param('code') code: string) {
     return this.reservationsService.confirmByCode(code);
   }
 
   @Post('cancel/:code')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Cancel reservation by confirmation code (public)' })
-  async cancelByCode(@Param('code') code: string, @Body() body: CancelReservationDto) {
+  async cancelByCode(
+    @Param('code') code: string,
+    @Body() body: CancelReservationDto,
+  ) {
     return this.reservationsService.cancelByCode(code, body.reason ?? null);
   }
 
   @Get('lookup/:code')
-  @ApiOperation({ summary: 'Look up reservation by confirmation code (public)' })
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({
+    summary: 'Look up reservation by confirmation code (public)',
+  })
   async lookupByCode(@Param('code') code: string) {
     return this.reservationsService.findByConfirmationCode(code);
   }
@@ -79,7 +94,12 @@ export class ReservationsController {
 
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
-  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.SUPERADMIN)
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.SUPERADMIN,
+  )
   @RequirePermissions(PERMISSIONS.MANAGE_RESERVATIONS)
   @ApiOperation({ summary: 'List reservations (manager view)' })
   async list(@Request() req: any, @Query() query: ReservationQueryDto) {
@@ -88,16 +108,26 @@ export class ReservationsController {
 
   @Get('today')
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
-  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.SUPERADMIN)
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.SUPERADMIN,
+  )
   @RequirePermissions(PERMISSIONS.MANAGE_RESERVATIONS)
-  @ApiOperation({ summary: 'Get today\'s reservation summary' })
+  @ApiOperation({ summary: "Get today's reservation summary" })
   async todaySummary(@Request() req: any) {
     return this.reservationsService.getTodaySummary(req.user.branchId);
   }
 
   @Get(':id')
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
-  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.SUPERADMIN)
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.SUPERADMIN,
+  )
   @RequirePermissions(PERMISSIONS.MANAGE_RESERVATIONS)
   @ApiOperation({ summary: 'Get reservation by ID' })
   async findOne(@Param('id') id: string, @Request() req: any) {
@@ -106,25 +136,53 @@ export class ReservationsController {
 
   @Post('walkin')
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
-  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.SUPERADMIN)
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.SUPERADMIN,
+  )
   @RequirePermissions(PERMISSIONS.OPEN_TABLE)
   @ApiOperation({ summary: 'Create walk-in reservation (seats immediately)' })
   async createWalkin(@Body() dto: WalkinReservationDto, @Request() req: any) {
-    return this.reservationsService.createWalkin(dto, req.user.branchId, req.user.userId);
+    return this.reservationsService.createWalkin(
+      dto,
+      req.user.branchId,
+      req.user.userId,
+    );
   }
 
   @Patch(':id')
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
-  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.SUPERADMIN)
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.SUPERADMIN,
+  )
   @RequirePermissions(PERMISSIONS.MANAGE_RESERVATIONS)
   @ApiOperation({ summary: 'Update reservation (time, party, status, etc.)' })
-  async update(@Param('id') id: string, @Body() dto: UpdateReservationDto, @Request() req: any) {
-    return this.reservationsService.update(id, req.user.businessId, dto, req.user.userId);
+  async update(
+    @Param('id') id: string,
+    @Body() dto: UpdateReservationDto,
+    @Request() req: any,
+  ) {
+    return this.reservationsService.update(
+      id,
+      req.user.businessId,
+      dto,
+      req.user.userId,
+    );
   }
 
   @Patch(':id/seat')
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
-  @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERVISOR, UserRole.SUPERADMIN)
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.SUPERADMIN,
+  )
   @RequirePermissions(PERMISSIONS.OPEN_TABLE)
   @ApiOperation({ summary: 'Seat a confirmed reservation (creates tab)' })
   async seat(@Param('id') id: string, @Request() req: any) {

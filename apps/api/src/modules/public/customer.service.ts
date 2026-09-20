@@ -15,6 +15,7 @@ import { Branch } from '../branch/entities/branch.entity';
 import { Business } from '../business/entities/business.entity';
 import { Review } from '../review/entities/review.entity';
 import { Bill } from '../bill/entities/bill.entity';
+import { computeBillTotals, resolveBillRates } from '../bill/bill-totals';
 import { Delivery } from '../delivery/entities/delivery.entity';
 import { Rider } from '../riders/entities/rider.entity';
 import { User } from '../user/entities/user.entity';
@@ -30,7 +31,6 @@ import {
   PickupMode,
   DeliveryStatus,
   DeliveryDetails,
-  isBillable,
 } from '../../common/shared';
 
 const UUID_RE =
@@ -222,8 +222,10 @@ export class CustomerService {
         'branch_id is required when opening a new order group',
       );
 
-    const pickupMode = first?.pickup_mode ?? meta?.pickup_mode ?? PickupMode.SELF;
-    let deliveryFeeKobo = first?.delivery_fee_kobo ?? meta?.delivery_fee_kobo ?? 0;
+    const pickupMode =
+      first?.pickup_mode ?? meta?.pickup_mode ?? PickupMode.SELF;
+    let deliveryFeeKobo =
+      first?.delivery_fee_kobo ?? meta?.delivery_fee_kobo ?? 0;
     if (pickupMode === PickupMode.DISPATCH) {
       const details = (meta?.delivery_details ??
         first?.delivery_details) as DeliveryDetails | null;
@@ -296,7 +298,9 @@ export class CustomerService {
           status: 'open',
           pickup_mode: pickupMode,
           delivery_details:
-            first?.delivery_details ?? (meta?.delivery_details as DeliveryDetails) ?? null,
+            first?.delivery_details ??
+            (meta?.delivery_details as DeliveryDetails) ??
+            null,
           delivery_fee_kobo: deliveryFeeKobo,
           customer_name: first?.customer_name ?? meta?.customer_name ?? 'Guest',
           party_size: first?.party_size ?? meta?.party_size ?? 1,
@@ -571,7 +575,10 @@ export class CustomerService {
     }
   }
 
-  private async resolveGroupBranch(trackingCode: string, fallbackBranchId: string) {
+  private async resolveGroupBranch(
+    trackingCode: string,
+    fallbackBranchId: string,
+  ) {
     const first = await this.orderRepo.findOne({
       where: { tracking_code: trackingCode },
       order: { created_at: 'ASC' },
@@ -650,7 +657,12 @@ export class CustomerService {
         throw new ForbiddenException('Invalid tracking code');
       if (tab.status !== 'open' && tab.status !== 'paid')
         throw new BadRequestException('Tab is not open');
-      return this.saveReview(tab.branch_id, { tabId: tab.id }, body, tab.tracking_code);
+      return this.saveReview(
+        tab.branch_id,
+        { tabId: tab.id },
+        body,
+        tab.tracking_code,
+      );
     }
 
     if (orderKey !== trackingCode)
@@ -733,12 +745,6 @@ export class CustomerService {
 
     const menuMap = await this.loadMenuMap(orders);
 
-    // Match the bill exactly: excluded (declined/cancelled) orders never count
-    // toward the subtotal, and the total adds service charge + VAT on top.
-    const subtotalKobo = orders
-      .filter((o) => isBillable(o.order_status))
-      .reduce((sum, o) => sum + (o.subtotal_kobo ?? 0), 0);
-
     const tabBranch = await this.branchRepo.findOne({
       where: { id: tab.branch_id },
     });
@@ -747,18 +753,25 @@ export class CustomerService {
           where: { id: tabBranch.business_id },
         })
       : null;
-    const serviceChargePercent = Number(business?.service_charge_percent ?? 10);
-    const serviceChargeKobo = Math.round(
-      subtotalKobo * (serviceChargePercent / 100),
-    );
-    const taxRatePercent = Number(business?.tax_rate ?? 7.5);
-    const taxKobo = Math.round(subtotalKobo * (taxRatePercent / 100));
-    const deliveryFeeKobo =
-      tab.pickup_mode === PickupMode.DISPATCH
-        ? Number(tab.delivery_fee_kobo || 0)
-        : 0;
-    const totalKobo =
-      subtotalKobo + serviceChargeKobo + taxKobo + deliveryFeeKobo;
+    // Shared bill math (see bill-totals.ts): excluded orders never count,
+    // and the total matches what checkout will actually charge.
+    const rates = resolveBillRates(business);
+    const {
+      subtotal_kobo: subtotalKobo,
+      service_charge_kobo: serviceChargeKobo,
+      tax_kobo: taxKobo,
+      delivery_fee_kobo: deliveryFeeKobo,
+      total_kobo: totalKobo,
+    } = computeBillTotals({
+      orders,
+      rates,
+      deliveryFeeKobo:
+        tab.pickup_mode === PickupMode.DISPATCH
+          ? Number(tab.delivery_fee_kobo || 0)
+          : 0,
+    });
+    const serviceChargePercent = rates.serviceChargePercent;
+    const taxRatePercent = rates.taxRatePercent;
 
     const base = {
       id: tab.id,
@@ -843,23 +856,26 @@ export class CustomerService {
       : null;
     const menuMap = await this.loadMenuMap(orders);
 
-    const subtotalKobo = orders
-      .filter((o) => isBillable(o.order_status))
-      .reduce((sum, o) => sum + (o.subtotal_kobo ?? 0), 0);
-    const serviceChargePercent = Number(business?.service_charge_percent ?? 10);
-    const serviceChargeKobo = Math.round(
-      subtotalKobo * (serviceChargePercent / 100),
-    );
-    const taxRatePercent = Number(business?.tax_rate ?? 7.5);
-    const taxKobo = Math.round(subtotalKobo * (taxRatePercent / 100));
     const pickupMode =
       first?.pickup_mode ?? meta?.pickup_mode ?? PickupMode.SELF;
-    const deliveryFeeKobo =
-      pickupMode === PickupMode.DISPATCH
-        ? Number(first?.delivery_fee_kobo ?? meta?.delivery_fee_kobo ?? 0)
-        : 0;
-    const totalKobo =
-      subtotalKobo + serviceChargeKobo + taxKobo + deliveryFeeKobo;
+    // Shared bill math (see bill-totals.ts).
+    const groupRates = resolveBillRates(business);
+    const {
+      subtotal_kobo: subtotalKobo,
+      service_charge_kobo: serviceChargeKobo,
+      tax_kobo: taxKobo,
+      delivery_fee_kobo: deliveryFeeKobo,
+      total_kobo: totalKobo,
+    } = computeBillTotals({
+      orders,
+      rates: groupRates,
+      deliveryFeeKobo:
+        pickupMode === PickupMode.DISPATCH
+          ? Number(first?.delivery_fee_kobo ?? meta?.delivery_fee_kobo ?? 0)
+          : 0,
+    });
+    const serviceChargePercent = groupRates.serviceChargePercent;
+    const taxRatePercent = groupRates.taxRatePercent;
     const groupStatus = first
       ? first.status === 'paid'
         ? 'paid'
@@ -924,7 +940,11 @@ export class CustomerService {
     return base;
   }
 
-  private async attachSplitProgress(base: Record<string, any>, tab: Tab, tabId: string) {
+  private async attachSplitProgress(
+    base: Record<string, any>,
+    tab: Tab,
+    tabId: string,
+  ) {
     if (tab.tab_type !== 'takeaway') {
       const splits = await this.billRepo.find({
         where: {

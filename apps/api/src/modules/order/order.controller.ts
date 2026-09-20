@@ -69,6 +69,7 @@ export class OrderController {
       items,
       req.user.userId,
       req.user.role,
+      req.user.branchId,
     );
   }
 

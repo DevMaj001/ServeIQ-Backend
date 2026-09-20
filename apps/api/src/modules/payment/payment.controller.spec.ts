@@ -14,6 +14,9 @@ import { Repository } from 'typeorm';
 import { PaymentMethod } from '../../common/shared';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { NotificationService } from '../notification/notification.service';
+import { WebhookEventsService } from './webhook-events.service';
+import { PlatformPaymentProvider } from '../admin/entities/platform-payment-provider.entity';
+import { EncryptionService } from '../../common/services/encryption.service';
 import * as crypto from 'crypto';
 
 const mockRepo = () => ({
@@ -39,6 +42,14 @@ const mockSimReq = {
   headers: { 'x-simulate': '1' },
 } as any;
 
+// Direct controller calls have no rawBody, so the digest is computed over
+// JSON.stringify(payload) — sign the same bytes.
+const sign512 = (payload: any, secret: string) =>
+  crypto
+    .createHmac('sha512', secret)
+    .update(JSON.stringify(payload))
+    .digest('hex');
+
 describe('PaymentController', () => {
   let controller: PaymentController;
   let module: TestingModule;
@@ -49,6 +60,8 @@ describe('PaymentController', () => {
   let branchRepo: any;
   let billService: any;
   let notificationService: any;
+  let webhookEvents: any;
+  let platformProviderRepo: any;
 
   beforeAll(() => {
     // Dev sandbox: let the x-simulate header bypass provider signatures in
@@ -72,6 +85,13 @@ describe('PaymentController', () => {
     notificationService = {
       create: jest.fn().mockResolvedValue(undefined),
     };
+    webhookEvents = {
+      record: jest.fn().mockResolvedValue(undefined),
+      hasSettledPayload: jest.fn().mockResolvedValue(false),
+      list: jest.fn().mockResolvedValue([]),
+      providerHealth: jest.fn().mockResolvedValue([]),
+    };
+    platformProviderRepo = mockRepo();
 
     module = await Test.createTestingModule({
       controllers: [PaymentController],
@@ -82,8 +102,14 @@ describe('PaymentController', () => {
         { provide: getRepositoryToken(PosTerminal), useValue: posTerminalRepo },
         { provide: getRepositoryToken(Branch), useValue: branchRepo },
         { provide: getRepositoryToken(Business), useValue: mockRepo() },
+        {
+          provide: getRepositoryToken(PlatformPaymentProvider),
+          useValue: platformProviderRepo,
+        },
         { provide: BillService, useValue: billService },
         { provide: NotificationService, useValue: notificationService },
+        { provide: WebhookEventsService, useValue: webhookEvents },
+        EncryptionService,
       ],
     })
       .overrideGuard(PermissionsGuard)
@@ -210,10 +236,10 @@ describe('PaymentController', () => {
     });
 
     it('should return received:true with Bill not found for a verifiable request whose branch has no bill', async () => {
-      // Branch resolves from the terminal (pre-auth), provider does not
-      // require HMAC (verification_method: none), and the amount fallback
-      // finds no candidate bill: the request is authenticated-and-known but
-      // has no bill to settle, so it still returns the graceful 200.
+      // Branch resolves from the terminal (pre-auth), the signature verifies
+      // against the branch secret, and the amount fallback finds no candidate
+      // bill: the request is authenticated-and-known but has no bill to
+      // settle, so it still returns the graceful 200.
       posTerminalRepo.findOne.mockResolvedValue({
         id: 'term-1',
         branch_id: 'branch-1',
@@ -225,8 +251,8 @@ describe('PaymentController', () => {
               name: 'monniepoint',
               type: 'webhook',
               label: 'Moniepoint',
-              verification_method: 'none',
-              config: {},
+              verification_method: 'hmac-sha512',
+              config: { webhook_secret: 'secret123' },
             },
           ],
         },
@@ -239,14 +265,19 @@ describe('PaymentController', () => {
         getMany: jest.fn().mockResolvedValue([]),
       });
 
-      const result = await controller.monniepointWebhook(mockReq, 'sig', {
+      const payload = {
         data: {
           reference: 'ref-1',
           amount: 100,
           status: 'SUCCESSFUL',
           terminalId: 'term-1',
         },
-      });
+      };
+      const result = await controller.monniepointWebhook(
+        mockReq,
+        sign512(payload, 'secret123'),
+        payload,
+      );
       expect(result.received).toBe(true);
       expect(result.error).toBe('Bill not found');
     });
@@ -357,21 +388,26 @@ describe('PaymentController', () => {
               name: 'monniepoint',
               type: 'webhook',
               label: 'Moniepoint',
-              verification_method: 'none',
-              config: {},
+              verification_method: 'hmac-sha512',
+              config: { webhook_secret: 'secret123' },
             },
           ],
         },
       });
 
-      const result = await controller.monniepointWebhook(mockReq, 'valid-sig', {
+      const payload = {
         data: {
           reference: 'ref-1',
           amount: 150000,
           status: 'SUCCESSFUL',
           terminalId: 'term-1',
         },
-      });
+      };
+      const result = await controller.monniepointWebhook(
+        mockReq,
+        sign512(payload, 'secret123'),
+        payload,
+      );
       expect(result.received).toBe(true);
       expect(result.status).toBe('processed');
       expect(billService.processPayment).toHaveBeenCalledWith(
@@ -404,15 +440,20 @@ describe('PaymentController', () => {
               name: 'monniepoint',
               type: 'webhook',
               label: 'Moniepoint',
-              verification_method: 'none',
-              config: {},
+              verification_method: 'hmac-sha512',
+              config: { webhook_secret: 'secret123' },
             },
           ],
         },
       });
-      const result = await controller.monniepointWebhook(mockReq, 'sig', {
+      const payload = {
         data: { reference: 'ref-1', amount: 100, status: 'SUCCESSFUL' },
-      });
+      };
+      const result = await controller.monniepointWebhook(
+        mockReq,
+        sign512(payload, 'secret123'),
+        payload,
+      );
       expect(result.status).toBe('already_paid');
     });
 
@@ -881,21 +922,26 @@ describe('PaymentController', () => {
             {
               name: 'monniepoint',
               type: 'webhook',
-              verification_method: 'none',
-              config: {},
+              verification_method: 'hmac-sha512',
+              config: { webhook_secret: 'secret123' },
             },
           ],
         },
       });
 
-      const result = await controller.monniepointWebhook(mockReq, 'sig', {
+      const payload = {
         data: {
           reference: 'ref-1',
           amount: 123,
           status: 'SUCCESSFUL',
           terminalId: 'term-1',
         },
-      });
+      };
+      const result = await controller.monniepointWebhook(
+        mockReq,
+        sign512(payload, 'secret123'),
+        payload,
+      );
       expect(result.error).toBe('Amount mismatch');
       expect(result.received).toBe(true);
     });
@@ -931,8 +977,8 @@ describe('PaymentController', () => {
               name: 'opay',
               type: 'webhook',
               label: 'OPay',
-              verification_method: 'none',
-              config: {},
+              verification_method: 'hmac-sha512',
+              config: { webhook_secret: 'secret123' },
             },
           ],
         },
@@ -976,8 +1022,8 @@ describe('PaymentController', () => {
               name: 'opay',
               type: 'webhook',
               label: 'OPay',
-              verification_method: 'none',
-              config: {},
+              verification_method: 'hmac-sha512',
+              config: { webhook_secret: 'secret123' },
             },
           ],
         },
@@ -1141,21 +1187,26 @@ describe('PaymentController', () => {
               name: 'monniepoint',
               type: 'webhook',
               label: 'Moniepoint',
-              verification_method: 'none',
-              config: {},
+              verification_method: 'hmac-sha512',
+              config: { webhook_secret: 'secret123' },
             },
           ],
         },
       });
 
-      const result = await controller.monniepointWebhook(mockReq, 'sig', {
+      const payload = {
         data: {
           reference: 'ref-1',
           amount: 1500,
           status: 'SUCCESSFUL',
           terminalId: 'term-1',
         },
-      });
+      };
+      const result = await controller.monniepointWebhook(
+        mockReq,
+        sign512(payload, 'secret123'),
+        payload,
+      );
       expect(result.status).toBe('processed');
       expect(billService.processPayment).toHaveBeenCalledWith(
         'tab-1',
@@ -1182,21 +1233,26 @@ describe('PaymentController', () => {
               name: 'monniepoint',
               type: 'webhook',
               label: 'Moniepoint',
-              verification_method: 'none',
-              config: {},
+              verification_method: 'hmac-sha512',
+              config: { webhook_secret: 'secret123' },
             },
           ],
         },
       });
 
-      const result = await controller.monniepointWebhook(mockReq, 'sig', {
+      const payload = {
         data: {
           reference: 'ref-1',
           amount: 123,
           status: 'SUCCESSFUL',
           terminalId: 'term-1',
         },
-      });
+      };
+      const result = await controller.monniepointWebhook(
+        mockReq,
+        sign512(payload, 'secret123'),
+        payload,
+      );
       expect(result.error).toBe('Amount mismatch');
       expect(billService.processPayment).not.toHaveBeenCalled();
     });
@@ -1216,21 +1272,26 @@ describe('PaymentController', () => {
             {
               name: 'monniepoint',
               type: 'webhook',
-              verification_method: 'none',
-              config: {},
+              verification_method: 'hmac-sha512',
+              config: { webhook_secret: 'secret123' },
             },
           ],
         },
       });
 
-      const result = await controller.monniepointWebhook(mockReq, 'sig', {
+      const payload = {
         data: {
           reference: 'ref-1',
           amount: 123,
           status: 'SUCCESSFUL',
           terminalId: 'term-1',
         },
-      });
+      };
+      const result = await controller.monniepointWebhook(
+        mockReq,
+        sign512(payload, 'secret123'),
+        payload,
+      );
       expect(result.error).toBe('Amount mismatch');
       expect(notificationService.create).toHaveBeenCalledWith(
         expect.objectContaining({

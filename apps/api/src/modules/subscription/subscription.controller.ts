@@ -24,6 +24,9 @@ import { CreatePlanDto } from './dto/create-plan.dto';
 import { UpdatePlanDto } from './dto/create-plan.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '../../common/shared';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { PERMISSIONS } from '../role/permission-codes';
 
@@ -47,22 +50,27 @@ export class SubscriptionController {
     @Request() req: any,
     @Body() dto: InitializeSubscriptionDto,
   ) {
-    return this.subscriptionService.initialize(req.user.branchId, dto.plan_id, dto.callback_url);
+    return this.subscriptionService.initialize(
+      req.user.branchId,
+      dto.plan_id,
+      dto.callback_url,
+    );
   }
 
   @Post('verify')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({
-    summary: 'Verify a Paystack transaction reference and activate the subscription',
+    summary:
+      'Verify a Paystack transaction reference and activate the subscription',
   })
   @ApiResponse({ status: 200, description: 'Subscription activated' })
-  @ApiResponse({ status: 400, description: 'Transaction could not be verified' })
+  @ApiResponse({
+    status: 400,
+    description: 'Transaction could not be verified',
+  })
   @ApiResponse({ status: 404, description: 'Business/branch not found' })
-  async verify(
-    @Request() req: any,
-    @Body() dto: VerifySubscriptionDto,
-  ) {
+  async verify(@Request() req: any, @Body() dto: VerifySubscriptionDto) {
     return this.subscriptionService.verifyByReference(
       req.user.branchId,
       dto.reference,
@@ -79,7 +87,8 @@ export class SubscriptionController {
   }
 
   @Get('admin/plans')
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.SUPERADMIN)
   @RequirePermissions(PERMISSIONS.MANAGE_SUBSCRIPTION)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'List all plans including inactive (superadmin)' })
@@ -89,7 +98,8 @@ export class SubscriptionController {
   }
 
   @Post('admin/plans')
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.SUPERADMIN)
   @RequirePermissions(PERMISSIONS.MANAGE_SUBSCRIPTION)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Create a new subscription plan (superadmin)' })
@@ -103,7 +113,8 @@ export class SubscriptionController {
   }
 
   @Patch('admin/plans/:id')
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.SUPERADMIN)
   @RequirePermissions(PERMISSIONS.MANAGE_SUBSCRIPTION)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Update a subscription plan (superadmin)' })
@@ -114,7 +125,8 @@ export class SubscriptionController {
   }
 
   @Patch('admin/plans/:id/toggle')
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.SUPERADMIN)
   @RequirePermissions(PERMISSIONS.MANAGE_SUBSCRIPTION)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Toggle plan active/inactive (superadmin)' })
@@ -125,7 +137,8 @@ export class SubscriptionController {
   }
 
   @Delete('admin/plans/:id')
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.SUPERADMIN)
   @RequirePermissions(PERMISSIONS.MANAGE_SUBSCRIPTION)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Delete a subscription plan (superadmin)' })
@@ -165,7 +178,8 @@ export class SubscriptionController {
   }
 
   @Post('admin/grant')
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.SUPERADMIN)
   @RequirePermissions(PERMISSIONS.MANAGE_SUBSCRIPTION)
   @ApiBearerAuth('access-token')
   @ApiOperation({
@@ -177,7 +191,8 @@ export class SubscriptionController {
   }
 
   @Post('admin/extend-grace')
-  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(UserRole.SUPERADMIN)
   @RequirePermissions(PERMISSIONS.MANAGE_SUBSCRIPTION)
   @ApiBearerAuth('access-token')
   @ApiOperation({

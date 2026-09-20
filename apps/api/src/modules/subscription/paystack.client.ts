@@ -62,6 +62,8 @@ export class PaystackClient {
           'Content-Type': 'application/json',
         },
         body: body === undefined ? undefined : JSON.stringify(body),
+        // In the checkout path: a hung Paystack call must fail fast.
+        signal: AbortSignal.timeout(15_000),
       });
     } catch (e) {
       throw new Error(

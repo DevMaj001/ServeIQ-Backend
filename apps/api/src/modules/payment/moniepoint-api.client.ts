@@ -240,6 +240,9 @@ export class MoniepointApiClient {
         Accept: 'application/json',
         'Content-Type': 'application/json',
       },
+      // A hung provider call must never hold a request (and its DB pool
+      // slot) for undici's 300s default.
+      signal: AbortSignal.timeout(10_000),
     });
     const text = await res.text();
     let body: any = null;

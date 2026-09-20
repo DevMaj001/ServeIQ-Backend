@@ -113,6 +113,15 @@ export class TableController {
   }
 
   @Patch(':id/status')
+  @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.WAITER,
+    UserRole.CASHIER,
+  )
+  @RequirePermissions(PERMISSIONS.OPEN_TABLE)
   @ApiOperation({
     summary: 'Update table status (available/occupied/reserved)',
   })

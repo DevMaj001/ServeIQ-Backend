@@ -62,31 +62,50 @@ export class MenuModifierService {
 
   // ── Options ──
 
-  async findOptions(groupId: string) {
+  // Options have no branch column of their own: tenancy is enforced by
+  // resolving the parent group WITH the caller's branch id on every path.
+
+  async findOptions(groupId: string, branchId: string) {
+    await this.findGroup(groupId, branchId);
     return this.optionRepo.find({
       where: { modifier_group_id: groupId },
       order: { sort_order: 'ASC', name: 'ASC' },
     });
   }
 
-  async createOption(groupId: string, data: CreateModifierOptionDto) {
-    const group = await this.groupRepo.findOne({ where: { id: groupId } });
-    if (!group) throw new NotFoundException('Modifier group not found');
+  async createOption(
+    groupId: string,
+    branchId: string,
+    data: CreateModifierOptionDto,
+  ) {
+    await this.findGroup(groupId, branchId);
     return this.optionRepo.save(
       this.optionRepo.create({ ...data, modifier_group_id: groupId }),
     );
   }
 
-  async updateOption(id: string, data: UpdateModifierOptionDto) {
+  private async findOptionInBranch(id: string, branchId: string) {
     const option = await this.optionRepo.findOne({ where: { id } });
     if (!option) throw new NotFoundException('Modifier option not found');
+    const group = await this.groupRepo.findOne({
+      where: { id: option.modifier_group_id, branch_id: branchId },
+    });
+    if (!group) throw new NotFoundException('Modifier option not found');
+    return option;
+  }
+
+  async updateOption(
+    id: string,
+    branchId: string,
+    data: UpdateModifierOptionDto,
+  ) {
+    const option = await this.findOptionInBranch(id, branchId);
     Object.assign(option, data);
     return this.optionRepo.save(option);
   }
 
-  async removeOption(id: string) {
-    const option = await this.optionRepo.findOne({ where: { id } });
-    if (!option) throw new NotFoundException('Modifier option not found');
+  async removeOption(id: string, branchId: string) {
+    const option = await this.findOptionInBranch(id, branchId);
     return this.optionRepo.remove(option);
   }
 
@@ -103,7 +122,10 @@ export class MenuModifierService {
     });
     if (!menuItem) throw new NotFoundException('Menu item not found');
 
-    const groups = await this.groupRepo.find({ where: { id: In(groupIds) } });
+    // Only this branch's groups may be linked; foreign ids are dropped.
+    const groups = await this.groupRepo.find({
+      where: { id: In(groupIds), branch_id: branchId },
+    });
     menuItem.modifierGroups = groups;
     return this.menuItemRepo.save(menuItem);
   }

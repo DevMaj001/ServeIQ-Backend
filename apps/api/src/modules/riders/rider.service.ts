@@ -150,7 +150,13 @@ export class RiderService {
     });
     if (!rider) throw new NotFoundException('Rider not found');
 
-    if (dto.branch_id !== undefined) rider.branch_id = dto.branch_id;
+    if (dto.branch_id !== undefined && dto.branch_id !== rider.branch_id) {
+      const branch = await this.branchRepo.findOne({
+        where: { id: dto.branch_id, business_id: businessId },
+      });
+      if (!branch) throw new NotFoundException('Branch not found');
+      rider.branch_id = dto.branch_id;
+    }
     if (dto.is_online !== undefined) rider.is_online = dto.is_online;
     if (dto.vehicle !== undefined) rider.vehicle = dto.vehicle ?? null;
     await this.riderRepo.save(rider);

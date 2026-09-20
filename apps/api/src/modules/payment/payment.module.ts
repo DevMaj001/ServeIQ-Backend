@@ -17,6 +17,10 @@ import { MoniepointErpPush } from './entities/moniepoint-erp-push.entity';
 import { MoniepointErpService } from './moniepoint-erp.service';
 import { MoniepointErpController } from './moniepoint-erp.controller';
 import { EncryptionService } from '../../common/services/encryption.service';
+import { WebhookEvent } from './entities/webhook-event.entity';
+import { WebhookEventsService } from './webhook-events.service';
+import { WebhookAdminController } from './webhook-admin.controller';
+import { PlatformPaymentProvider } from '../admin/entities/platform-payment-provider.entity';
 
 @Module({
   imports: [
@@ -30,17 +34,24 @@ import { EncryptionService } from '../../common/services/encryption.service';
       Notification,
       MoniepointErpCredential,
       MoniepointErpPush,
+      WebhookEvent,
+      PlatformPaymentProvider,
     ]),
     BillModule,
     NotificationModule,
   ],
-  controllers: [PaymentController, MoniepointErpController],
+  controllers: [
+    PaymentController,
+    MoniepointErpController,
+    WebhookAdminController,
+  ],
   providers: [
     MoniepointApiClient,
     PaymentReconciliationScheduler,
     MoniepointErpService,
     EncryptionService,
+    WebhookEventsService,
   ],
-  exports: [MoniepointErpService],
+  exports: [MoniepointErpService, WebhookEventsService],
 })
 export class PaymentModule {}

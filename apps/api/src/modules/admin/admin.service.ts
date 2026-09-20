@@ -29,6 +29,14 @@ import {
   UpdateShiftTemplateDto,
 } from '../shift/dto/shift-template.dto';
 import { BillingInterval } from '../subscription/entities/plan.entity';
+import { EncryptionService } from '../../common/services/encryption.service';
+import { RefreshToken } from '../../entities/refresh-token.entity';
+import { RealtimeService } from '../gateway/realtime.service';
+import {
+  encryptSensitiveConfig,
+  maskSensitiveConfig,
+  stripMaskedSecrets,
+} from '../payment/provider-secrets';
 
 @Injectable()
 export class AdminService {
@@ -54,6 +62,8 @@ export class AdminService {
     @InjectRepository(ShiftTemplate)
     private shiftTemplateRepo: Repository<ShiftTemplate>,
     @InjectDataSource() private dataSource: DataSource,
+    private encryptionService: EncryptionService,
+    private realtimeService: RealtimeService,
   ) {}
 
   async getRevenue(params?: { months?: number }) {
@@ -515,18 +525,165 @@ export class AdminService {
     };
   }
 
-  async updateBusiness(id: string, dto: UpdateBusinessDto) {
+  async updateBusiness(
+    id: string,
+    dto: UpdateBusinessDto,
+    adminUserId?: string,
+  ) {
     const business = await this.businessRepo.findOne({ where: { id } });
     if (!business) {
       throw new NotFoundException('Business not found');
     }
+
+    const suspending = dto.is_active === false && business.is_active !== false;
 
     if (dto.name !== undefined) business.name = dto.name;
     if (dto.is_active !== undefined) business.is_active = dto.is_active;
     if (dto.subscription_plan !== undefined)
       business.subscription_plan = dto.subscription_plan;
 
-    return this.businessRepo.save(business);
+    const saved = await this.businessRepo.save(business);
+
+    if (suspending) {
+      // Suspension must bite immediately: kill every live session (token
+      // version bump + refresh-token revocation + socket disconnect), not
+      // just flip a flag the request path now also checks.
+      await this.revokeBusinessSessions(id, adminUserId, 'business_suspended');
+    }
+
+    return saved;
+  }
+
+  /** Invalidate every session of a business: bumps each branch's
+   *  staff_token_version (all JWTs carry it), revokes refresh tokens, and
+   *  force-disconnects live sockets. */
+  private async revokeBusinessSessions(
+    businessId: string,
+    adminUserId: string | undefined,
+    reason: string,
+  ): Promise<{ branches: number }> {
+    const branches = await this.branchRepo.find({
+      where: { business_id: businessId },
+    });
+    if (branches.length > 0) {
+      await this.branchRepo.increment(
+        { business_id: businessId },
+        'staff_token_version',
+        1,
+      );
+    }
+    await this.dataSource.query(
+      `UPDATE refresh_tokens SET is_revoked = true
+       WHERE user_id IN (SELECT id FROM users WHERE business_id = $1)`,
+      [businessId],
+    );
+    for (const branch of branches) {
+      this.realtimeService.disconnectBranch(branch.id);
+      await this.auditLogRepo.save(
+        this.auditLogRepo.create({
+          branch_id: branch.id,
+          user_id: adminUserId,
+          action: `admin.${reason}`,
+          entity_id: businessId,
+          entity_type: 'business',
+          payload: { reason },
+        }),
+      );
+    }
+    return { branches: branches.length };
+  }
+
+  /** Force-logout every session of a business without changing its status. */
+  async forceLogoutBusiness(businessId: string, adminUserId?: string) {
+    await this.requireBusiness(businessId);
+    const result = await this.revokeBusinessSessions(
+      businessId,
+      adminUserId,
+      'force_logout_business',
+    );
+    return { business_id: businessId, ...result, sessions_revoked: true };
+  }
+
+  /** Force-logout one user: bumps their pin_token_version (every token
+   *  carries it) and revokes their refresh tokens. */
+  async forceLogoutUser(userId: string, adminUserId?: string) {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    await this.userRepo.increment({ id: userId }, 'pin_token_version', 1);
+    await this.dataSource
+      .getRepository(RefreshToken)
+      .update({ user_id: userId }, { is_revoked: true });
+    if (user.branch_id) {
+      await this.auditLogRepo.save(
+        this.auditLogRepo.create({
+          branch_id: user.branch_id,
+          user_id: adminUserId,
+          action: 'admin.force_logout_user',
+          entity_id: userId,
+          entity_type: 'user',
+          payload: { email: user.email },
+        }),
+      );
+    }
+    return { user_id: userId, sessions_revoked: true };
+  }
+
+  /** Activate/deactivate a user platform-wide. Deactivation also kills
+   *  their live sessions. */
+  async updateUserStatus(
+    userId: string,
+    isActive: boolean,
+    adminUserId?: string,
+  ) {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    user.is_active = isActive;
+    await this.userRepo.save(user);
+    if (!isActive) {
+      await this.forceLogoutUser(userId, adminUserId);
+    }
+    return {
+      id: user.id,
+      email: user.email,
+      full_name: user.full_name,
+      is_active: user.is_active,
+    };
+  }
+
+  /** Cross-tenant user search for the super-admin panel. Safe fields only. */
+  async searchUsers(filters: {
+    q?: string;
+    businessId?: string;
+    role?: string;
+    limit?: number;
+  }) {
+    const qb = this.userRepo
+      .createQueryBuilder('u')
+      .select([
+        'u.id',
+        'u.full_name',
+        'u.email',
+        'u.role',
+        'u.role_id',
+        'u.business_id',
+        'u.branch_id',
+        'u.is_active',
+        'u.created_at',
+      ])
+      .orderBy('u.created_at', 'DESC')
+      .take(Math.min(Math.max(filters.limit ?? 50, 1), 100));
+    if (filters.q) {
+      qb.andWhere('(u.full_name ILIKE :q OR u.email ILIKE :q)', {
+        q: `%${filters.q}%`,
+      });
+    }
+    if (filters.businessId) {
+      qb.andWhere('u.business_id = :bid', { bid: filters.businessId });
+    }
+    if (filters.role) {
+      qb.andWhere('u.role = :role', { role: filters.role });
+    }
+    return qb.getMany();
   }
 
   async extendBusinessSubscription(dto: {
@@ -577,10 +734,16 @@ export class AdminService {
   async listPaymentProviders(
     includeInactive = false,
   ): Promise<PlatformPaymentProvider[]> {
-    return this.paymentProviderRepo.find({
+    const providers = await this.paymentProviderRepo.find({
       order: { label: 'ASC' },
       where: includeInactive ? undefined : { is_active: true },
     });
+    // Secrets never leave the API, superadmin included: mask for display.
+    return providers.map((p) => ({
+      ...p,
+      config: (maskSensitiveConfig(p.config, this.encryptionService) ??
+        {}) as Record<string, string>,
+    }));
   }
 
   async createPaymentProvider(
@@ -599,10 +762,18 @@ export class AdminService {
       label: dto.label,
       type: dto.type,
       verification_method: dto.verification_method ?? null,
-      config: dto.config ?? {},
+      config: (encryptSensitiveConfig(
+        dto.config ?? {},
+        this.encryptionService,
+      ) ?? {}) as Record<string, string>,
       is_active: dto.is_active ?? true,
     });
-    return this.paymentProviderRepo.save(provider);
+    const saved = await this.paymentProviderRepo.save(provider);
+    return {
+      ...saved,
+      config: (maskSensitiveConfig(saved.config, this.encryptionService) ??
+        {}) as Record<string, string>,
+    };
   }
 
   async updatePaymentProvider(
@@ -617,9 +788,22 @@ export class AdminService {
     if (dto.type !== undefined) provider.type = dto.type;
     if (dto.verification_method !== undefined)
       provider.verification_method = dto.verification_method;
-    if (dto.config !== undefined) provider.config = dto.config;
+    if (dto.config !== undefined) {
+      // Masked values round-tripping from the dashboard mean "unchanged";
+      // real new values are encrypted before they touch the row.
+      const incoming = stripMaskedSecrets(dto.config) ?? {};
+      provider.config = (encryptSensitiveConfig(
+        { ...provider.config, ...incoming },
+        this.encryptionService,
+      ) ?? {}) as Record<string, string>;
+    }
     if (dto.is_active !== undefined) provider.is_active = dto.is_active;
-    return this.paymentProviderRepo.save(provider);
+    const saved = await this.paymentProviderRepo.save(provider);
+    return {
+      ...saved,
+      config: (maskSensitiveConfig(saved.config, this.encryptionService) ??
+        {}) as Record<string, string>,
+    };
   }
 
   async removePaymentProvider(id: string): Promise<{ id: string }> {
@@ -695,7 +879,8 @@ export class AdminService {
       template.scheduled_start_time = dto.scheduled_start_time;
     if (dto.scheduled_end_time !== undefined)
       template.scheduled_end_time = dto.scheduled_end_time;
-    if (dto.days_of_week !== undefined) template.days_of_week = dto.days_of_week;
+    if (dto.days_of_week !== undefined)
+      template.days_of_week = dto.days_of_week;
     if (dto.color !== undefined) template.color = dto.color;
     if (dto.is_active !== undefined)
       template.is_active =

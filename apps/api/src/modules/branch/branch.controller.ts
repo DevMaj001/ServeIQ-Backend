@@ -37,6 +37,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as QRCode from 'qrcode';
 import { Response } from 'express';
+import { EncryptionService } from '../../common/services/encryption.service';
+import {
+  encryptSensitiveConfig,
+  sanitizeSettingsForResponse,
+  stripMaskedSecrets,
+} from '../payment/provider-secrets';
 
 @ApiTags('Branches')
 @ApiBearerAuth('access-token')
@@ -49,7 +55,22 @@ export class BranchController {
     private readonly branchRepository: Repository<Branch>,
     @InjectRepository(PlatformPaymentProvider)
     private readonly platformPaymentProviderRepo: Repository<PlatformPaymentProvider>,
+    private readonly encryptionService: EncryptionService,
   ) {}
+
+  /** Branch entities carry payment-provider secrets inside settings; every
+   *  response leaves through this so a staff token can never read a webhook
+   *  secret back. Never mutates the entity (the same object may be saved). */
+  private toResponse(branch: Branch): Branch {
+    if (!branch?.settings) return branch;
+    return {
+      ...branch,
+      settings: sanitizeSettingsForResponse(
+        branch.settings,
+        this.encryptionService,
+      ),
+    } as Branch;
+  }
 
   @Get('payment-providers')
   @ApiOperation({
@@ -83,7 +104,10 @@ export class BranchController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async findAll(@Request() req: any) {
-    return this.branchService.findAllByBusiness(req.user.businessId);
+    const branches = await this.branchService.findAllByBusiness(
+      req.user.businessId,
+    );
+    return branches.map((b) => this.toResponse(b));
   }
 
   @Get(':id')
@@ -93,7 +117,9 @@ export class BranchController {
   @ApiResponse({ status: 404, description: 'Branch not found.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   async findOne(@Param('id') id: string, @Request() req: any) {
-    return this.branchService.findOne(id, req.user.businessId);
+    return this.toResponse(
+      await this.branchService.findOne(id, req.user.businessId),
+    );
   }
 
   @Get('dashboard/stats')
@@ -135,7 +161,9 @@ export class BranchController {
     @Request() req: any,
     @Body() updateDto: UpdateBranchDto,
   ) {
-    return this.branchService.update(id, req.user.businessId, updateDto);
+    return this.toResponse(
+      await this.branchService.update(id, req.user.businessId, updateDto),
+    );
   }
 
   @Post(':id/generate-qr')
@@ -198,10 +226,7 @@ export class BranchController {
     const branch = await this.branchService.findOne(id, req.user.businessId);
     if (!branch) throw new NotFoundException('Branch not found');
     const currentSettings = branch.settings || {};
-    const newSettings = this.mergeBranchSettings(
-      currentSettings,
-      dto.settings,
-    );
+    const newSettings = this.mergeBranchSettings(currentSettings, dto.settings);
     if (dto.delivery) {
       newSettings.delivery = {
         ...(currentSettings.delivery || {}),
@@ -217,8 +242,25 @@ export class BranchController {
     if (dto.kds_default_department_id !== undefined) {
       newSettings.kds_default_department_id = dto.kds_default_department_id;
     }
+    // Secrets are stored encrypted at rest; a value the client did not
+    // change (it only ever saw the mask) was already dropped in the merge.
+    if (Array.isArray(newSettings.payment_providers)) {
+      newSettings.payment_providers = newSettings.payment_providers.map(
+        (p: any) =>
+          p && typeof p === 'object'
+            ? {
+                ...p,
+                config: encryptSensitiveConfig(
+                  p.config,
+                  this.encryptionService,
+                ),
+              }
+            : p,
+      );
+    }
     branch.settings = newSettings;
-    return this.branchRepository.save(branch);
+    const saved = await this.branchRepository.save(branch);
+    return this.toResponse(saved);
   }
 
   /**
@@ -253,8 +295,16 @@ export class BranchController {
         ? merged.payment_providers
         : [];
       const mergedProviders = [...existing];
-      for (const provider of incoming.payment_providers) {
-        if (!provider || !provider.name) continue;
+      for (const rawProvider of incoming.payment_providers) {
+        if (!rawProvider || !rawProvider.name) continue;
+        // A masked secret coming back from the UI means "unchanged": drop it
+        // so the stored (encrypted) value survives the round-trip.
+        const provider = {
+          ...rawProvider,
+          ...(rawProvider.config
+            ? { config: stripMaskedSecrets(rawProvider.config) }
+            : {}),
+        };
         const index = mergedProviders.findIndex(
           (p) => p?.name === provider.name,
         );

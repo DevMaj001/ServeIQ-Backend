@@ -54,7 +54,13 @@ describe('CustomerService.submitReview', () => {
           provide: getRepositoryToken(MenuItem),
           useValue: { find: jest.fn() },
         },
-        { provide: getRepositoryToken(Order), useValue: { find: jest.fn(), findOne: jest.fn().mockResolvedValue(null) } },
+        {
+          provide: getRepositoryToken(Order),
+          useValue: {
+            find: jest.fn(),
+            findOne: jest.fn().mockResolvedValue(null),
+          },
+        },
         { provide: getRepositoryToken(Branch), useValue: branchRepo },
         {
           provide: getRepositoryToken(Business),
@@ -62,7 +68,15 @@ describe('CustomerService.submitReview', () => {
         },
         { provide: getRepositoryToken(Review), useValue: reviewRepo },
         { provide: getRepositoryToken(Bill), useValue: { find: jest.fn() } },
-        { provide: getRepositoryToken(Delivery), useValue: { find: jest.fn(), findOne: jest.fn(), create: jest.fn(), save: jest.fn() } },
+        {
+          provide: getRepositoryToken(Delivery),
+          useValue: {
+            find: jest.fn(),
+            findOne: jest.fn(),
+            create: jest.fn(),
+            save: jest.fn(),
+          },
+        },
         { provide: getRepositoryToken(Rider), useValue: { find: jest.fn() } },
         { provide: getRepositoryToken(User), useValue: { find: jest.fn() } },
         { provide: DataSource, useValue: {} },
@@ -71,7 +85,12 @@ describe('CustomerService.submitReview', () => {
           useValue: { generateUniqueCode: jest.fn() },
         },
         { provide: RealtimeService, useValue: {} },
-        { provide: DeliveryService, useValue: { confirmCustomerDelivery: jest.fn().mockResolvedValue({}) } },
+        {
+          provide: DeliveryService,
+          useValue: {
+            confirmCustomerDelivery: jest.fn().mockResolvedValue({}),
+          },
+        },
       ],
     }).compile();
 
@@ -97,11 +116,9 @@ describe('CustomerService.submitReview', () => {
   it('throws BadRequestException when tab is not open/paid', async () => {
     tabRepo.findOne.mockResolvedValue({ ...openTab, status: 'closed' });
     await expect(
-      service.submitReview(
-        '11111111-1111-1111-1111-111111111111',
-        'TRACK-1',
-        { rating: 5 },
-      ),
+      service.submitReview('11111111-1111-1111-1111-111111111111', 'TRACK-1', {
+        rating: 5,
+      }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
@@ -110,9 +127,13 @@ describe('CustomerService.submitReview', () => {
     async (rating) => {
       tabRepo.findOne.mockResolvedValue(openTab);
       await expect(
-        service.submitReview('11111111-1111-1111-1111-111111111111', 'TRACK-1', {
-          rating,
-        }),
+        service.submitReview(
+          '11111111-1111-1111-1111-111111111111',
+          'TRACK-1',
+          {
+            rating,
+          },
+        ),
       ).rejects.toBeInstanceOf(BadRequestException);
     },
   );

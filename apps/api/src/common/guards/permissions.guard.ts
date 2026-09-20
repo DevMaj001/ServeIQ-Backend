@@ -33,9 +33,18 @@ export class PermissionsGuard implements CanActivate {
     const { user } = context.switchToHttp().getRequest();
     if (!user) return false;
 
-    // super_admin and owner bypass all permission checks
+    // Platform superadmins and tenant owners bypass all permission checks.
+    // The superadmin check must use the JWT role claim: superadmin accounts
+    // are created without a role_id (no PBAC row), so without this bypass a
+    // superadmin would be 403'd from every PermissionsGuard-protected route.
     const userRole = user?.roleEntity?.name || user?.role;
-    if (userRole === 'Owner' || userRole === 'Super Admin') return true;
+    if (
+      userRole === 'Owner' ||
+      userRole === 'Super Admin' ||
+      user?.role === 'superadmin'
+    ) {
+      return true;
+    }
 
     // User must have role_id — legacy fallback removed
     if (!user.role_id) {

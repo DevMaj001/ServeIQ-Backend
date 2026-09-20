@@ -73,7 +73,10 @@ export class DepartmentController {
   @ApiOperation({ summary: 'Create a new department' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
-  async create(@Request() req: RequestWithUser, @Body() dto: CreateDepartmentDto) {
+  async create(
+    @Request() req: RequestWithUser,
+    @Body() dto: CreateDepartmentDto,
+  ) {
     return this.departmentService.create(req.user.branchId, dto.name);
   }
 
@@ -87,9 +90,10 @@ export class DepartmentController {
   @ApiResponse({ status: 401 })
   async update(
     @Param('id') id: string,
+    @Request() req: any,
     @Body() dto: UpdateDepartmentDto,
   ) {
-    return this.departmentService.update(id, dto);
+    return this.departmentService.update(id, req.user.branchId, dto);
   }
 
   @Delete(':id')
@@ -100,7 +104,7 @@ export class DepartmentController {
   @ApiParam({ name: 'id', description: 'Department UUID' })
   @ApiResponse({ status: 200 })
   @ApiResponse({ status: 401 })
-  async remove(@Param('id') id: string) {
-    return this.departmentService.remove(id);
+  async remove(@Param('id') id: string, @Request() req: any) {
+    return this.departmentService.remove(id, req.user.branchId);
   }
 }

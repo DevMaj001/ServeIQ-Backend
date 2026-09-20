@@ -1,4 +1,9 @@
-import { Injectable, Logger, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, In } from 'typeorm';
 import { SyncQueue } from './sync.entity';
@@ -11,6 +16,13 @@ import { BillService } from '../bill/bill.service';
 import { TabType, TableStatus } from '../../common/shared';
 
 export type SyncPayload = Record<string, any>;
+
+/** The authenticated caller replaying the operation. Replay runs with THIS
+ *  identity — never with a role or branch taken from the client payload. */
+export interface SyncActor {
+  userId: string;
+  role: string;
+}
 
 @Injectable()
 export class SyncService {
@@ -38,7 +50,8 @@ export class SyncService {
     entityType: string,
     operation: string,
     payload: any,
-    clientKey?: string,
+    clientKey: string | undefined,
+    actor: SyncActor,
   ) {
     let entry: SyncQueue | null = null;
 
@@ -74,7 +87,7 @@ export class SyncService {
     // success; on failure we record the error and rethrow so the client retries
     // locally with backoff (a later retry replays this same pending/failed row).
     try {
-      await this.replayOne(entry);
+      await this.replayOne(entry, actor);
     } catch (err) {
       entry.status = 'failed';
       entry.error_message = err instanceof Error ? err.message : String(err);
@@ -92,13 +105,13 @@ export class SyncService {
     });
   }
 
-  async replayAll(branchId: string) {
+  async replayAll(branchId: string, actor: SyncActor) {
     const pending = await this.getPending(branchId);
     const results = [];
 
     for (const entry of pending) {
       try {
-        const result = await this.replayOne(entry);
+        const result = await this.replayOne(entry, actor);
         results.push(result);
       } catch (err) {
         entry.status = 'failed';
@@ -111,7 +124,7 @@ export class SyncService {
     return results;
   }
 
-  private async replayOne(entry: SyncQueue) {
+  private async replayOne(entry: SyncQueue, actor: SyncActor) {
     const { entity_type, operation, payload, branch_id } = entry;
 
     // Replay queued offline mutations. Where possible we delegate to the same
@@ -125,10 +138,30 @@ export class SyncService {
           const existing = await manager
             .getRepository(Tab)
             .findOne({ where: { id: payload.id } });
-          if (existing) break;
+          if (existing) {
+            // Someone else's tab under this id is not "already synced".
+            if (existing.branch_id !== branch_id) {
+              throw new ConflictException('Tab id belongs to another branch');
+            }
+            break;
+          }
+          const isTakeaway =
+            (payload.tab_type || TabType.DINE_IN) === TabType.TAKEAWAY;
+          if (!isTakeaway) {
+            // The table must belong to the caller's branch — the payload's
+            // table id is client data.
+            const table = await manager.getRepository(Table).findOne({
+              where: { id: payload.table_id, branch_id },
+            });
+            if (!table) {
+              throw new NotFoundException('Table not found in this branch');
+            }
+          }
           const tab = manager.getRepository(Tab).create({
             id: payload.id,
-            branch_id: payload.branch_id || branch_id,
+            // Tenant scope always comes from the queue entry (the caller's
+            // JWT), never from the payload.
+            branch_id,
             table_id: payload.table_id,
             waiter_id: payload.waiter_id ?? null,
             shift_id: payload.shift_id ?? null,
@@ -148,49 +181,105 @@ export class SyncService {
           });
           await manager.getRepository(Tab).save(tab);
           // Mark the seatable table occupied just like the live open-tab flow.
-          if ((payload.tab_type || TabType.DINE_IN) !== TabType.TAKEAWAY) {
-            await manager.getRepository(Table).update(payload.table_id, {
-              status: TableStatus.OCCUPIED,
-            });
+          if (!isTakeaway) {
+            await manager
+              .getRepository(Table)
+              .update(
+                { id: payload.table_id, branch_id },
+                { status: TableStatus.OCCUPIED },
+              );
           }
           break;
         }
         case 'tab.update': {
-          await manager.getRepository(Tab).update(payload.id, {
-            ...(payload.status ? { status: payload.status } : {}),
-            ...(payload.closed_at
-              ? { closed_at: new Date(payload.closed_at) }
-              : {}),
-          });
+          // Branch-scoped update: a foreign tab id simply matches nothing.
+          await manager.getRepository(Tab).update(
+            { id: payload.id, branch_id },
+            {
+              ...(payload.status ? { status: payload.status } : {}),
+              ...(payload.closed_at
+                ? { closed_at: new Date(payload.closed_at) }
+                : {}),
+            },
+          );
           break;
         }
         case 'order.create': {
+          // The parent tab anchors the tenant scope; refuse foreign tabs.
+          const parentTab = await manager.getRepository(Tab).findOne({
+            where: { id: payload.tab_id, branch_id },
+          });
+          if (!parentTab) {
+            throw new NotFoundException('Tab not found in this branch');
+          }
           const existing = await manager
             .getRepository(Order)
-            .findOne({ where: { id: payload.id } });
+            .findOne({ where: { id: payload.id, tab_id: parentTab.id } });
           if (existing) {
             existing.quantity = payload.quantity;
             existing.notes = payload.notes ?? existing.notes;
             await manager.getRepository(Order).save(existing);
           } else {
-            await manager
-              .getRepository(Order)
-              .save(manager.getRepository(Order).create(payload));
+            // The menu item must belong to this branch — prices/items from
+            // another tenant's menu must never attach to a tab here.
+            const menuItem = await manager.getRepository(MenuItem).findOne({
+              where: { id: payload.menu_item_id, branch_id },
+            });
+            if (!menuItem) {
+              throw new NotFoundException('Menu item not found in this branch');
+            }
+            // Explicit field whitelist — payload is raw client data and must
+            // never mass-assign arbitrary Order columns.
+            await manager.getRepository(Order).save(
+              manager.getRepository(Order).create({
+                id: payload.id,
+                tab_id: parentTab.id,
+                branch_id,
+                menu_item_id: menuItem.id,
+                quantity: payload.quantity,
+                notes: payload.notes ?? null,
+                modifiers: payload.modifiers ?? null,
+                unit_price_kobo: payload.unit_price_kobo,
+                subtotal_kobo: payload.subtotal_kobo,
+                status: payload.status,
+                order_status: payload.order_status,
+                round_number: payload.round_number,
+              }),
+            );
           }
           break;
         }
         case 'order.delete': {
           if (payload.id) {
+            // Delete only orders whose parent tab belongs to this branch
+            // (or standalone orders carrying this branch id).
+            const order = await manager
+              .getRepository(Order)
+              .findOne({ where: { id: payload.id } });
+            if (!order) break;
+            let inBranch = order.branch_id === branch_id;
+            if (!inBranch && order.tab_id) {
+              const tab = await manager.getRepository(Tab).findOne({
+                where: { id: order.tab_id, branch_id },
+              });
+              inBranch = !!tab;
+            }
+            if (!inBranch) {
+              throw new NotFoundException('Order not found in this branch');
+            }
             await manager.getRepository(Order).delete({ id: payload.id });
           }
           break;
         }
         case 'bill.create': {
+          // Branch scope is the queue entry's; identity/role is the real
+          // authenticated caller — generateBill re-applies waiter ownership
+          // and role rules exactly as the live endpoint would.
           await this.billService.generateBill(
             payload.tab_id,
-            payload.branch_id || branch_id,
-            'offline-sync',
-            'owner',
+            branch_id,
+            actor.userId,
+            actor.role,
             {
               service_charge_percent:
                 payload.serviceChargePercent ?? payload.service_charge_percent,
@@ -208,9 +297,9 @@ export class SyncService {
           };
           await this.billService.processPayment(
             payload.tab_id,
-            payload.branch_id || branch_id,
-            'offline-sync',
-            'owner',
+            branch_id,
+            actor.userId,
+            actor.role,
             opts,
           );
           break;

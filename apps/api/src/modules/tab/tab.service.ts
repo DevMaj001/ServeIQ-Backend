@@ -15,7 +15,10 @@ import { StockMovement } from '../ingredient/entities/stock-movement.entity';
 import { MenuItem } from '../menu/entities/menu-item.entity';
 import { Shift } from '../shift/entities/shift.entity';
 import { Bill } from '../bill/entities/bill.entity';
-import { Reservation, ReservationStatus } from '../reservations/entities/reservation.entity';
+import {
+  Reservation,
+  ReservationStatus,
+} from '../reservations/entities/reservation.entity';
 import { StockMovementType, TabType, isBillable } from '../../common/shared';
 import { TrackingService } from '../tracking/tracking.service';
 import { RealtimeService } from '../gateway/realtime.service';
@@ -73,10 +76,15 @@ export class TabService {
     // Takeaway tabs have no physical table — they never participate in occupancy logic.
     // For dine-in tables, check if the table already has an open tab.
     if (tabType !== TabType.TAKEAWAY) {
+      // The table must belong to the tab's branch — a foreign table UUID
+      // must not be occupiable from here.
       const table = await this.tableRepository.findOne({
-        where: { id: tableId },
+        where: { id: tableId, branch_id: createDto.branch_id },
       });
-      if (table && table.status === TableStatus.INACTIVE) {
+      if (!table) {
+        throw new NotFoundException('Table not found in this branch');
+      }
+      if (table.status === TableStatus.INACTIVE) {
         throw new BadRequestException('This table is out of service.');
       }
       const existingOpenTab = await this.tabRepository.findOne({
@@ -118,7 +126,9 @@ export class TabService {
         shift_id: openShift.id,
         status: 'open',
         opened_at: new Date(),
-        tab_number: `TAB-${Date.now()}`,
+        tab_number: `TAB-${Date.now()}-${Math.floor(Math.random() * 10000)
+          .toString()
+          .padStart(4, '0')}`,
         tracking_code: await this.trackingService.generateUniqueCode(),
         tracking_generated_at: new Date(),
       });
@@ -216,7 +226,7 @@ export class TabService {
     if (status) {
       const statuses = status
         .split(',')
-        .map(s => s.trim())
+        .map((s) => s.trim())
         .filter(Boolean);
       where.status = statuses.length > 1 ? In(statuses) : statuses[0];
     }
@@ -409,7 +419,9 @@ export class TabService {
       return now >= start - holdMs && now <= end;
     });
     if (reservedNow) {
-      throw new BadRequestException('Target table is reserved for an upcoming booking');
+      throw new BadRequestException(
+        'Target table is reserved for an upcoming booking',
+      );
     }
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -479,16 +491,12 @@ export class TabService {
       currentUserRole !== 'manager' &&
       currentUserRole !== 'supervisor'
     ) {
-      throw new ForbiddenException(
-        "You cannot merge another waiter's tab",
-      );
+      throw new ForbiddenException("You cannot merge another waiter's tab");
     }
 
     // Orders must land on a seatable (dine-in) tab
     if (targetTab.tab_type === TabType.TAKEAWAY) {
-      throw new BadRequestException(
-        'Cannot merge into a takeaway tab.',
-      );
+      throw new BadRequestException('Cannot merge into a takeaway tab.');
     }
 
     // Reject tabs that have already moved into billing
@@ -622,7 +630,9 @@ export class TabService {
           })
         : null;
       if (voidTable) {
-        await tableRepo.update(tab.table_id!, { status: TableStatus.AVAILABLE });
+        await tableRepo.update(tab.table_id!, {
+          status: TableStatus.AVAILABLE,
+        });
       }
 
       if (existingReversal) return;

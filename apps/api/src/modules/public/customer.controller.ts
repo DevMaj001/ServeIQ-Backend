@@ -179,6 +179,7 @@ export class CustomerController {
   }
 
   @Get('tabs/:tabId')
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @ApiOperation({
     summary: 'Get self-service tab status (tracking code required)',
   })
@@ -257,7 +258,11 @@ export class CustomerController {
   ) {
     if (!trackingCode)
       throw new BadRequestException('x-tracking-code header is required');
-    return this.customerService.confirmDelivery(tabId, trackingCode, body?.delivery_id);
+    return this.customerService.confirmDelivery(
+      tabId,
+      trackingCode,
+      body?.delivery_id,
+    );
   }
 
   @Post('tabs/:tabId/review')

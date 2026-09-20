@@ -123,8 +123,21 @@ export class GatewayGateway
 
       const payload = this.jwtService.verify(token);
       client.userId = payload.sub;
-      client.branchId = payload.branch_id;
+      // The auth JWT carries camelCase claims. This previously read
+      // payload.branch_id, leaving branchId undefined for every socket, so
+      // all tenants shared one `branch:undefined` room and real branch
+      // rooms never received members.
+      client.branchId = payload.branchId ?? payload.branch_id;
       client.role = payload.role;
+
+      if (!client.branchId) {
+        // A token without a branch scope gets no rooms: joining
+        // `branch:undefined` would pool every such client across tenants.
+        this.logger.warn(
+          `Client ${client.id} (user: ${client.userId}) has no branch claim — no rooms joined`,
+        );
+        return;
+      }
 
       const key = `${client.branchId}:${client.userId}`;
       if (!connectedClients.has(key)) {

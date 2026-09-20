@@ -26,7 +26,9 @@ const branch = (overrides: Partial<Branch> = {}): Branch =>
       tax_rate: 7.5,
       service_charge_percent: 10,
     },
-    settings: { delivery: { enabled: false, fee_kobo: 0, rider_payout_kobo: 0 } },
+    settings: {
+      delivery: { enabled: false, fee_kobo: 0, rider_payout_kobo: 0 },
+    },
     ...overrides,
   }) as unknown as Branch;
 

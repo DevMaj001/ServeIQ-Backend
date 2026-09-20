@@ -12,6 +12,7 @@ import { PlatformPaymentProvider } from './entities/platform-payment-provider.en
 import { SyncQueue } from '../sync/sync.entity';
 import { AuditLog } from '../../entities/audit-log.entity';
 import { ShiftTemplate } from '../shift/entities/shift-template.entity';
+import { EncryptionService } from '../../common/services/encryption.service';
 
 @Module({
   imports: [
@@ -29,6 +30,6 @@ import { ShiftTemplate } from '../shift/entities/shift-template.entity';
     ]),
   ],
   controllers: [AdminController],
-  providers: [AdminService],
+  providers: [AdminService, EncryptionService],
 })
 export class AdminModule {}

@@ -238,10 +238,14 @@ export class PrinterService {
   }
 
   async sendToKds(branchId: string, groupKey: string) {
-    const tab = await this.tabRepo.findOne({ where: { id: groupKey } });
+    // Branch-scoped: a foreign tab/tracking key must never push another
+    // tenant's order contents onto this branch's KDS or print spool.
+    const tab = await this.tabRepo.findOne({
+      where: { id: groupKey, branch_id: branchId },
+    });
     let tableId: string | null = null;
     let orders: Order[];
-    let orderIds = [];
+    const orderIds = [];
     if (tab) {
       tableId = tab.table_id;
       orders = await this.orderRepo.find({
@@ -251,7 +255,7 @@ export class PrinterService {
     } else {
       // Standalone (tabless) order group addressed by its tracking code.
       orders = await this.orderRepo.find({
-        where: { tracking_code: groupKey },
+        where: { tracking_code: groupKey, branch_id: branchId },
         order: { created_at: 'ASC' },
       });
       tableId = orders[0]?.table_id ?? null;
@@ -259,7 +263,9 @@ export class PrinterService {
     if (orders.length === 0) return;
 
     const table = tableId
-      ? await this.tableRepo.findOne({ where: { id: tableId } })
+      ? await this.tableRepo.findOne({
+          where: { id: tableId, branch_id: branchId },
+        })
       : null;
     const items = [];
     for (const order of orders) {
@@ -308,12 +314,20 @@ export class PrinterService {
   // ── Order Fired (from KDS) ──
 
   async fireOrder(branchId: string, tabId: string, orderIds?: string[]) {
-    const where: any = { tab_id: tabId };
-    if (orderIds) where.id = In(orderIds);
-    let orders = await this.orderRepo.find({ where });
+    // Branch-scoped: the tab must belong to this branch before any of its
+    // orders are mutated.
+    const tab = await this.tabRepo.findOne({
+      where: { id: tabId, branch_id: branchId },
+    });
+    let orders: Order[] = [];
+    if (tab) {
+      const where: any = { tab_id: tabId };
+      if (orderIds) where.id = In(orderIds);
+      orders = await this.orderRepo.find({ where });
+    }
     if (orders.length === 0) {
       // Standalone (tabless) order group addressed by its tracking code.
-      const groupWhere: any = { tracking_code: tabId };
+      const groupWhere: any = { tracking_code: tabId, branch_id: branchId };
       if (orderIds) groupWhere.id = In(orderIds);
       orders = await this.orderRepo.find({ where: groupWhere });
     }

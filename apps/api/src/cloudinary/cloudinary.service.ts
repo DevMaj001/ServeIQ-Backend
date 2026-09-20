@@ -20,7 +20,7 @@ export class CloudinaryService {
   ): Promise<string> {
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
-        { folder },
+        { folder, timeout: 30_000 },
         (error: unknown, result: unknown) => {
           if (error) return reject(toError(error));
           if (!result || typeof result !== 'object')
@@ -43,7 +43,7 @@ export class CloudinaryService {
   ): Promise<{ secure_url: string }> {
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
-        { public_id: publicId, resource_type: resourceType },
+        { public_id: publicId, resource_type: resourceType, timeout: 30_000 },
         (error: unknown, result: unknown) => {
           if (error) return reject(toError(error));
           if (!result || typeof result !== 'object')

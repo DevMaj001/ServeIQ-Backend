@@ -32,6 +32,13 @@ export class SetupSuperAdminDto {
   @IsOptional()
   @IsString()
   full_name?: string;
+
+  @ApiProperty({
+    description:
+      'One-time setup token; must match the SUPERADMIN_SETUP_TOKEN environment variable',
+  })
+  @IsString()
+  setup_token: string;
 }
 
 export class ImpersonateDto {

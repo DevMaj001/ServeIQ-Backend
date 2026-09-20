@@ -54,6 +54,7 @@ export class SyncController {
       body.operation,
       body.payload,
       body.client_idempotency_key,
+      { userId: req.user.userId, role: req.user.role },
     );
   }
 
@@ -62,7 +63,10 @@ export class SyncController {
   @ApiOperation({ summary: 'Replay all pending queued operations' })
   @ApiResponse({ status: 200 })
   async replayAll(@Request() req: any) {
-    return this.syncService.replayAll(req.user.branchId);
+    return this.syncService.replayAll(req.user.branchId, {
+      userId: req.user.userId,
+      role: req.user.role,
+    });
   }
 
   @Get('status')

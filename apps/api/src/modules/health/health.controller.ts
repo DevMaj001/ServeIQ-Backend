@@ -1,4 +1,9 @@
-import { Controller, Get, Inject } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Inject,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
 import { DataSource } from 'typeorm';
@@ -36,9 +41,8 @@ export class HealthController {
       dbConnected = false;
     }
 
-    const ready = dbConnected;
-    return {
-      status: ready ? 'ready' : 'not_ready',
+    const body = {
+      status: dbConnected ? 'ready' : 'not_ready',
       timestamp: new Date().toISOString(),
       checks: {
         database: {
@@ -47,5 +51,12 @@ export class HealthController {
         },
       },
     };
+    if (!dbConnected) {
+      // A readiness probe must FAIL when the instance cannot serve —
+      // returning 200 with "not_ready" made load balancers route traffic
+      // to instances with no database.
+      throw new ServiceUnavailableException(body);
+    }
+    return body;
   }
 }

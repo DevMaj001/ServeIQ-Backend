@@ -1,10 +1,18 @@
 services:
   - type: web
-    name: serveiq-api
+    # Named to match the live service/hostname (serveiq-backend.onrender.com)
+    # that vercel.json and every operator doc point at.
+    name: serveiq-backend
     env: node
     # Starter keeps the API always-on. The free tier sleeps after 15 min idle,
     # causing ~60s cold starts — unacceptable mid-service at a bar.
     plan: starter
+    # Deploys are triggered deliberately (dashboard "Manual Deploy" or a
+    # deploy hook), never implicitly by a push.
+    autoDeploy: false
+    # Render routes traffic only to instances whose readiness probe passes
+    # (DB reachable), instead of the default TCP port-open check.
+    healthCheckPath: /api/v1/health/ready
     buildCommand: cd apps/api && npm install && npm run build
     startCommand: cd apps/api && node dist/main.js
     envVars:
@@ -18,12 +26,16 @@ services:
         value: "true"
       - key: DATABASE_URL
         sync: false
-      # Required before boot: fail-fast validation will refuse to start without it.
-      # Use the current JWT_SECRET value once to avoid breaking existing ciphertext.
+      # Required before boot (validate-env fails fast without it). Protects
+      # staff PINs and payment-provider webhook secrets at rest. Set once and
+      # never rotate casually — existing ciphertext dies with the old key.
       - key: ENCRYPTION_KEY
         sync: false
+      # sync:false, NOT generateValue: a Render-side regeneration would
+      # invalidate every session and (before ENCRYPTION_KEY was mandatory)
+      # would have destroyed all field-level ciphertext.
       - key: JWT_SECRET
-        generateValue: true
+        sync: false
       - key: JWT_EXPIRES_IN
         value: 15m
       - key: JWT_REFRESH_EXPIRES_IN
@@ -31,6 +43,32 @@ services:
       - key: PAYSTACK_SECRET_KEY
         sync: false
       - key: PAYSTACK_PUBLIC_KEY
+        sync: false
+      # Error reporting. Without it Sentry is silently disabled.
+      - key: SENTRY_DSN
+        sync: false
+      # Receipt PDFs and image uploads 500 without these three.
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      # Public origin the guest menu/QR links point at. Defaults to
+      # http://localhost:3000 when unset — never ship without it.
+      - key: PUBLIC_MENU_BASE_URL
+        value: https://serve-iq-one.vercel.app
+      # Moniepoint webhook-delivery reconciliation (the 5-minute cron) is
+      # silently disabled unless these are set.
+      - key: MONIEPOINT_API_BASE_URL
+        sync: false
+      - key: MONIEPOINT_API_KEY
+        sync: false
+      - key: MONIEPOINT_WEBHOOK_SUBSCRIPTION_ID
+        sync: false
+      # One-time bootstrap token for POST /auth/setup-super-admin. Leave
+      # unset to keep the route disabled (404) once setup is done.
+      - key: SUPERADMIN_SETUP_TOKEN
         sync: false
       - key: REDIS_URL
         fromService:

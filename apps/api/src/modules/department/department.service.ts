@@ -27,15 +27,27 @@ export class DepartmentService {
     return this.departmentRepo.save(dept);
   }
 
-  async update(id: string, data: { name?: string; is_active?: boolean }) {
-    const dept = await this.findOne(id);
+  private async findOneInBranch(id: string, branchId: string) {
+    const dept = await this.departmentRepo.findOne({
+      where: { id, branch_id: branchId },
+    });
+    if (!dept) throw new NotFoundException('Department not found');
+    return dept;
+  }
+
+  async update(
+    id: string,
+    branchId: string,
+    data: { name?: string; is_active?: boolean },
+  ) {
+    const dept = await this.findOneInBranch(id, branchId);
     if (data.name !== undefined) dept.name = data.name;
     if (data.is_active !== undefined) dept.is_active = data.is_active;
     return this.departmentRepo.save(dept);
   }
 
-  async remove(id: string) {
-    const dept = await this.findOne(id);
+  async remove(id: string, branchId: string) {
+    const dept = await this.findOneInBranch(id, branchId);
     return this.departmentRepo.remove(dept);
   }
 }

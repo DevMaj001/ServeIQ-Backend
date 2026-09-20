@@ -47,18 +47,15 @@ export class AuthService {
     headers: Record<string, unknown>,
     ip?: string,
   ): string | null {
-    const ua = typeof headers['user-agent'] === 'string' ? headers['user-agent'] : '';
+    const ua =
+      typeof headers['user-agent'] === 'string' ? headers['user-agent'] : '';
     const acceptLang =
       typeof headers['accept-language'] === 'string'
         ? headers['accept-language']
         : '';
     const raw = [ua, acceptLang, ip || ''].join('|').trim();
     if (!raw || raw === '||') return null;
-    return crypto
-      .createHash('sha256')
-      .update(raw)
-      .digest('hex')
-      .slice(0, 64);
+    return crypto.createHash('sha256').update(raw).digest('hex').slice(0, 64);
   }
 
   async register(dto: RegisterDto, deviceFingerprint?: string | null) {
@@ -212,7 +209,12 @@ export class AuthService {
   async login(
     dto: LoginDto,
     deviceFingerprint?: string | null,
-    deviceInfo?: { device_id?: string; device_name?: string; platform?: string; app_version?: string },
+    deviceInfo?: {
+      device_id?: string;
+      device_name?: string;
+      platform?: string;
+      app_version?: string;
+    },
   ) {
     const user = await this.dataSource.getRepository(User).findOne({
       where: { email: dto.email },
@@ -242,10 +244,7 @@ export class AuthService {
     throw new UnauthorizedException('Invalid credentials');
   }
 
-  async waiterLogin(
-    dto: WaiterLoginDto,
-    deviceFingerprint?: string | null,
-  ) {
+  async waiterLogin(dto: WaiterLoginDto, deviceFingerprint?: string | null) {
     if (!dto.pin) {
       throw new BadRequestException('PIN or passcode is required');
     }
@@ -336,7 +335,10 @@ export class AuthService {
     };
   }
 
-  async activate(dto: { email: string; password: string }, deviceFingerprint?: string | null) {
+  async activate(
+    dto: { email: string; password: string },
+    deviceFingerprint?: string | null,
+  ) {
     const user = await this.dataSource.getRepository(User).findOne({
       where: { email: dto.email },
     });
@@ -401,12 +403,17 @@ export class AuthService {
     }
 
     let effectiveBranchId = dto.branchId;
-    if (!effectiveBranchId) {
-      const firstBranch = await this.dataSource.getRepository(Branch).findOne({
+    let effectiveBranch: Branch | null = null;
+    if (effectiveBranchId) {
+      effectiveBranch = await this.dataSource
+        .getRepository(Branch)
+        .findOne({ where: { id: effectiveBranchId } });
+    } else {
+      effectiveBranch = await this.dataSource.getRepository(Branch).findOne({
         where: { business_id: dto.businessId },
         order: { created_at: 'ASC' },
       });
-      effectiveBranchId = firstBranch?.id || undefined;
+      effectiveBranchId = effectiveBranch?.id || undefined;
     }
 
     const payload = {
@@ -417,9 +424,35 @@ export class AuthService {
       businessId: dto.businessId,
       branchId: effectiveBranchId,
       impersonating: true,
+      // Accountability: the token names the admin behind it, and carrying
+      // the target's token versions makes it revocable by force-logout
+      // like any other session (previously impersonation tokens skipped
+      // revocation entirely).
+      impersonator_id: currentUser.userId,
+      ...(owner ? { pin_token_version: owner.pin_token_version } : {}),
+      ...(effectiveBranch
+        ? { staff_token_version: effectiveBranch.staff_token_version }
+        : {}),
     };
+
+    if (effectiveBranchId) {
+      await this.auditService.log({
+        branchId: effectiveBranchId,
+        userId: currentUser.userId,
+        action: 'admin.impersonate',
+        entityId: dto.businessId,
+        entityType: 'business',
+        payload: {
+          impersonated_owner_id: owner?.id ?? null,
+          admin_email: currentUser.email ?? null,
+        },
+      });
+    }
+
     return {
-      access_token: this.jwtService.sign(payload),
+      // Impersonation sessions are deliberately short-lived: 15 minutes,
+      // then the admin must mint a fresh (audited) one.
+      access_token: this.jwtService.sign(payload, { expiresIn: '15m' }),
       branchId: effectiveBranchId,
     };
   }
@@ -434,10 +467,7 @@ export class AuthService {
     }
 
     let permissions: string[] = [];
-    if (
-      user.role === 'superadmin' ||
-      user.role === UserRole.OWNER
-    ) {
+    if (user.role === 'superadmin' || user.role === UserRole.OWNER) {
       const all = await this.dataSource
         .getRepository(Permission)
         .find({ select: { code: true } });
@@ -524,7 +554,10 @@ export class AuthService {
     };
   }
 
-  async refreshToken(refreshTokenStr: string, deviceFingerprint?: string | null) {
+  async refreshToken(
+    refreshTokenStr: string,
+    deviceFingerprint?: string | null,
+  ) {
     const repo = this.dataSource.getRepository(RefreshToken);
     const tokenHash = crypto
       .createHash('sha256')
@@ -609,6 +642,16 @@ export class AuthService {
       }),
     );
 
+    // SECURITY: the reset token must NEVER be returned to the caller in
+    // production — that hands account takeover to anyone who knows the
+    // email. It is exposed only in dev/test until an email provider is
+    // wired to deliver it out-of-band; in production the flow is disabled
+    // rather than insecure.
+    if (process.env.NODE_ENV === 'production') {
+      return {
+        message: 'If that email exists, a reset link has been sent.',
+      };
+    }
     return {
       message: 'If that email exists, a reset link has been sent.',
       reset_token: token,
@@ -661,7 +704,31 @@ export class AuthService {
     email: string;
     password: string;
     full_name?: string;
+    setup_token?: string;
   }) {
+    // This route mints a platform superadmin, so it fails closed three ways:
+    // disabled entirely unless SUPERADMIN_SETUP_TOKEN is configured, the
+    // caller must present that token (timing-safe compare), and once any
+    // superadmin exists the route refuses regardless of token.
+    const setupToken = process.env.SUPERADMIN_SETUP_TOKEN;
+    if (!setupToken) {
+      throw new NotFoundException();
+    }
+    const provided = Buffer.from(dto.setup_token || '');
+    const expected = Buffer.from(setupToken);
+    if (
+      provided.length !== expected.length ||
+      !crypto.timingSafeEqual(provided, expected)
+    ) {
+      throw new ForbiddenException('Invalid setup token');
+    }
+    const existingSuperAdmin = await this.dataSource
+      .getRepository(User)
+      .findOne({ where: { role: UserRole.SUPERADMIN } });
+    if (existingSuperAdmin) {
+      return { message: 'Super admin already exists' };
+    }
+
     const existing = await this.dataSource.getRepository(User).findOne({
       where: { email: dto.email },
     });

@@ -3,6 +3,7 @@ import {
   Post,
   Get,
   Body,
+  Param,
   Query,
   Req,
   NotFoundException,
@@ -32,23 +33,44 @@ import { PosTerminal } from '../pos/entities/pos-terminal.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { Business } from '../business/entities/business.entity';
 import { BillService } from '../bill/bill.service';
-import { ProcessPaymentDto } from '../bill/dto/process-payment.dto';
 import {
-  PaymentMethod,
-  OrderStatus,
-  TabType,
-  isBillable,
-} from '../../common/shared';
+  computeBillTotals,
+  recomputeBillTotal,
+  resolveBillRates,
+} from '../bill/bill-totals';
+import { ProcessPaymentDto } from '../bill/dto/process-payment.dto';
+import { PaymentMethod, OrderStatus, TabType } from '../../common/shared';
 import { PaymentVerificationDto } from './dto/payment-verification.dto';
 import {
   buildPaymentMethods,
   PaymentProviderConfig,
 } from './payment-provider.util';
 import { NotificationService } from '../notification/notification.service';
-import * as crypto from 'crypto';
+import {
+  hashWebhookPayload,
+  isFreshEpochTimestamp,
+  verifyMoniepointSignature,
+  verifyRsaSha256,
+  verifyWebhookSignature,
+  WebhookVerificationMethod,
+} from './webhook-verification';
+import { WebhookEventsService } from './webhook-events.service';
+import {
+  WebhookOutcome,
+  WebhookSignatureStatus,
+} from './entities/webhook-event.entity';
+import { PlatformPaymentProvider } from '../admin/entities/platform-payment-provider.entity';
+import { EncryptionService } from '../../common/services/encryption.service';
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Bank account numbers are PII — logs only ever carry the last 4 digits. */
+function maskAccount(account: unknown): string {
+  const s = account == null ? '' : String(account);
+  if (!s) return 'none';
+  return `****${s.slice(-4)}`;
+}
 
 @ApiTags('Customer Payments')
 @Controller('public/payments')
@@ -68,8 +90,12 @@ export class PaymentController {
     private branchRepo: Repository<Branch>,
     @InjectRepository(Business)
     private businessRepo: Repository<Business>,
+    @InjectRepository(PlatformPaymentProvider)
+    private platformProviderRepo: Repository<PlatformPaymentProvider>,
     private billService: BillService,
     private notificationService: NotificationService,
+    private webhookEvents: WebhookEventsService,
+    private encryptionService: EncryptionService,
   ) {}
 
   @Post('initialize')
@@ -149,11 +175,6 @@ export class PaymentController {
         deliveryFeeKobo = Number(orders[0].delivery_fee_kobo || 0);
     }
 
-    const billableOrders = orders.filter((o) => isBillable(o.order_status));
-    const subtotalKobo = billableOrders.reduce(
-      (sum, o) => sum + (o.subtotal_kobo ?? 0),
-      0,
-    );
     const tabBranch = await this.branchRepo.findOne({
       where: { id: branchId },
     });
@@ -162,10 +183,14 @@ export class PaymentController {
           where: { id: tabBranch.business_id },
         })
       : null;
-    const serviceChargePercent = Number(business?.service_charge_percent ?? 10);
-    const serviceChargeKobo = Math.round(
-      subtotalKobo * (serviceChargePercent / 100),
-    );
+    // Same math as BillService.generateBill — tax included. The self-service
+    // checkout previously charged without VAT while the tracking page showed
+    // a VAT-inclusive total.
+    const totals = computeBillTotals({
+      orders,
+      rates: resolveBillRates(business),
+      deliveryFeeKobo,
+    });
 
     let bill = tab
       ? await this.billRepo.findOne({
@@ -183,12 +208,12 @@ export class PaymentController {
         tab_id: tab?.id ?? null,
         tracking_code: tab ? null : dto.tracking_code,
         branch_id: branchId,
-        subtotal_kobo: subtotalKobo,
-        service_charge_kobo: serviceChargeKobo,
-        tax_kobo: 0,
-        discount_kobo: 0,
-        delivery_fee_kobo: deliveryFeeKobo,
-        total_kobo: subtotalKobo + serviceChargeKobo + deliveryFeeKobo,
+        subtotal_kobo: totals.subtotal_kobo,
+        service_charge_kobo: totals.service_charge_kobo,
+        tax_kobo: totals.tax_kobo,
+        discount_kobo: totals.discount_kobo,
+        delivery_fee_kobo: totals.delivery_fee_kobo,
+        total_kobo: totals.total_kobo,
         payment_status: 'pending',
         issued_by: 'self-service',
         payment_reference: paymentReference,
@@ -281,7 +306,6 @@ export class PaymentController {
     const orders = await this.orderRepo.find({ where: { tab_id: tab.id } });
     if (orders.length === 0) throw new BadRequestException('Tab has no orders');
 
-    const subtotalKobo = orders.reduce((s, o) => s + o.subtotal_kobo, 0);
     const tabBranch = await this.branchRepo.findOne({
       where: { id: tab.branch_id },
     });
@@ -290,12 +314,14 @@ export class PaymentController {
           where: { id: tabBranch.business_id },
         })
       : null;
-    const serviceChargePercent = Number(business?.service_charge_percent ?? 10);
-    const serviceChargeKobo = Math.round(
-      subtotalKobo * (serviceChargePercent / 100),
-    );
-    const deliveryFeeKobo =
-      tab.pickup_mode === 'dispatch' ? Number(tab.delivery_fee_kobo || 0) : 0;
+    // Shared bill math: tax included, and declined/cancelled orders excluded
+    // (this path previously summed every order row and charged no VAT).
+    const totals = computeBillTotals({
+      orders,
+      rates: resolveBillRates(business),
+      deliveryFeeKobo:
+        tab.pickup_mode === 'dispatch' ? Number(tab.delivery_fee_kobo || 0) : 0,
+    });
 
     const existingBill = await this.billRepo.findOne({
       where: { tab_id: tab.id },
@@ -334,12 +360,12 @@ export class PaymentController {
       const paymentReference = `PAY-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
       bill = this.billRepo.create({
         tab_id: tab.id,
-        subtotal_kobo: subtotalKobo,
-        service_charge_kobo: serviceChargeKobo,
-        tax_kobo: 0,
-        discount_kobo: 0,
-        delivery_fee_kobo: deliveryFeeKobo,
-        total_kobo: subtotalKobo + serviceChargeKobo + deliveryFeeKobo,
+        subtotal_kobo: totals.subtotal_kobo,
+        service_charge_kobo: totals.service_charge_kobo,
+        tax_kobo: totals.tax_kobo,
+        discount_kobo: totals.discount_kobo,
+        delivery_fee_kobo: totals.delivery_fee_kobo,
+        total_kobo: totals.total_kobo,
         payment_status: 'pending_cash',
         payment_method: PaymentMethod.CASH,
         issued_by: 'self-service',
@@ -348,12 +374,10 @@ export class PaymentController {
     } else {
       bill.payment_method = PaymentMethod.CASH;
       bill.payment_status = 'pending_cash';
-      bill.delivery_fee_kobo = deliveryFeeKobo;
-      bill.total_kobo =
-        bill.subtotal_kobo +
-        bill.service_charge_kobo -
-        (bill.discount_kobo ?? 0) +
-        deliveryFeeKobo;
+      bill.delivery_fee_kobo = totals.delivery_fee_kobo;
+      // Recompute from the bill's own components — the old inline formula
+      // dropped tax_kobo, shrinking waiter-issued bills at cash intent.
+      bill.total_kobo = recomputeBillTotal(bill);
     }
     bill = await this.billRepo.save(bill);
 
@@ -410,18 +434,17 @@ export class PaymentController {
     this.logger.log(
       `[monniepoint][ping] method=${req.method} ct=${String(
         req.headers['content-type'] || '',
-      )} sigHeaders=${[
-        'moniepoint-webhook-signature',
-        'monniepoint-webhook-signature',
-        'monnify-signature',
-        'x-monnify-signature',
-        'x-moniepoint-signature',
-      ]
-        .filter((h) => Boolean(req.headers[h]))
-        .join(',') || 'none'} bodyLen=${rawArrival.length} body=${rawArrival.slice(
-        0,
-        400,
-      )}`,
+      )} sigHeaders=${
+        [
+          'moniepoint-webhook-signature',
+          'monniepoint-webhook-signature',
+          'monnify-signature',
+          'x-monnify-signature',
+          'x-moniepoint-signature',
+        ]
+          .filter((h) => Boolean(req.headers[h]))
+          .join(',') || 'none'
+      } bodyLen=${rawArrival.length} keys=${Object.keys(payload || {}).join(',')}`,
     );
     const reference =
       eventData.reference ||
@@ -450,11 +473,37 @@ export class PaymentController {
       eventData.accountNumber ||
       (Array.isArray(eventData.paymentSourceInformation) &&
         eventData.paymentSourceInformation[0]?.accountNumber);
+    const rawBodyBuf: Buffer = (req as any).rawBody
+      ? Buffer.from((req as any).rawBody)
+      : Buffer.from(JSON.stringify(payload));
+    const payloadHash = hashWebhookPayload(rawBodyBuf);
+    const log = (
+      signatureStatus: WebhookSignatureStatus,
+      outcome: WebhookOutcome,
+      extra: {
+        branchId?: string | null;
+        billId?: string | null;
+        amountKobo?: number | null;
+        httpStatus?: number;
+        errorMessage?: string | null;
+      } = {},
+    ) =>
+      this.webhookEvents.record({
+        provider: 'monniepoint',
+        payloadHash,
+        reference: reference ? String(reference) : null,
+        payload,
+        signatureStatus,
+        outcome,
+        ...extra,
+      });
+
     if (!reference || !amount || !isSuccess) {
+      await log('unverifiable', 'ignored');
       return { received: true };
     }
     this.logger.log(
-      `[monniepoint][arrive] ref=${reference} amount=${amount} status=${rawStatus} terminal=${terminalId} account=${account_number}`,
+      `[monniepoint][arrive] ref=${reference} amount=${amount} status=${rawStatus} terminal=${terminalId} account=${maskAccount(account_number)}`,
     );
 
     // ΓöÇΓöÇ Step 1: Resolve branch from payload metadata (pre-auth) ΓöÇΓöÇ
@@ -470,7 +519,7 @@ export class PaymentController {
     });
     if (!branch) {
       this.logger.warn(
-        `[monniepoint][unverifiable] no branch for ref=${reference} terminal=${terminalId} account=${account_number}`,
+        `[monniepoint][unverifiable] no branch for ref=${reference} terminal=${terminalId} account=${maskAccount(account_number)}`,
       );
       if (!isTestSimulation) {
         // No branch means no provider secret exists to verify the signature
@@ -478,8 +527,10 @@ export class PaymentController {
         // retries and the delivery eventually lands in FAILED where
         // reconciliation can surface it) instead of echoing a permissive
         // response whose body leaks whether a matching bill exists.
+        await log('unverifiable', 'rejected', { httpStatus: 403 });
         throw new ForbiddenException('Invalid Moniepoint signature');
       }
+      await log('simulated', 'no_bill');
       return { received: true, error: 'Bill not found' };
     }
 
@@ -493,33 +544,64 @@ export class PaymentController {
       this.logger.warn(
         `[monniepoint][misconfig] branch=${branch.id} has no monniepoint provider configured`,
       );
+      await log('not-configured', 'rejected', {
+        branchId: branch.id,
+        httpStatus: 403,
+      });
       throw new ForbiddenException('Moniepoint webhook not configured');
     }
 
-    if (
-      !isTestSimulation &&
-      providerConfig?.verification_method === 'hmac-sha512'
-    ) {
+    if (!isTestSimulation) {
+      // Fail closed: a config whose verification_method is missing or not
+      // hmac-sha512 must never skip verification and auto-settle money.
+      if (providerConfig?.verification_method !== 'hmac-sha512') {
+        this.logger.warn(
+          `[monniepoint][misconfig] branch=${branch.id} verification_method is not hmac-sha512`,
+        );
+        await log('not-configured', 'rejected', {
+          branchId: branch.id,
+          httpStatus: 403,
+        });
+        throw new ForbiddenException('Moniepoint webhook not configured');
+      }
       const secret =
         providerConfig.config?.webhook_secret || providerConfig.config?.secret;
       if (!secret) {
         this.logger.warn(
           `[monniepoint][misconfig] branch=${branch.id} configured hmac-sha512 but has no webhook_secret`,
         );
+        await log('not-configured', 'rejected', {
+          branchId: branch.id,
+          httpStatus: 403,
+        });
         throw new ForbiddenException(
           'Moniepoint webhook secret not configured',
         );
       }
-      const sigFormat = this.verifyMoniepointSignature(
-        req,
-        payload,
-        signature,
+      const sig =
+        signature ||
+        String(req.headers['moniepoint-webhook-signature'] || '') ||
+        String(req.headers['monniepoint-webhook-signature'] || '') ||
+        String(req.headers['monnify-signature'] || '') ||
+        String(req.headers['x-monnify-signature'] || '');
+      const sigFormat = verifyMoniepointSignature({
+        rawBody: rawBodyBuf,
+        signature: sig || undefined,
         secret,
-      );
+        webhookId:
+          String(req.headers['moniepoint-webhook-id'] || '') || undefined,
+        timestamp:
+          String(req.headers['moniepoint-webhook-timestamp'] || '') ||
+          undefined,
+      });
       if (!sigFormat) {
         this.logger.warn(
           `[monniepoint][bad-signature] branch=${branch.id} signature rejected against configured secret`,
         );
+        await log('invalid', 'rejected', {
+          branchId: branch.id,
+          httpStatus: 403,
+        });
         throw new ForbiddenException('Invalid Moniepoint signature');
       }
       // Replay protection: reject stale sha256-signed payloads whose
@@ -532,11 +614,28 @@ export class PaymentController {
         );
         // Replay guard: once the signature is proven genuine, an aged timestamp
         // is the only signal a replayed capture can be caught on ΓÇö reject.
+        await log('invalid', 'rejected', {
+          branchId: branch.id,
+          httpStatus: 403,
+          errorMessage: 'stale timestamp',
+        });
         throw new ForbiddenException('Expired Moniepoint signature');
       }
       this.logger.log(
         `[monniepoint][verified] signature ok for branch=${branch.id}`,
       );
+    }
+    const sigStatus: WebhookSignatureStatus = isTestSimulation
+      ? 'simulated'
+      : 'verified';
+
+    // Byte-identical delivery already verified and settled: a provider
+    // redelivery or a replayed capture. Short-circuit before touching bills.
+    if (
+      await this.webhookEvents.hasSettledPayload('monniepoint', payloadHash)
+    ) {
+      await log(sigStatus, 'duplicate', { branchId: branch.id });
+      return { received: true, status: 'duplicate' };
     }
 
     // ΓöÇΓöÇ Step 3: Resolve the bill (post-auth confirmed) ΓöÇΓöÇ
@@ -549,7 +648,7 @@ export class PaymentController {
     });
     if (!resolved) {
       this.logger.warn(
-        `[monniepoint][unresolved] no bill for ref=${reference} terminal=${terminalId} account=${account_number}`,
+        `[monniepoint][unresolved] no bill for ref=${reference} terminal=${terminalId} account=${maskAccount(account_number)}`,
       );
       await this.alertPaymentReconciliation(branch, 'unresolved', {
         reference,
@@ -557,6 +656,7 @@ export class PaymentController {
         terminalId,
         account_number,
       });
+      await log(sigStatus, 'no_bill', { branchId: branch.id });
       return { received: true, error: 'Bill not found' };
     }
     const { bill, tab } = resolved;
@@ -564,7 +664,13 @@ export class PaymentController {
       `[monniepoint][resolved] bill=${bill?.id} tab=${tab?.id ?? '(standalone)'} branch=${branch.id}`,
     );
 
-    if (bill.paid_at) return { received: true, status: 'already_paid' };
+    if (bill.paid_at) {
+      await log(sigStatus, 'already_paid', {
+        branchId: branch.id,
+        billId: bill.id ?? null,
+      });
+      return { received: true, status: 'already_paid' };
+    }
 
     // Normalize the provider's amount (naira or kobo) to kobo against the
     // bill's known total before settling.
@@ -579,21 +685,42 @@ export class PaymentController {
         bill_total_kobo: bill.total_kobo,
         bill_id: bill.id,
       });
+      await log(sigStatus, 'amount_mismatch', {
+        branchId: branch.id,
+        billId: bill.id ?? null,
+      });
       return { received: true, error: 'Amount mismatch' };
     }
 
     this.logger.log(
       `[monniepoint][settle] bill=${bill.id} amountKobo=${amountKobo} method=POS ref=${reference}`,
     );
-    return this.routeWebhookPayment({
-      bill,
-      tab,
-      reference,
-      amount: amountKobo,
-      method: PaymentMethod.POS,
-      terminalId,
-      idempotencyKey: `monniepoint-${reference}`,
-    });
+    try {
+      const result = await this.routeWebhookPayment({
+        bill,
+        tab,
+        reference,
+        amount: amountKobo,
+        method: PaymentMethod.POS,
+        terminalId,
+        idempotencyKey: `monniepoint-${reference}`,
+      });
+      await log(sigStatus, 'settled', {
+        branchId: branch.id,
+        billId: bill.id ?? null,
+        amountKobo,
+      });
+      return result;
+    } catch (err) {
+      await log(sigStatus, 'error', {
+        branchId: branch.id,
+        billId: bill.id ?? null,
+        amountKobo,
+        httpStatus: 500,
+        errorMessage: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
+    }
   }
 
   @Post('webhooks/opay')
@@ -612,30 +739,71 @@ export class PaymentController {
   ) {
     const { reference, amount, status, transactionType, account_number } =
       payload?.data || payload;
+    const rawBodyBuf: Buffer = (req as any).rawBody
+      ? Buffer.from((req as any).rawBody)
+      : Buffer.from(JSON.stringify(payload));
+    const payloadHash = hashWebhookPayload(rawBodyBuf);
+    const log = (
+      signatureStatus: WebhookSignatureStatus,
+      outcome: WebhookOutcome,
+      extra: {
+        branchId?: string | null;
+        billId?: string | null;
+        amountKobo?: number | null;
+        httpStatus?: number;
+        errorMessage?: string | null;
+      } = {},
+    ) =>
+      this.webhookEvents.record({
+        provider: 'opay',
+        payloadHash,
+        reference: reference ? String(reference) : null,
+        payload,
+        signatureStatus,
+        outcome,
+        ...extra,
+      });
+
     if (!reference || !amount || status !== 'SUCCESS') {
+      await log('unverifiable', 'ignored');
       return { received: true };
     }
 
-    const resolved = await this.resolveWebhookBill({
-      reference,
-      amount,
-      accountNumber: account_number,
+    const isTestSimulation = this.isTestSimulation(req);
+
+    // Verify BEFORE any settlement-oriented lookup, mirroring the Moniepoint
+    // path: resolve the branch that configured OPay from payload metadata
+    // (deposit account, or the merchant payment reference as an anchor),
+    // check the signature against that branch's key, and only then resolve
+    // the bill. An unverifiable delivery is rejected instead of echoing a
+    // response that leaks whether a matching bill exists.
+    const branch = await this.resolveWebhookBranch({
       provider: 'opay',
+      reference,
+      accountNumber: account_number,
     });
-    if (!resolved) {
+    if (!branch) {
+      this.logger.warn(
+        `[opay][unverifiable] no branch for ref=${reference} account=${maskAccount(account_number)}`,
+      );
+      if (!isTestSimulation) {
+        await log('unverifiable', 'rejected', { httpStatus: 403 });
+        throw new ForbiddenException('Invalid OPay signature');
+      }
+      await log('simulated', 'no_bill');
       return { received: true, error: 'Bill not found' };
     }
-    const { bill, tab, branch } = resolved;
 
-    const providerConfig = branch
-      ? this.findProviderConfig(branch.settings, 'opay')
-      : null;
-    const isTestSimulation = this.isTestSimulation(req);
+    const providerConfig = this.findProviderConfig(branch.settings, 'opay');
 
     if (
       !isTestSimulation &&
       (!providerConfig || providerConfig.verification_method !== 'rsa')
     ) {
+      await log('not-configured', 'rejected', {
+        branchId: branch.id,
+        httpStatus: 403,
+      });
       throw new ForbiddenException('OPay webhook not configured');
     }
 
@@ -646,35 +814,362 @@ export class PaymentController {
     ) {
       const publicKey =
         providerConfig.config?.public_key || providerConfig.config?.publicKey;
-      const rawBody: Buffer = (req as any).rawBody
-        ? Buffer.from((req as any).rawBody)
-        : Buffer.from(JSON.stringify(payload));
-      if (
-        !publicKey ||
-        !this.verifyRsaSignature(rawBody, signature, publicKey)
-      ) {
+      if (!publicKey || !verifyRsaSha256(rawBodyBuf, signature, publicKey)) {
+        await log('invalid', 'rejected', {
+          branchId: branch.id,
+          httpStatus: 403,
+        });
         throw new ForbiddenException('Invalid OPay signature');
       }
     }
+    const sigStatus: WebhookSignatureStatus = isTestSimulation
+      ? 'simulated'
+      : 'verified';
 
-    if (bill.paid_at) return { received: true, status: 'already_paid' };
+    // RSA has no signed timestamp, so replay protection for OPay comes from
+    // the ledger: a byte-identical delivery that already settled is a
+    // redelivery or a replayed capture.
+    if (await this.webhookEvents.hasSettledPayload('opay', payloadHash)) {
+      await log(sigStatus, 'duplicate', { branchId: branch.id });
+      return { received: true, status: 'duplicate' };
+    }
+
+    const resolved = await this.resolveWebhookBill({
+      reference,
+      amount,
+      accountNumber: account_number,
+      provider: 'opay',
+    });
+    if (!resolved) {
+      this.logger.warn(
+        `[opay][unresolved] no bill for ref=${reference} account=${maskAccount(account_number)}`,
+      );
+      await this.alertPaymentReconciliation(branch, 'unresolved', {
+        reference,
+        amount,
+        account_number,
+      });
+      await log(sigStatus, 'no_bill', { branchId: branch.id });
+      return { received: true, error: 'Bill not found' };
+    }
+    const { bill, tab } = resolved;
+
+    if (bill.paid_at) {
+      await log(sigStatus, 'already_paid', {
+        branchId: branch.id,
+        billId: bill.id ?? null,
+      });
+      return { received: true, status: 'already_paid' };
+    }
 
     const amountKobo = this.normalizeAmountToKobo(amount, bill.total_kobo);
     if (amountKobo === null) {
+      this.logger.warn(
+        `[opay][amount-mismatch] sent=${amount} bill_total=${bill.total_kobo}`,
+      );
+      await this.alertPaymentReconciliation(branch, 'amount-mismatch', {
+        reference,
+        amount,
+        bill_total_kobo: bill.total_kobo,
+        bill_id: bill.id,
+      });
+      await log(sigStatus, 'amount_mismatch', {
+        branchId: branch.id,
+        billId: bill.id ?? null,
+      });
       return { received: true, error: 'Amount mismatch' };
     }
 
     const method =
       transactionType === 'POS' ? PaymentMethod.POS : PaymentMethod.TRANSFER;
-    return this.routeWebhookPayment({
-      bill,
-      tab,
-      reference,
-      amount: amountKobo,
-      method,
-      terminalId: undefined,
-      idempotencyKey: `opay-${reference}`,
+    try {
+      const result = await this.routeWebhookPayment({
+        bill,
+        tab,
+        reference,
+        amount: amountKobo,
+        method,
+        terminalId: undefined,
+        idempotencyKey: `opay-${reference}`,
+      });
+      await log(sigStatus, 'settled', {
+        branchId: branch.id,
+        billId: bill.id ?? null,
+        amountKobo,
+      });
+      return result;
+    } catch (err) {
+      await log(sigStatus, 'error', {
+        branchId: branch.id,
+        billId: bill.id ?? null,
+        amountKobo,
+        httpStatus: 500,
+        errorMessage: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
+    }
+  }
+
+  @Post('webhooks/:provider')
+  @SkipThrottle()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Generic payment webhook for providers onboarded through the super-admin catalogue (Moniepoint/OPay/Paystack keep their dedicated routes)',
+  })
+  async genericProviderWebhook(
+    @Param('provider') providerParam: string,
+    @Req() req: Request,
+    @Body() payload: any,
+  ) {
+    // Nest matches the dedicated routes above first, but be defensive: the
+    // hand-hardened providers must never be reachable through this path.
+    const providerName = String(providerParam || '').toLowerCase();
+    if (
+      ['monniepoint', 'moniepoint', 'opay', 'paystack'].includes(providerName)
+    ) {
+      throw new NotFoundException('Unknown payment provider');
+    }
+
+    const catalog = await this.platformProviderRepo.findOne({
+      where: { name: providerName, is_active: true },
     });
+    if (!catalog || catalog.type !== 'webhook') {
+      throw new NotFoundException('Unknown payment provider');
+    }
+    const label = catalog.label || providerName;
+
+    const rawBodyBuf: Buffer = (req as any).rawBody
+      ? Buffer.from((req as any).rawBody)
+      : Buffer.from(JSON.stringify(payload));
+    const payloadHash = hashWebhookPayload(rawBodyBuf);
+
+    // Generic field extraction over the shapes providers commonly use
+    // (flat, `data`, or `eventData` envelopes).
+    const eventData = payload?.eventData || payload?.data || payload || {};
+    const reference =
+      eventData.reference ||
+      eventData.paymentReference ||
+      eventData.transactionReference ||
+      eventData.merchantReference;
+    const rawStatus =
+      payload?.eventType ||
+      eventData.paymentStatus ||
+      eventData.status ||
+      eventData.eventType ||
+      '';
+    const isSuccess = /SUCCESS|PAID/.test(String(rawStatus).toUpperCase());
+    const amount =
+      eventData.amountPaid ?? eventData.totalPayable ?? eventData.amount;
+    const account_number =
+      eventData.destinationAccountInformation?.accountNumber ||
+      eventData.account_number ||
+      eventData.accountNumber;
+    const terminalId =
+      eventData.terminalId || eventData.terminal_id || eventData.terminalSerial;
+
+    const log = (
+      signatureStatus: WebhookSignatureStatus,
+      outcome: WebhookOutcome,
+      extra: {
+        branchId?: string | null;
+        billId?: string | null;
+        amountKobo?: number | null;
+        httpStatus?: number;
+        errorMessage?: string | null;
+      } = {},
+    ) =>
+      this.webhookEvents.record({
+        provider: providerName,
+        payloadHash,
+        reference: reference ? String(reference) : null,
+        payload,
+        signatureStatus,
+        outcome,
+        ...extra,
+      });
+
+    if (!reference || !amount || !isSuccess) {
+      await log('unverifiable', 'ignored');
+      return { received: true };
+    }
+
+    const isTestSimulation = this.isTestSimulation(req);
+
+    // Branch first, then signature, then (and only then) the bill.
+    const branch = await this.resolveWebhookBranch({
+      provider: providerName,
+      reference,
+      terminalId,
+      accountNumber: account_number,
+    });
+    if (!branch) {
+      this.logger.warn(
+        `[${providerName}][unverifiable] no branch for ref=${reference} account=${maskAccount(account_number)}`,
+      );
+      if (!isTestSimulation) {
+        await log('unverifiable', 'rejected', { httpStatus: 403 });
+        throw new ForbiddenException(`Invalid ${label} signature`);
+      }
+      await log('simulated', 'no_bill');
+      return { received: true, error: 'Bill not found' };
+    }
+
+    const providerConfig = this.findProviderConfig(
+      branch.settings,
+      providerName,
+    );
+
+    if (!isTestSimulation) {
+      const method = (providerConfig?.verification_method ??
+        catalog.verification_method) as WebhookVerificationMethod | null;
+      // 'none' fails closed: an unverified webhook never settles money.
+      if (!method || method === 'none') {
+        await log('not-configured', 'rejected', {
+          branchId: branch.id,
+          httpStatus: 403,
+        });
+        throw new ForbiddenException(`${label} webhook not configured`);
+      }
+      const cfg = providerConfig?.config || {};
+      const catalogCfg = catalog.config || {};
+      const signatureHeader = String(
+        cfg.signature_header ||
+          catalogCfg.signature_header ||
+          (method === 'stripe'
+            ? 'stripe-signature'
+            : `x-${providerName}-signature`),
+      ).toLowerCase();
+      const headerValue = (name: string): string | undefined => {
+        const v = req.headers[name];
+        if (Array.isArray(v)) return v[0];
+        return v ? String(v) : undefined;
+      };
+      const signature =
+        headerValue(signatureHeader) || headerValue('x-webhook-signature');
+      const result = verifyWebhookSignature({
+        method,
+        rawBody: rawBodyBuf,
+        signature,
+        secret: cfg.webhook_secret || cfg.secret || null,
+        publicKey: cfg.public_key || cfg.publicKey || null,
+        webhookId: headerValue(
+          String(
+            cfg.webhook_id_header ||
+              catalogCfg.webhook_id_header ||
+              'webhook-id',
+          ).toLowerCase(),
+        ),
+        timestamp: headerValue(
+          String(
+            cfg.timestamp_header ||
+              catalogCfg.timestamp_header ||
+              'webhook-timestamp',
+          ).toLowerCase(),
+        ),
+      });
+      if (!result.ok) {
+        const misconfigured =
+          result.reason === 'missing-secret' ||
+          result.reason === 'missing-public-key' ||
+          result.reason === 'unsupported-method';
+        this.logger.warn(
+          `[${providerName}][${misconfigured ? 'misconfig' : 'bad-signature'}] branch=${branch.id} reason=${result.reason}`,
+        );
+        await log(misconfigured ? 'not-configured' : 'invalid', 'rejected', {
+          branchId: branch.id,
+          httpStatus: 403,
+          errorMessage: result.reason ?? null,
+        });
+        throw new ForbiddenException(
+          misconfigured
+            ? `${label} webhook not configured`
+            : `Invalid ${label} signature`,
+        );
+      }
+    }
+    const sigStatus: WebhookSignatureStatus = isTestSimulation
+      ? 'simulated'
+      : 'verified';
+
+    if (await this.webhookEvents.hasSettledPayload(providerName, payloadHash)) {
+      await log(sigStatus, 'duplicate', { branchId: branch.id });
+      return { received: true, status: 'duplicate' };
+    }
+
+    const resolved = await this.resolveWebhookBill({
+      reference,
+      amount,
+      terminalId,
+      accountNumber: account_number,
+      provider: providerName,
+    });
+    if (!resolved) {
+      await this.alertPaymentReconciliation(branch, 'unresolved', {
+        reference,
+        amount,
+        account_number,
+      });
+      await log(sigStatus, 'no_bill', { branchId: branch.id });
+      return { received: true, error: 'Bill not found' };
+    }
+    const { bill, tab } = resolved;
+
+    if (bill.paid_at) {
+      await log(sigStatus, 'already_paid', {
+        branchId: branch.id,
+        billId: bill.id ?? null,
+      });
+      return { received: true, status: 'already_paid' };
+    }
+
+    const amountKobo = this.normalizeAmountToKobo(amount, bill.total_kobo);
+    if (amountKobo === null) {
+      await this.alertPaymentReconciliation(branch, 'amount-mismatch', {
+        reference,
+        amount,
+        bill_total_kobo: bill.total_kobo,
+        bill_id: bill.id,
+      });
+      await log(sigStatus, 'amount_mismatch', {
+        branchId: branch.id,
+        billId: bill.id ?? null,
+      });
+      return { received: true, error: 'Amount mismatch' };
+    }
+
+    const transactionType = String(
+      eventData.transactionType || eventData.channel || '',
+    ).toUpperCase();
+    try {
+      const result = await this.routeWebhookPayment({
+        bill,
+        tab,
+        reference,
+        amount: amountKobo,
+        method:
+          transactionType === 'POS'
+            ? PaymentMethod.POS
+            : PaymentMethod.TRANSFER,
+        terminalId: undefined,
+        idempotencyKey: `${providerName}-${reference}`,
+      });
+      await log(sigStatus, 'settled', {
+        branchId: branch.id,
+        billId: bill.id ?? null,
+        amountKobo,
+      });
+      return result;
+    } catch (err) {
+      await log(sigStatus, 'error', {
+        branchId: branch.id,
+        billId: bill.id ?? null,
+        amountKobo,
+        httpStatus: 500,
+        errorMessage: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
+    }
   }
 
   /** Test mode: a dev-only header that bypasses provider signature
@@ -729,62 +1224,26 @@ export class PaymentController {
     return { received: true, status: 'processed' };
   }
 
+  /** Look up a branch's provider entry and return a copy with its config
+   *  values decrypted (secrets are stored encrypted at rest with the enc:v1:
+   *  prefix; legacy plaintext values pass through unchanged). Never mutates
+   *  the branch's settings object. */
   private findProviderConfig(
     settings: any,
     providerName: string,
   ): PaymentProviderConfig | null {
     const providers = settings.payment_providers;
     if (!Array.isArray(providers)) return null;
-    return providers.find((p: any) => p.name === providerName) || null;
-  }
-
-  private safeEqual(a: string, b: string): boolean {
-    const ab = Buffer.from(a || '');
-    const bb = Buffer.from(b || '');
-    if (ab.length !== bb.length) return false;
-    return crypto.timingSafeEqual(ab, bb);
-  }
-
-  /** Verify a Moniepoint webhook signature against a raw body (not re-serialized
-   *  JSON) so the digest matches exactly what the provider signed. Accepts both
-   *  the simple HMAC-SHA512(hex) over the raw body and Moniepoint's documented
-   *  HMAC-SHA256(base64) over `${webhookId}__${timestamp}__${rawBody}`, depending
-   *  on which dashboard/integration is used. */
-  private verifyMoniepointSignature(
-    req: Request,
-    payload: any,
-    signature: string,
-    secret: string,
-  ): 'sha512' | 'sha256' | null {
-    const sig =
-      signature ||
-      String(req.headers['moniepoint-webhook-signature'] || '') ||
-      String(req.headers['monniepoint-webhook-signature'] || '') ||
-      String(req.headers['monnify-signature'] || '') ||
-      String(req.headers['x-monnify-signature'] || '');
-    if (!sig) return null;
-    const rawBody: Buffer = (req as any).rawBody
-      ? Buffer.from((req as any).rawBody)
-      : Buffer.from(JSON.stringify(payload));
-
-    const hmacSha512 = crypto
-      .createHmac('sha512', secret)
-      .update(rawBody)
-      .digest('hex');
-    if (this.safeEqual(sig.replace(/^sha512=/i, ''), hmacSha512))
-      return 'sha512';
-
-    const webhookId = req.headers['moniepoint-webhook-id'];
-    const timestamp = req.headers['moniepoint-webhook-timestamp'];
-    if (webhookId && timestamp) {
-      const signed = `${webhookId}__${timestamp}__${rawBody.toString('utf8')}`;
-      const hmacSha256 = crypto
-        .createHmac('sha256', secret)
-        .update(signed)
-        .digest('base64');
-      if (this.safeEqual(sig, hmacSha256)) return 'sha256';
+    const found = providers.find((p: any) => p.name === providerName);
+    if (!found) return null;
+    const config: Record<string, any> = {};
+    for (const [key, value] of Object.entries(found.config || {})) {
+      config[key] =
+        typeof value === 'string'
+          ? this.encryptionService.decrypt(value)
+          : value;
     }
-    return null;
+    return { ...found, config };
   }
 
   /** Reject stale webhooks whose signed timestamp is outside the acceptable
@@ -798,13 +1257,11 @@ export class PaymentController {
   private isFreshMoniepointTimestamp(req: Request): boolean {
     const raw = req.headers['moniepoint-webhook-timestamp'];
     if (!raw) return true;
-    const rawTs = Number(raw);
-    if (!Number.isFinite(rawTs)) return false;
-    const ts = rawTs >= 1e12 ? rawTs / 1000 : rawTs;
-    const maxAgeSec =
-      Number(process.env.MONIEPOINT_MAX_WEBHOOK_AGE_SECONDS) || 300;
-    const ageSec = Date.now() / 1000 - ts;
-    return ageSec >= -60 && ageSec <= maxAgeSec;
+    return isFreshEpochTimestamp(Array.isArray(raw) ? raw[0] : raw, {
+      maxAgeSeconds:
+        Number(process.env.MONIEPOINT_MAX_WEBHOOK_AGE_SECONDS) || 300,
+      futureSkewSeconds: 60,
+    });
   }
 
   /** Write a structured alert to the notifications table so branch staff
@@ -895,7 +1352,7 @@ export class PaymentController {
    *  "3A000001") can only be looked up once. When it isn't a uuid, match the
    *  terminal by its label instead of crashing with Postgres 22P02. */
   private async resolveWebhookBranch(opts: {
-    provider: 'monniepoint' | 'opay';
+    provider: string;
     reference?: string;
     terminalId?: string;
     accountNumber?: string;
@@ -955,7 +1412,7 @@ export class PaymentController {
   private async resolveWebhookBill(opts: {
     reference?: string;
     amount: any;
-    provider: 'monniepoint' | 'opay';
+    provider: string;
     terminalId?: string;
     accountNumber?: string;
   }): Promise<{ bill: Bill; tab: Tab | null; branch: Branch | null } | null> {
@@ -1010,24 +1467,6 @@ export class PaymentController {
       ? await this.tabRepo.findOne({ where: { id: bill.tab_id } })
       : null;
     return { bill, tab, branch };
-  }
-
-  private verifyRsaSignature(
-    rawBody: Buffer,
-    signature: string,
-    publicKey: string,
-  ): boolean {
-    if (!signature || !publicKey) return false;
-    try {
-      return crypto.verify(
-        'RSA-SHA256',
-        rawBody,
-        publicKey,
-        Buffer.from(signature, 'base64'),
-      );
-    } catch {
-      return false;
-    }
   }
 
   @Get('status')

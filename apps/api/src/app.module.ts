@@ -3,6 +3,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ALL_MIGRATIONS } from './database/migrations';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -42,68 +43,17 @@ import { Role } from './modules/role/entities/role.entity';
 import { Device } from './modules/device/entities/device.entity';
 import { MenuCategory } from './modules/menu-category/entities/menu-category.entity';
 import { Unit } from './modules/unit/entities/unit.entity';
-import { CreateMenuCategoriesTable1799000000000 } from './database/migrations/1799000000000-CreateMenuCategoriesTable';
-import { CreateUnitsTable1799000000001 } from './database/migrations/1799000000001-CreateUnitsTable';
-import { CreateBaseTables1782000000000 } from './database/migrations/1782000000000-CreateBaseTables';
-import { AddTrackingAndTimestampsToOrders1792000000000 } from './database/migrations/1792000000000-AddTrackingAndTimestampsToOrders';
-import { CreateAdvertisementsTable1793000000000 } from './database/migrations/1793000000000-CreateAdvertisementsTable';
-import { CreatePermissionsAndRoles1794000000000 } from './database/migrations/1794000000000-CreatePermissionsAndRoles';
-import { CreatePlansAndSubscriptions1784000000000 } from './database/migrations/1784000000000-CreatePlansAndSubscriptions';
-import { CreateNotificationsTable1784000000003 } from './database/migrations/1784000000003-CreateNotificationsTable';
-import { CreateDepartmentsTable1790000000000 } from './database/migrations/1790000000000-CreateDepartmentsTable';
-import { CreateStockMovementsTable1795000000000 } from './database/migrations/1795000000000-CreateStockMovementsTable';
-import { AddBusinessCodeToBusinesses1796000000000 } from './database/migrations/1796000000000-AddBusinessCodeToBusinesses';
-import { BackfillBusinessCodes1796000000001 } from './database/migrations/1796000000001-BackfillBusinessCodes';
-import { AddTokenVersionFields1797000000000 } from './database/migrations/1797000000000-AddTokenVersionFields';
-import { MakeAdBranchIdNullable1798000000000 } from './database/migrations/1798000000000-MakeAdBranchIdNullable';
-import { MakeExistingAdsUniversal1798000000001 } from './database/migrations/1798000000001-MakeExistingAdsUniversal';
-import { AddTabType1800000000001 } from './database/migrations/1800000000001-AddTabType';
-import { AddFulfillmentType1800000000002 } from './database/migrations/1800000000002-AddFulfillmentType';
-import { RelocateTrackingToTabs1800000000003 } from './database/migrations/1800000000003-RelocateTrackingToTabs';
-import { MakeWaiterIdNullable1800000000004 } from './database/migrations/1800000000004-MakeWaiterIdNullable';
-import { BackfillUserRoleId1752892800000 } from './database/migrations/1752892800000-BackfillUserRoleId';
-import { MakeUserRoleIdNotNull1752892800001 } from './database/migrations/1752892800001-MakeUserRoleIdNotNull';
-import { CreatePlatformPaymentProvidersTable1801000000000 } from './database/migrations/1801000000000-CreatePlatformPaymentProvidersTable';
-import { CreateFeedbackTable1802000000000 } from './database/migrations/1802000000000-CreateFeedbackTable';
-import { AddIsVipToTables1804000000000 } from './database/migrations/1804000000000-AddIsVipToTables';
-import { AddVipSurchargePercentToBusinesses1805000000000 } from './database/migrations/1805000000000-AddVipSurchargePercentToBusinesses';
-import { AddServiceChargePercentToBusinesses1806000000000 } from './database/migrations/1806000000000-AddServiceChargePercentToBusinesses';
-import { AddInactiveToTableStatus1807000000000 } from './database/migrations/1807000000000-AddInactiveToTableStatus';
-import { CreateReviewsTable1808000000000 } from './database/migrations/1808000000000-CreateReviewsTable';
-import { AddNavigationPermissions1809000000000 } from './database/migrations/1809000000000-AddNavigationPermissions';
-import { CreateShiftTemplates1810000000000 } from './database/migrations/1810000000000-CreateShiftTemplates';
-import { AddBusinessIdToShiftTemplates1811000000000 } from './database/migrations/1811000000000-AddBusinessIdToShiftTemplates';
-import { NormalizeShiftTemplateDaysOfWeek1819900000000 } from './database/migrations/1819900000000-NormalizeShiftTemplateDaysOfWeek';
-import { AddCountryToBusinesses1819950000000 } from './database/migrations/1819950000000-AddCountryToBusinesses';
-import { SeedDefaultShiftTemplates1820000000000 } from './database/migrations/1820000000000-SeedDefaultShiftTemplates';
-import { AddManageShiftsPermission1812000000000 } from './database/migrations/1812000000000-AddManageShiftsPermission';
-import { AddDeviceFingerprintToRefreshTokens1813000000000 } from './database/migrations/1813000000000-AddDeviceFingerprintToRefreshTokens';
-import { CreateDevicesTable1814000000000 } from './database/migrations/1814000000000-CreateDevicesTable';
-import { AddManageDevicesPermission1815000000000 } from './database/migrations/1815000000000-AddManageDevicesPermission';
-import { AddVersionColumns1816000000000 } from './database/migrations/1816000000000-AddVersionColumns';
-import { AddUserIdToNotifications1817000000000 } from './database/migrations/1817000000000-AddUserIdToNotifications';
-import { CreateWaiterCallsTable1818000000000 } from './database/migrations/1818000000000-CreateWaiterCallsTable';
-import { AddMaxTablesPerWaiterToBranches1819000000000 } from './database/migrations/1819000000000-AddMaxTablesPerWaiterToBranches';
-import { ActivateBerbadosNightlifeSubscription1836000000000 } from './database/migrations/1836000000000-ActivateBarbadosNightlifeSubscription';
-import { ActivateBerbadosNightlifeSubscription1836000000001 } from './database/migrations/1836000000001-ActivateBerbadosNightlifeSubscription';
-import { AddDispatchDelivery1840000000000 } from './database/migrations/1840000000000-AddDispatchDelivery';
-import { CleanRiderVehicleData1841000000000 } from './database/migrations/1841000000000-CleanRiderVehicleData';
-import { AddRiderPayoutTables1842000000000 } from './database/migrations/1842000000000-AddRiderPayoutTables';
-import { AddTableReservations1843000000000 } from './database/migrations/1843000000000-AddTableReservations';
-import { AddPrepTimeToMenuItems1860000000000 } from './database/migrations/1860000000000-AddPrepTimeToMenuItems';
-import { AddVersionToPayoutBatches1865000000000 } from './database/migrations/1865000000000-AddVersionToPayoutBatches';
-import { AddStandaloneOrderFields1870000000000 } from './database/migrations/1870000000000-AddStandaloneOrderFields';
-import { AddBranchIdToBills1870000000001 } from './database/migrations/1870000000001-AddBranchIdToBills';
-import { MakeDeliveriesTabIdNullable1870000000002 } from './database/migrations/1870000000002-MakeDeliveriesTabIdNullable';
-import { AddStandaloneReviewFields1870000000003 } from './database/migrations/1870000000003-AddStandaloneReviewFields';
-import { RemoveVirtualTables1870000000004 } from './database/migrations/1870000000004-RemoveVirtualTables';
 import { PlatformPaymentProvider } from './modules/admin/entities/platform-payment-provider.entity';
 import { Feedback } from './modules/feedback/entities/feedback.entity';
 import { WaiterCall } from './modules/waiter-call/entities/waiter-call.entity';
 import { Rider } from './modules/riders/entities/rider.entity';
 import { Delivery } from './modules/delivery/entities/delivery.entity';
-import { RiderLedger, PayoutBatch } from './modules/delivery/entities/rider-payout.entity';
+import {
+  RiderLedger,
+  PayoutBatch,
+} from './modules/delivery/entities/rider-payout.entity';
 import { Reservation } from './modules/reservations/entities/reservation.entity';
+import { WebhookEvent } from './modules/payment/entities/webhook-event.entity';
 
 import { AuthModule } from './modules/auth/auth.module';
 import { BusinessModule } from './modules/business/business.module';
@@ -191,64 +141,9 @@ import { ReservationsModule } from './modules/reservations/reservations.module';
         RiderLedger,
         PayoutBatch,
         Reservation,
+        WebhookEvent,
       ],
-      migrations: [
-        BackfillUserRoleId1752892800000,
-        MakeUserRoleIdNotNull1752892800001,
-        CreateBaseTables1782000000000,
-        CreatePlansAndSubscriptions1784000000000,
-        AddTrackingAndTimestampsToOrders1792000000000,
-        CreateAdvertisementsTable1793000000000,
-        CreatePermissionsAndRoles1794000000000,
-        CreateNotificationsTable1784000000003,
-        CreateDepartmentsTable1790000000000,
-        CreateStockMovementsTable1795000000000,
-        AddBusinessCodeToBusinesses1796000000000,
-        BackfillBusinessCodes1796000000001,
-        AddTokenVersionFields1797000000000,
-        MakeAdBranchIdNullable1798000000000,
-        MakeExistingAdsUniversal1798000000001,
-        CreateMenuCategoriesTable1799000000000,
-        CreateUnitsTable1799000000001,
-        AddTabType1800000000001,
-        AddFulfillmentType1800000000002,
-        RelocateTrackingToTabs1800000000003,
-        MakeWaiterIdNullable1800000000004,
-        CreatePlatformPaymentProvidersTable1801000000000,
-        CreateFeedbackTable1802000000000,
-        AddIsVipToTables1804000000000,
-        AddVipSurchargePercentToBusinesses1805000000000,
-        AddServiceChargePercentToBusinesses1806000000000,
-        AddInactiveToTableStatus1807000000000,
-        CreateReviewsTable1808000000000,
-        AddNavigationPermissions1809000000000,
-        CreateShiftTemplates1810000000000,
-        AddBusinessIdToShiftTemplates1811000000000,
-        NormalizeShiftTemplateDaysOfWeek1819900000000,
-        AddCountryToBusinesses1819950000000,
-        SeedDefaultShiftTemplates1820000000000,
-        AddManageShiftsPermission1812000000000,
-        AddDeviceFingerprintToRefreshTokens1813000000000,
-        CreateDevicesTable1814000000000,
-        AddManageDevicesPermission1815000000000,
-        AddVersionColumns1816000000000,
-        AddUserIdToNotifications1817000000000,
-        CreateWaiterCallsTable1818000000000,
-        AddMaxTablesPerWaiterToBranches1819000000000,
-        ActivateBerbadosNightlifeSubscription1836000000000,
-        ActivateBerbadosNightlifeSubscription1836000000001,
-        AddDispatchDelivery1840000000000,
-        CleanRiderVehicleData1841000000000,
-        AddRiderPayoutTables1842000000000,
-        AddTableReservations1843000000000,
-        AddPrepTimeToMenuItems1860000000000,
-        AddVersionToPayoutBatches1865000000000,
-        AddStandaloneOrderFields1870000000000,
-        AddBranchIdToBills1870000000001,
-        MakeDeliveriesTabIdNullable1870000000002,
-        AddStandaloneReviewFields1870000000003,
-        RemoveVirtualTables1870000000004,
-      ],
+      migrations: ALL_MIGRATIONS,
       migrationsRun: true,
       synchronize: false,
       invalidWhereValuesBehavior: { undefined: 'ignore', null: 'sql-null' },

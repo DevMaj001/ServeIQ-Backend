@@ -5,10 +5,8 @@ import { ClassSerializerInterceptor } from '@nestjs/common';
 import helmet from 'helmet';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
-import { SentryExceptionFilter } from './common/filters/sentry-exception.filter';
 import { StructuredLogger } from './common/services/logger.service';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { HttpAdapterHost } from '@nestjs/core';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { validateProductionEnv } from './common/bootstrap/validate-env';
@@ -17,9 +15,10 @@ import cookieParser from 'cookie-parser';
 async function bootstrap() {
   validateProductionEnv();
 
-  // Schema is owned exclusively by versioned migrations. The AppModule's
-  // TypeORM connection runs pending migrations on init (migrationsRun: true),
-  // and the Render startCommand runs `migration:run:prod` before boot.
+  // Schema is owned exclusively by versioned migrations: the AppModule's
+  // TypeORM connection runs pending migrations on init (migrationsRun: true).
+  // The Render startCommand deliberately does NOT run a separate migration
+  // step — boot-time migrationsRun is the single migration path.
   const app = await NestFactory.create(AppModule, {
     logger: new StructuredLogger('ServeIQ'),
     rawBody: true,
@@ -34,8 +33,26 @@ async function bootstrap() {
       dsn: process.env.SENTRY_DSN,
       environment: process.env.NODE_ENV || 'development',
     });
-    app.useGlobalFilters(new SentryExceptionFilter(app.get(HttpAdapterHost)));
+    // NOTE: no SentryExceptionFilter here. Nest uses the FIRST matching
+    // global @Catch() filter, so registering it alongside HttpExceptionFilter
+    // silently disabled the error envelope and DB error mapping. 5xx capture
+    // happens inside HttpExceptionFilter instead.
   }
+
+  // A floating rejection outside any request context (timers, socket
+  // handlers) must not kill the process silently — log, report, keep serving.
+  process.on('unhandledRejection', (reason) => {
+    const err = reason instanceof Error ? reason : new Error(String(reason));
+    console.error('[unhandledRejection]', err);
+    if (process.env.SENTRY_DSN) Sentry.captureException(err);
+  });
+  process.on('uncaughtException', (err) => {
+    console.error('[uncaughtException]', err);
+    if (process.env.SENTRY_DSN) Sentry.captureException(err);
+    // Sync exceptions leave the process in an undefined state: report, then
+    // exit so the platform restarts a clean instance.
+    process.exit(1);
+  });
 
   // Security headers
   app.use(helmet());
@@ -92,7 +109,8 @@ async function bootstrap() {
 
   // Swagger / OpenAPI (disabled in production unless SWAGGER_ENABLED=true)
   const swaggerEnabled =
-    (process.env.NODE_ENV ?? 'development') !== 'production' || process.env.SWAGGER_ENABLED === 'true';
+    (process.env.NODE_ENV ?? 'development') !== 'production' ||
+    process.env.SWAGGER_ENABLED === 'true';
   if (swaggerEnabled) {
     const config = new DocumentBuilder()
       .setTitle('ServeIQ API')

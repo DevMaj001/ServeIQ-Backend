@@ -48,7 +48,14 @@ export class AiService {
     if (apiKey) {
       try {
         const { default: OpenAI } = await import('openai');
-        this.openai = new OpenAI({ apiKey, baseURL });
+        // SDK defaults are 600s with retries — far too long behind an
+        // authenticated request path.
+        this.openai = new OpenAI({
+          apiKey,
+          baseURL,
+          timeout: 30_000,
+          maxRetries: 1,
+        });
       } catch (err) {
         this.logger.error('Failed to initialize OpenAI client', err);
       }

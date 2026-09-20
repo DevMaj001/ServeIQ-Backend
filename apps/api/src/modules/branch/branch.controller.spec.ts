@@ -5,6 +5,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Branch } from './entities/branch.entity';
 import { PlatformPaymentProvider } from '../admin/entities/platform-payment-provider.entity';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { EncryptionService } from '../../common/services/encryption.service';
 import { Repository } from 'typeorm';
 
 const mockRepo = () => ({
@@ -41,6 +42,7 @@ describe('BranchController', () => {
           provide: getRepositoryToken(PlatformPaymentProvider),
           useValue: mockRepo(),
         },
+        EncryptionService,
       ],
     })
       .overrideGuard(PermissionsGuard)
@@ -174,7 +176,11 @@ describe('BranchController', () => {
         id: 'branch-1',
         settings: {
           ...existingSettings,
-          reservation: { enabled: true, allow_online: true, max_party_size: 12 },
+          reservation: {
+            enabled: true,
+            allow_online: true,
+            max_party_size: 12,
+          },
         },
       });
 
@@ -182,7 +188,11 @@ describe('BranchController', () => {
         'branch-1',
         { user: { businessId: 'biz-1' } },
         {
-          reservation: { enabled: true, allow_online: true, max_party_size: 12 },
+          reservation: {
+            enabled: true,
+            allow_online: true,
+            max_party_size: 12,
+          },
         },
       );
 
@@ -251,16 +261,25 @@ describe('BranchController', () => {
       const saved = branchRepo.save.mock.calls[0][0];
       const settings = saved.settings;
       expect(settings.takeaway_payment_policy).toBe('pay_on_pickup');
-      // The existing Moniepoint config must survive the partial save
+      // The existing Moniepoint config must survive the partial save; the
+      // secret is stored encrypted at rest and must decrypt to the original.
       expect(settings.payment_providers).toEqual([
         {
           name: 'monniepoint',
           type: 'webhook',
           label: 'Moniepoint',
           verification_method: 'hmac-sha512',
-          config: { webhook_secret: 'secret_123', account_number: '000111' },
+          config: {
+            webhook_secret: expect.stringMatching(/^enc:v1:/),
+            account_number: '000111',
+          },
         },
       ]);
+      expect(
+        new EncryptionService().decrypt(
+          settings.payment_providers[0].config.webhook_secret,
+        ),
+      ).toBe('secret_123');
       expect(settings.payment_provider).toBe('monniepoint');
     });
 
@@ -311,7 +330,10 @@ describe('BranchController', () => {
         'opay',
       ]);
       const mono = providers.find((p: any) => p.name === 'monniepoint');
-      expect(mono.config.webhook_secret).toBe('old_secret');
+      // Stored encrypted at rest; must still decrypt to the untouched secret.
+      expect(new EncryptionService().decrypt(mono.config.webhook_secret)).toBe(
+        'old_secret',
+      );
       expect(mono.config.account_number).toBe('6912160642');
     });
 
@@ -329,12 +351,7 @@ describe('BranchController', () => {
         { user: { businessId: 'biz-1' } },
         {
           settings: {
-            enabled_providers: [
-              'manual',
-              'manual',
-              'manual',
-              'monniepoint',
-            ],
+            enabled_providers: ['manual', 'manual', 'manual', 'monniepoint'],
           },
         },
       );

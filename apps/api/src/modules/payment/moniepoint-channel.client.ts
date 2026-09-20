@@ -222,6 +222,8 @@ export class MoniepointChannelClient {
       method: opts?.method ?? 'GET',
       headers,
       body: opts?.body ? JSON.stringify(opts.body) : undefined,
+      // Reached from waiter-facing request paths: bound the wait.
+      signal: AbortSignal.timeout(10_000),
     });
     const text = await res.text();
     let body: any = null;

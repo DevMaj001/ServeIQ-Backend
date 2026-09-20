@@ -12,7 +12,14 @@ import { Order } from '../order/entities/order.entity';
 import { Rider } from '../riders/entities/rider.entity';
 import { Branch } from '../branch/entities/branch.entity';
 import { User } from '../user/entities/user.entity';
-import { RiderLedger, LedgerType, LedgerRefType, PayoutBatch, PayoutBatchStatus, PayoutProvider } from './entities/rider-payout.entity';
+import {
+  RiderLedger,
+  LedgerType,
+  LedgerRefType,
+  PayoutBatch,
+  PayoutBatchStatus,
+  PayoutProvider,
+} from './entities/rider-payout.entity';
 import {
   PickupMode,
   DeliveryStatus,
@@ -75,9 +82,7 @@ export class DeliveryService {
   /** Resolve the scope of orders a delivery covers. Tabs scope by tab_id;
    *  standalone (tabless) dispatch groups scope by their shared tracking_code.
    *  Returns the group identity used for socket rooms and order updates. */
-  private async groupScope(
-    delivery: Delivery,
-  ): Promise<{
+  private async groupScope(delivery: Delivery): Promise<{
     tab: Tab | null;
     where: Record<string, string>;
     branchId: string;
@@ -147,7 +152,9 @@ export class DeliveryService {
     if (!tabId || !trackingCode) {
       if (!orderIds.length) return;
       const first = await this.orderRepo.findOne({
-        where: trackingCode ? { tracking_code: trackingCode } : { id: orderIds[0] },
+        where: trackingCode
+          ? { tracking_code: trackingCode }
+          : { id: orderIds[0] },
       });
       if (!first || first.pickup_mode !== PickupMode.DISPATCH) return;
       const branchId = first.branch_id;
@@ -209,11 +216,13 @@ export class DeliveryService {
       this.realtimeService.emitTabUpdate(branchId, trackingCode, {
         delivery: { id: delivery.id, status: delivery.status },
       });
-      getPublicServer()?.to(`tracking:${trackingCode}`).emit('delivery:status', {
-        tabId: trackingCode,
-        delivery_id: delivery.id,
-        status: delivery.status,
-      });
+      getPublicServer()
+        ?.to(`tracking:${trackingCode}`)
+        .emit('delivery:status', {
+          tabId: trackingCode,
+          delivery_id: delivery.id,
+          status: delivery.status,
+        });
 
       await this.notifyOnlineRiders(branchId, {
         type: NotificationType.DELIVERY_AVAILABLE,
@@ -519,9 +528,7 @@ export class DeliveryService {
     const next = await this.deliveryRepo.save(
       this.deliveryRepo.create({
         tab_id: scope.tab?.id ?? null,
-        tracking_code: scope.tab
-          ? null
-          : (delivery.tracking_code ?? null),
+        tracking_code: scope.tab ? null : (delivery.tracking_code ?? null),
         branch_id: delivery.branch_id,
         status: DeliveryStatus.PENDING,
         fee_kobo:
@@ -579,7 +586,19 @@ export class DeliveryService {
     return Promise.all(jobs.map((d) => this.toView(d)));
   }
 
-  async listByBranch(branchId: string, status?: string) {
+  async listByBranch(
+    caller: { businessId: string; isSuperAdmin?: boolean },
+    branchId: string,
+    status?: string,
+  ) {
+    // The branch id may come from a query param; a caller may only read
+    // branches of their own business.
+    if (!caller.isSuperAdmin) {
+      const branch = await this.branchRepo.findOne({
+        where: { id: branchId, business_id: caller.businessId },
+      });
+      if (!branch) throw new NotFoundException('Branch not found');
+    }
     const where: any = { branch_id: branchId };
     if (status) where.status = status;
     const jobs = await this.deliveryRepo.find({
@@ -679,11 +698,28 @@ export class DeliveryService {
     };
   }
 
+  /** The rider must belong to the caller's business — rider ids arrive from
+   *  route params and are otherwise a cross-tenant oracle. */
+  private async requireRiderInBusiness(
+    riderId: string,
+    businessId: string,
+  ): Promise<Rider> {
+    const rider = await this.riderRepo.findOne({
+      where: { id: riderId, business_id: businessId },
+    });
+    if (!rider) throw new NotFoundException('Rider not found');
+    return rider;
+  }
+
   /** Get all unpaid (pending payout) deliveries for a rider */
-  async getPendingPayouts(riderId: string): Promise<{
+  async getPendingPayouts(
+    riderId: string,
+    businessId: string,
+  ): Promise<{
     deliveries: Delivery[];
     totalPayoutKobo: number;
   }> {
+    await this.requireRiderInBusiness(riderId, businessId);
     const deliveries = await this.deliveryRepo.find({
       where: {
         rider_id: riderId,
@@ -692,17 +728,22 @@ export class DeliveryService {
       },
       order: { delivered_at: 'ASC' },
     });
-    const totalPayoutKobo = deliveries.reduce((sum, d) => sum + (d.payout_kobo || 0), 0);
+    const totalPayoutKobo = deliveries.reduce(
+      (sum, d) => sum + (d.payout_kobo || 0),
+      0,
+    );
     return { deliveries, totalPayoutKobo };
   }
 
   /** Get pending payout summary for all riders in a branch */
-  async getPendingPayoutsByBranch(branchId: string): Promise<Array<{
-    riderId: string;
-    riderName: string;
-    pendingDeliveries: number;
-    totalPayoutKobo: number;
-  }>> {
+  async getPendingPayoutsByBranch(branchId: string): Promise<
+    Array<{
+      riderId: string;
+      riderName: string;
+      pendingDeliveries: number;
+      totalPayoutKobo: number;
+    }>
+  > {
     const pendingDeliveries = await this.deliveryRepo
       .createQueryBuilder('d')
       .select('d.rider_id', 'riderId')
@@ -729,7 +770,9 @@ export class DeliveryService {
       const rider = riderMap.get(r.riderId);
       return {
         riderId: r.riderId,
-        riderName: rider ? userMap.get(rider.user_id)?.full_name ?? 'Unknown' : 'Unknown',
+        riderName: rider
+          ? (userMap.get(rider.user_id)?.full_name ?? 'Unknown')
+          : 'Unknown',
         pendingDeliveries: Number(r.pendingDeliveries),
         totalPayoutKobo: Number(r.totalPayoutKobo || 0),
       };
@@ -753,69 +796,106 @@ export class DeliveryService {
     deliveriesPaid: number;
     totalKobo: number;
   }> {
-    const rider = await this.riderRepo.findOne({ where: { id: riderId, business_id: businessId } });
+    const rider = await this.riderRepo.findOne({
+      where: { id: riderId, business_id: businessId },
+    });
     if (!rider) throw new NotFoundException('Rider not found');
 
-    const { deliveries, totalPayoutKobo } = await this.getPendingPayouts(riderId);
-    if (deliveries.length === 0) {
-      throw new BadRequestException('No pending payouts for this rider');
-    }
-
-    // Create payout batch record
-    const batch = this.payoutBatchRepo.create({
-      business_id: businessId,
-      rider_id: riderId,
-      provider,
-      provider_batch_id: providerBatchId ?? null,
-      total_kobo: totalPayoutKobo,
-      status: PayoutBatchStatus.PENDING,
-      created_by: adminUserId,
-    });
-    await this.payoutBatchRepo.save(batch);
-
-    // Create ledger entries for each delivery earning
-    for (const delivery of deliveries) {
-      await this.ledgerRepo.save(
-        this.ledgerRepo.create({
+    // Everything below is one transaction, and the FIRST step is an atomic
+    // claim: a conditional UPDATE flips only still-pending deliveries to
+    // 'paid'. A concurrent payout run claims zero rows and errors out, and a
+    // mid-way crash rolls the claim back — the batch, the ledger rows, and
+    // the delivery flags can never disagree. (Previously this was
+    // read-then-write with no transaction: two concurrent runs paid the
+    // same deliveries twice.)
+    return this.deliveryRepo.manager.transaction(async (manager) => {
+      const candidates = await manager.getRepository(Delivery).find({
+        where: {
           rider_id: riderId,
+          status: DeliveryStatus.DELIVERED,
+          payout_status: 'pending',
+        },
+        order: { delivered_at: 'ASC' },
+      });
+      if (candidates.length === 0) {
+        throw new BadRequestException('No pending payouts for this rider');
+      }
+
+      const claim = await manager
+        .createQueryBuilder()
+        .update(Delivery)
+        .set({ payout_status: 'paid', paid_at: new Date() })
+        .where('id IN (:...ids)', { ids: candidates.map((d) => d.id) })
+        .andWhere(`payout_status = 'pending'`)
+        .returning(['id', 'payout_kobo'])
+        .execute();
+      const claimed: Array<{ id: string; payout_kobo: number }> =
+        claim.raw ?? [];
+      if (claimed.length === 0) {
+        throw new BadRequestException('No pending payouts for this rider');
+      }
+      const totalPayoutKobo = claimed.reduce(
+        (sum, d) => sum + Number(d.payout_kobo || 0),
+        0,
+      );
+
+      const batch = await manager.getRepository(PayoutBatch).save(
+        manager.getRepository(PayoutBatch).create({
           business_id: businessId,
-          type: LedgerType.DELIVERY_EARNING,
-          amount_kobo: delivery.payout_kobo,
-          ref_type: LedgerRefType.DELIVERY,
-          ref_id: delivery.id,
-          description: `Delivery ${delivery.id.slice(0, 8)} earnings`,
+          rider_id: riderId,
+          provider,
+          provider_batch_id: providerBatchId ?? null,
+          total_kobo: totalPayoutKobo,
+          status: PayoutBatchStatus.PENDING,
+          created_by: adminUserId,
         }),
       );
-    }
 
-    // Create ledger entry for the payout (negative = debit to rider)
-    await this.ledgerRepo.save(
-      this.ledgerRepo.create({
-        rider_id: riderId,
-        business_id: businessId,
-        type: LedgerType.PAYOUT,
-        amount_kobo: -totalPayoutKobo,
-        ref_type: LedgerRefType.BATCH_PAYOUT,
-        ref_id: batch.id,
-        description: `Payout batch ${batch.id.slice(0, 8)}`,
-      }),
-    );
+      // Ledger rows are built ONLY from the rows this run actually claimed.
+      const ledgerRepo = manager.getRepository(RiderLedger);
+      for (const delivery of claimed) {
+        await ledgerRepo.save(
+          ledgerRepo.create({
+            rider_id: riderId,
+            business_id: businessId,
+            type: LedgerType.DELIVERY_EARNING,
+            amount_kobo: Number(delivery.payout_kobo || 0),
+            ref_type: LedgerRefType.DELIVERY,
+            ref_id: delivery.id,
+            description: `Delivery ${delivery.id.slice(0, 8)} earnings`,
+          }),
+        );
+      }
 
-    // Mark deliveries as paid
-    const deliveryIds = deliveries.map((d) => d.id);
-    await this.deliveryRepo
-      .createQueryBuilder()
-      .update(Delivery)
-      .set({ payout_status: 'paid', paid_at: new Date() })
-      .where('id IN (:...ids)', { ids: deliveryIds })
-      .execute();
+      await ledgerRepo.save(
+        ledgerRepo.create({
+          rider_id: riderId,
+          business_id: businessId,
+          type: LedgerType.PAYOUT,
+          amount_kobo: -totalPayoutKobo,
+          ref_type: LedgerRefType.BATCH_PAYOUT,
+          ref_id: batch.id,
+          description: `Payout batch ${batch.id.slice(0, 8)}`,
+        }),
+      );
 
-    return { batch, deliveriesPaid: deliveries.length, totalKobo: totalPayoutKobo };
+      return {
+        batch,
+        deliveriesPaid: claimed.length,
+        totalKobo: totalPayoutKobo,
+      };
+    });
   }
 
   /** Mark a payout batch as completed (after successful bank transfer) */
-  async completePayoutBatch(batchId: string, providerBatchId: string): Promise<PayoutBatch> {
-    const batch = await this.payoutBatchRepo.findOne({ where: { id: batchId } });
+  async completePayoutBatch(
+    batchId: string,
+    businessId: string,
+    providerBatchId: string,
+  ): Promise<PayoutBatch> {
+    const batch = await this.payoutBatchRepo.findOne({
+      where: { id: batchId, business_id: businessId },
+    });
     if (!batch) throw new NotFoundException('Payout batch not found');
     if (batch.status !== PayoutBatchStatus.PENDING) {
       throw new BadRequestException(`Batch is already ${batch.status}`);
@@ -828,9 +908,23 @@ export class DeliveryService {
   }
 
   /** Mark a payout batch as failed */
-  async failPayoutBatch(batchId: string, reason: string): Promise<PayoutBatch> {
-    const batch = await this.payoutBatchRepo.findOne({ where: { id: batchId } });
+  async failPayoutBatch(
+    batchId: string,
+    businessId: string,
+    reason: string,
+  ): Promise<PayoutBatch> {
+    const batch = await this.payoutBatchRepo.findOne({
+      where: { id: batchId, business_id: businessId },
+    });
     if (!batch) throw new NotFoundException('Payout batch not found');
+    // A COMPLETED batch means the bank transfer already happened — flipping
+    // it to FAILED would make its deliveries look payable again.
+    if (
+      batch.status !== PayoutBatchStatus.PENDING &&
+      batch.status !== PayoutBatchStatus.PROCESSING
+    ) {
+      throw new BadRequestException(`Batch is already ${batch.status}`);
+    }
     batch.status = PayoutBatchStatus.FAILED;
     batch.failure_reason = reason;
     await this.payoutBatchRepo.save(batch);
@@ -838,7 +932,12 @@ export class DeliveryService {
   }
 
   /** Get ledger entries for a rider */
-  async getRiderLedger(riderId: string, limit = 100): Promise<RiderLedger[]> {
+  async getRiderLedger(
+    riderId: string,
+    businessId: string,
+    limit = 100,
+  ): Promise<RiderLedger[]> {
+    await this.requireRiderInBusiness(riderId, businessId);
     return this.ledgerRepo.find({
       where: { rider_id: riderId },
       order: { created_at: 'DESC' },
@@ -847,7 +946,12 @@ export class DeliveryService {
   }
 
   /** Get payout batches for a rider */
-  async getRiderPayoutBatches(riderId: string, limit = 50): Promise<PayoutBatch[]> {
+  async getRiderPayoutBatches(
+    riderId: string,
+    businessId: string,
+    limit = 50,
+  ): Promise<PayoutBatch[]> {
+    await this.requireRiderInBusiness(riderId, businessId);
     return this.payoutBatchRepo.find({
       where: { rider_id: riderId },
       order: { created_at: 'DESC' },
@@ -856,7 +960,10 @@ export class DeliveryService {
   }
 
   /** Get payout batches for a business (admin view) */
-  async getBusinessPayoutBatches(businessId: string, limit = 100): Promise<PayoutBatch[]> {
+  async getBusinessPayoutBatches(
+    businessId: string,
+    limit = 100,
+  ): Promise<PayoutBatch[]> {
     return this.payoutBatchRepo.find({
       where: { business_id: businessId },
       order: { created_at: 'DESC' },

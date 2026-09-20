@@ -33,11 +33,18 @@ export interface ReceiptData {
 
 @Injectable()
 export class ReceiptService {
-  generatePdf(data: ReceiptData): Buffer {
+  generatePdf(data: ReceiptData): Promise<Buffer> {
     const doc = new PDFDocument({ margin: 30, size: [226, 'auto'] });
     const chunks: Buffer[] = [];
 
-    doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+    // PDFKit finalizes asynchronously: the buffer is only complete once the
+    // 'end' event fires. Concatenating right after doc.end() (the previous
+    // implementation) returned truncated or empty PDFs.
+    const done = new Promise<Buffer>((resolve, reject) => {
+      doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', (err: Error) => reject(err));
+    });
 
     const koboToNaira = (kobo: number) => `₦${(kobo / 100).toFixed(2)}`;
     const businessName = data.business?.name || 'Business';
@@ -150,6 +157,6 @@ export class ReceiptService {
 
     doc.end();
 
-    return Buffer.concat(chunks);
+    return done;
   }
 }

@@ -68,7 +68,10 @@ export class MenuModifierController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async findGroup(@Param('id') id: string, @Request() req: any) {
     const group = await this.modifierService.findGroup(id, req.user.branchId);
-    const options = await this.modifierService.findOptions(id);
+    const options = await this.modifierService.findOptions(
+      id,
+      req.user.branchId,
+    );
     return { ...group, options };
   }
 
@@ -124,8 +127,8 @@ export class MenuModifierController {
   @ApiParam({ name: 'groupId' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async findOptions(@Param('groupId') groupId: string) {
-    return this.modifierService.findOptions(groupId);
+  async findOptions(@Param('groupId') groupId: string, @Request() req: any) {
+    return this.modifierService.findOptions(groupId, req.user.branchId);
   }
 
   @Post('modifier-groups/:groupId/options')
@@ -138,9 +141,10 @@ export class MenuModifierController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async createOption(
     @Param('groupId') groupId: string,
+    @Request() req: any,
     @Body() dto: CreateModifierOptionDto,
   ) {
-    return this.modifierService.createOption(groupId, dto);
+    return this.modifierService.createOption(groupId, req.user.branchId, dto);
   }
 
   @Patch('modifier-options/:id')
@@ -153,9 +157,10 @@ export class MenuModifierController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async updateOption(
     @Param('id') id: string,
+    @Request() req: any,
     @Body() dto: UpdateModifierOptionDto,
   ) {
-    return this.modifierService.updateOption(id, dto);
+    return this.modifierService.updateOption(id, req.user.branchId, dto);
   }
 
   @Delete('modifier-options/:id')
@@ -166,8 +171,8 @@ export class MenuModifierController {
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async removeOption(@Param('id') id: string) {
-    return this.modifierService.removeOption(id);
+  async removeOption(@Param('id') id: string, @Request() req: any) {
+    return this.modifierService.removeOption(id, req.user.branchId);
   }
 
   @Post('menu-items/:menuItemId/modifier-groups')

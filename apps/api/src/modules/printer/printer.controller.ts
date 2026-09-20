@@ -40,6 +40,15 @@ export class PrinterController {
   constructor(private readonly printerService: PrinterService) {}
 
   @Get('printers')
+  @UseGuards(RolesGuard)
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.CHEF,
+    UserRole.CASHIER,
+    UserRole.WAITER,
+  )
   @ApiOperation({ summary: 'List all printers for this branch' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -48,6 +57,15 @@ export class PrinterController {
   }
 
   @Get('printers/:id')
+  @UseGuards(RolesGuard)
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.CHEF,
+    UserRole.CASHIER,
+    UserRole.WAITER,
+  )
   @ApiOperation({ summary: 'Get printer by ID' })
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
@@ -98,6 +116,15 @@ export class PrinterController {
   }
 
   @Get('print-jobs')
+  @UseGuards(RolesGuard)
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.CHEF,
+    UserRole.CASHIER,
+    UserRole.WAITER,
+  )
   @ApiOperation({ summary: 'List print jobs' })
   @ApiQuery({ name: 'status', required: false })
   @ApiResponse({ status: 200, description: 'OK' })
@@ -107,6 +134,15 @@ export class PrinterController {
   }
 
   @Post('print-jobs/:id/print')
+  @UseGuards(RolesGuard)
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.CHEF,
+    UserRole.CASHIER,
+    UserRole.WAITER,
+  )
   @ApiOperation({ summary: 'Execute a print job on the configured printer' })
   @ApiParam({ name: 'id' })
   @ApiResponse({ status: 200, description: 'OK' })
@@ -116,6 +152,15 @@ export class PrinterController {
   }
 
   @Post('tabs/:tabId/send-to-kds')
+  @UseGuards(RolesGuard)
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.CHEF,
+    UserRole.CASHIER,
+    UserRole.WAITER,
+  )
   @ApiOperation({ summary: 'Send tab orders to KDS and queue kitchen print' })
   @ApiParam({ name: 'tabId' })
   @ApiResponse({ status: 200, description: 'OK' })
@@ -126,6 +171,15 @@ export class PrinterController {
   }
 
   @Post('tabs/:tabId/fire')
+  @UseGuards(RolesGuard)
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.CHEF,
+    UserRole.CASHIER,
+    UserRole.WAITER,
+  )
   @ApiOperation({ summary: 'Fire next round of orders for a tab' })
   @ApiParam({ name: 'tabId' })
   @ApiResponse({ status: 200, description: 'OK' })
@@ -143,6 +197,15 @@ export class PrinterController {
   }
 
   @Post('tabs/:tabId/bump/:orderId')
+  @UseGuards(RolesGuard)
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.CHEF,
+    UserRole.CASHIER,
+    UserRole.WAITER,
+  )
   @ApiOperation({ summary: 'Bump/mark an order as complete on KDS' })
   @ApiParam({ name: 'tabId' })
   @ApiParam({ name: 'orderId' })
@@ -158,6 +221,15 @@ export class PrinterController {
   }
 
   @Get('kds/stream')
+  @UseGuards(RolesGuard)
+  @Roles(
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SUPERVISOR,
+    UserRole.CHEF,
+    UserRole.CASHIER,
+    UserRole.WAITER,
+  )
   @ApiOperation({ summary: 'SSE stream for KDS real-time updates' })
   @ApiResponse({ status: 200, description: 'OK' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })

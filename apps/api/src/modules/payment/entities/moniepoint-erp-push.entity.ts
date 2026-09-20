@@ -9,11 +9,7 @@ import {
 } from 'typeorm';
 
 export type MoniepointErpPushStatus =
-  | 'pending'
-  | 'paid'
-  | 'declined'
-  | 'expired'
-  | 'cancelled';
+  'pending' | 'paid' | 'declined' | 'expired' | 'cancelled';
 
 /**
  * Tracks one Moniepoint ERP (Channel push-payment) push and its outcome.

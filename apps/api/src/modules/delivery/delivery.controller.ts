@@ -52,6 +52,10 @@ export class DeliveryController {
     @Query('status') status?: string,
   ) {
     return this.deliveryService.listByBranch(
+      {
+        businessId: req.user.businessId,
+        isSuperAdmin: req.user.role === UserRole.SUPERADMIN,
+      },
       branchId || req.user.branchId,
       status,
     );
@@ -124,9 +128,16 @@ export class DeliveryController {
   @UseGuards(RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERADMIN)
   @RequirePermissions(PERMISSIONS.VIEW_DELIVERIES, PERMISSIONS.MANAGE_RIDERS)
-  @ApiOperation({ summary: 'Get pending payout summary for all riders in branch' })
-  async getPendingPayouts(@Request() req: any, @Query('branch_id') branchId?: string) {
-    return this.deliveryService.getPendingPayoutsByBranch(branchId || req.user.branchId);
+  @ApiOperation({
+    summary: 'Get pending payout summary for all riders in branch',
+  })
+  async getPendingPayouts(
+    @Request() req: any,
+    @Query('branch_id') branchId?: string,
+  ) {
+    return this.deliveryService.getPendingPayoutsByBranch(
+      branchId || req.user.branchId,
+    );
   }
 
   @Get('riders/:riderId/payouts/pending')
@@ -134,13 +145,17 @@ export class DeliveryController {
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERADMIN, UserRole.RIDER)
   @RequirePermissions(PERMISSIONS.VIEW_DELIVERIES)
   @ApiOperation({ summary: 'Get pending payout details for a specific rider' })
-  async getRiderPendingPayouts(@Param('riderId') riderId: string, @Request() req: any) {
+  async getRiderPendingPayouts(
+    @Param('riderId') riderId: string,
+    @Request() req: any,
+  ) {
     // Riders can only see their own pending payouts
     if (req.user.role === UserRole.RIDER) {
       const rider = await this.riderService.findByUserId(req.user.userId);
-      if (rider.id !== riderId) throw new ForbiddenException('Cannot view other riders\' payouts');
+      if (rider.id !== riderId)
+        throw new ForbiddenException("Cannot view other riders' payouts");
     }
-    return this.deliveryService.getPendingPayouts(riderId);
+    return this.deliveryService.getPendingPayouts(riderId, req.user.businessId);
   }
 
   @Get('riders/:riderId/ledger')
@@ -148,12 +163,21 @@ export class DeliveryController {
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERADMIN, UserRole.RIDER)
   @RequirePermissions(PERMISSIONS.VIEW_DELIVERIES)
   @ApiOperation({ summary: 'Get earnings/payout ledger for a rider' })
-  async getRiderLedger(@Param('riderId') riderId: string, @Request() req: any, @Query('limit') limit?: number) {
+  async getRiderLedger(
+    @Param('riderId') riderId: string,
+    @Request() req: any,
+    @Query('limit') limit?: number,
+  ) {
     if (req.user.role === UserRole.RIDER) {
       const rider = await this.riderService.findByUserId(req.user.userId);
-      if (rider.id !== riderId) throw new ForbiddenException('Cannot view other riders\' ledger');
+      if (rider.id !== riderId)
+        throw new ForbiddenException("Cannot view other riders' ledger");
     }
-    return this.deliveryService.getRiderLedger(riderId, limit ? Number(limit) : 100);
+    return this.deliveryService.getRiderLedger(
+      riderId,
+      req.user.businessId,
+      limit ? Number(limit) : 100,
+    );
   }
 
   @Get('riders/:riderId/payout-batches')
@@ -161,28 +185,48 @@ export class DeliveryController {
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERADMIN, UserRole.RIDER)
   @RequirePermissions(PERMISSIONS.VIEW_DELIVERIES)
   @ApiOperation({ summary: 'Get payout batch history for a rider' })
-  async getRiderPayoutBatches(@Param('riderId') riderId: string, @Request() req: any, @Query('limit') limit?: number) {
+  async getRiderPayoutBatches(
+    @Param('riderId') riderId: string,
+    @Request() req: any,
+    @Query('limit') limit?: number,
+  ) {
     if (req.user.role === UserRole.RIDER) {
       const rider = await this.riderService.findByUserId(req.user.userId);
-      if (rider.id !== riderId) throw new ForbiddenException('Cannot view other riders\' batches');
+      if (rider.id !== riderId)
+        throw new ForbiddenException("Cannot view other riders' batches");
     }
-    return this.deliveryService.getRiderPayoutBatches(riderId, limit ? Number(limit) : 50);
+    return this.deliveryService.getRiderPayoutBatches(
+      riderId,
+      req.user.businessId,
+      limit ? Number(limit) : 50,
+    );
   }
 
   @Get('payout-batches')
   @UseGuards(RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERADMIN)
   @RequirePermissions(PERMISSIONS.VIEW_DELIVERIES, PERMISSIONS.MANAGE_RIDERS)
-  @ApiOperation({ summary: 'Get all payout batches for the business (admin view)' })
-  async getBusinessPayoutBatches(@Request() req: any, @Query('limit') limit?: number) {
-    return this.deliveryService.getBusinessPayoutBatches(req.user.businessId, limit ? Number(limit) : 100);
+  @ApiOperation({
+    summary: 'Get all payout batches for the business (admin view)',
+  })
+  async getBusinessPayoutBatches(
+    @Request() req: any,
+    @Query('limit') limit?: number,
+  ) {
+    return this.deliveryService.getBusinessPayoutBatches(
+      req.user.businessId,
+      limit ? Number(limit) : 100,
+    );
   }
 
   @Post('riders/:riderId/payout')
   @UseGuards(RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERADMIN)
   @RequirePermissions(PERMISSIONS.MANAGE_RIDERS)
-  @ApiOperation({ summary: 'Process payout for a rider (creates batch, marks deliveries paid)' })
+  @ApiOperation({
+    summary:
+      'Process payout for a rider (creates batch, marks deliveries paid)',
+  })
   async processRiderPayout(
     @Param('riderId') riderId: string,
     @Request() req: any,
@@ -201,9 +245,19 @@ export class DeliveryController {
   @UseGuards(RolesGuard, PermissionsGuard)
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERADMIN)
   @RequirePermissions(PERMISSIONS.MANAGE_RIDERS)
-  @ApiOperation({ summary: 'Mark a payout batch as completed (after bank transfer succeeds)' })
-  async completePayoutBatch(@Param('batchId') batchId: string, @Body() body: CompletePayoutBatchDto) {
-    return this.deliveryService.completePayoutBatch(batchId, body.providerBatchId);
+  @ApiOperation({
+    summary: 'Mark a payout batch as completed (after bank transfer succeeds)',
+  })
+  async completePayoutBatch(
+    @Param('batchId') batchId: string,
+    @Request() req: any,
+    @Body() body: CompletePayoutBatchDto,
+  ) {
+    return this.deliveryService.completePayoutBatch(
+      batchId,
+      req.user.businessId,
+      body.providerBatchId,
+    );
   }
 
   @Post('payout-batches/:batchId/fail')
@@ -211,7 +265,15 @@ export class DeliveryController {
   @Roles(UserRole.OWNER, UserRole.MANAGER, UserRole.SUPERADMIN)
   @RequirePermissions(PERMISSIONS.MANAGE_RIDERS)
   @ApiOperation({ summary: 'Mark a payout batch as failed' })
-  async failPayoutBatch(@Param('batchId') batchId: string, @Body() body: FailPayoutBatchDto) {
-    return this.deliveryService.failPayoutBatch(batchId, body.reason);
+  async failPayoutBatch(
+    @Param('batchId') batchId: string,
+    @Request() req: any,
+    @Body() body: FailPayoutBatchDto,
+  ) {
+    return this.deliveryService.failPayoutBatch(
+      batchId,
+      req.user.businessId,
+      body.reason,
+    );
   }
 }

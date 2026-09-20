@@ -1,3 +1,4 @@
+import { Throttle } from '@nestjs/throttler';
 import {
   Controller,
   Get,
@@ -36,6 +37,7 @@ export class PublicMenuController {
   ) {}
 
   @Get('menu/:branchId')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({ summary: 'Get public menu for a branch (no auth required)' })
   @ApiParam({ name: 'branchId', description: 'Branch UUID' })
   @ApiResponse({ status: 200, description: 'Public menu items.' })
@@ -46,11 +48,13 @@ export class PublicMenuController {
     let branch: Branch | null;
     if (branchId === 'default') {
       branch =
-        (await this.branchRepo.find({
-          relations: { business: true },
-          order: { created_at: 'ASC' },
-          take: 1,
-        }))[0] ?? null;
+        (
+          await this.branchRepo.find({
+            relations: { business: true },
+            order: { created_at: 'ASC' },
+            take: 1,
+          })
+        )[0] ?? null;
     } else if (isUUID(branchId)) {
       branch = await this.branchRepo.findOne({
         where: { id: branchId },
@@ -101,6 +105,7 @@ export class PublicMenuController {
   }
 
   @Get('ads/:branchId')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({
     summary: 'Get public advertisements for a branch (no auth required)',
   })
@@ -136,6 +141,7 @@ export class PublicMenuController {
   }
 
   @Get('tables/:branchId/resolve')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({
     summary:
       'Resolve a table number/label to its UUID within a branch (public)',

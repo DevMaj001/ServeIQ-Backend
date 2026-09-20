@@ -31,7 +31,8 @@ import { RealtimeService } from '../gateway/realtime.service';
 import { DeliveryService } from '../delivery/delivery.service';
 import type { FindOptionsWhere } from 'typeorm';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 @Injectable()
 export class OrderService {
@@ -116,6 +117,14 @@ export class OrderService {
           count,
           tab_id: firstOrder.tab_id,
         });
+      })
+      .catch((err) => {
+        // Runs from a setTimeout, outside any request: an uncaught rejection
+        // here would bubble to unhandledRejection instead of a 500.
+        console.error(
+          '[order-ready] failed to send ready notification:',
+          err instanceof Error ? err.message : String(err),
+        );
       });
   }
 
@@ -124,10 +133,15 @@ export class OrderService {
     items: any[],
     userId: string,
     userRole?: string,
+    callerBranchId?: string,
   ) {
     const ids = items.map((i) => i.menu_item_id);
+    // Menu items must come from the caller's own branch — otherwise another
+    // tenant's items (and prices) could be attached to a tab here.
     const menuItems = await this.menuRepository.find({
-      where: { id: In(ids) },
+      where: callerBranchId
+        ? { id: In(ids), branch_id: callerBranchId }
+        : { id: In(ids) },
     });
     const menuMap = new Map(menuItems.map((m) => [m.id, m]));
 
@@ -148,7 +162,12 @@ export class OrderService {
     return this.dataSource
       .transaction(async (manager) => {
         const orders = [];
-        const tab = await this.tabRepository.findOne({ where: { id: tabId } });
+        // Branch-scoped tab lookup: a foreign tab id is simply "not found".
+        const tab = await this.tabRepository.findOne({
+          where: callerBranchId
+            ? { id: tabId, branch_id: callerBranchId }
+            : { id: tabId },
+        });
         if (!tab) {
           throw new NotFoundException('Tab not found');
         }
@@ -470,7 +489,10 @@ export class OrderService {
     dto: ApproveOrderDto,
     branchId?: string,
   ) {
-const { tab, branchId: ctxBranchId } = await this.getTabForOrder(id, branchId);
+    const { tab, branchId: ctxBranchId } = await this.getTabForOrder(
+      id,
+      branchId,
+    );
     const alphaIds = [id].sort();
 
     return this.dataSource
@@ -882,7 +904,10 @@ const { tab, branchId: ctxBranchId } = await this.getTabForOrder(id, branchId);
    * before the passed timer. Safe no-op if already READY (idempotent-ish).
    */
   async bump(id: string, userId: string, branchId?: string) {
-    const { tab, branchId: ctxBranch } = await this.getTabForOrder(id, branchId);
+    const { tab, branchId: ctxBranch } = await this.getTabForOrder(
+      id,
+      branchId,
+    );
     const alphaIds = [id].sort();
     return this.dataSource
       .transaction(async (manager) => {
@@ -928,10 +953,9 @@ const { tab, branchId: ctxBranchId } = await this.getTabForOrder(id, branchId);
 
         if (savedOrder.tab_id) {
           // Dispatch: if this tab is a dispatch tab, create/broadcast the delivery
-          await this.deliveryService.ensureOnOrdersReady(
-            tab!.id,
-            [savedOrder.id],
-          );
+          await this.deliveryService.ensureOnOrdersReady(tab!.id, [
+            savedOrder.id,
+          ]);
 
           // Buffer notification per tab (flush after 5s)
           const tabId = savedOrder.tab_id;

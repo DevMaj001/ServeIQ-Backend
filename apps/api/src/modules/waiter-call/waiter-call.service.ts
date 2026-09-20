@@ -1,4 +1,9 @@
-import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, In } from 'typeorm';
 import { WaiterCall, WaiterCallStatus } from './entities/waiter-call.entity';
@@ -122,7 +127,9 @@ export class WaiterCallService {
       });
       if (existingActive) {
         await queryRunner.rollbackTransaction().catch(() => undefined);
-        throw new BadRequestException('This table already has an active waiter request');
+        throw new BadRequestException(
+          'This table already has an active waiter request',
+        );
       }
 
       // Broadcast model: create the call unassigned so every waiter in the
@@ -179,12 +186,16 @@ export class WaiterCallService {
     call.status = WaiterCallStatus.ACCEPTED;
     call.accepted_at = new Date();
     const saved = await this.waiterCallRepository.save(call);
-    this.realtimeService.emitWaiterCall(call.branch_id, 'waiter.request.accepted', {
-      id: saved.id,
-      tableId: saved.table_id,
-      status: saved.status,
-      assignedWaiterId: saved.assigned_waiter_id,
-    });
+    this.realtimeService.emitWaiterCall(
+      call.branch_id,
+      'waiter.request.accepted',
+      {
+        id: saved.id,
+        tableId: saved.table_id,
+        status: saved.status,
+        assignedWaiterId: saved.assigned_waiter_id,
+      },
+    );
     return saved;
   }
 
@@ -196,12 +207,16 @@ export class WaiterCallService {
     call.status = WaiterCallStatus.ARRIVED;
     call.arrived_at = new Date();
     const saved = await this.waiterCallRepository.save(call);
-    this.realtimeService.emitWaiterCall(call.branch_id, 'waiter.request.arrived', {
-      id: saved.id,
-      tableId: saved.table_id,
-      status: saved.status,
-      assignedWaiterId: saved.assigned_waiter_id,
-    });
+    this.realtimeService.emitWaiterCall(
+      call.branch_id,
+      'waiter.request.arrived',
+      {
+        id: saved.id,
+        tableId: saved.table_id,
+        status: saved.status,
+        assignedWaiterId: saved.assigned_waiter_id,
+      },
+    );
     return saved;
   }
 
@@ -213,12 +228,16 @@ export class WaiterCallService {
     call.status = WaiterCallStatus.RESOLVED;
     call.resolved_at = new Date();
     const saved = await this.waiterCallRepository.save(call);
-    this.realtimeService.emitWaiterCall(call.branch_id, 'waiter.request.resolved', {
-      id: saved.id,
-      tableId: saved.table_id,
-      status: saved.status,
-      assignedWaiterId: saved.assigned_waiter_id,
-    });
+    this.realtimeService.emitWaiterCall(
+      call.branch_id,
+      'waiter.request.resolved',
+      {
+        id: saved.id,
+        tableId: saved.table_id,
+        status: saved.status,
+        assignedWaiterId: saved.assigned_waiter_id,
+      },
+    );
     await this.processQueueWhenAvailable(call.branch_id);
     return saved;
   }
@@ -243,10 +262,17 @@ export class WaiterCallService {
     }
 
     const waiter = await this.userRepository.findOne({
-      where: { id: waiterId, branch_id: call.branch_id, deleted_at: null } as any,
+      where: {
+        id: waiterId,
+        branch_id: call.branch_id,
+        deleted_at: null,
+      } as any,
     });
     if (!waiter) throw new Error('Target waiter not found in this branch');
-    if (waiter.role !== UserRole.WAITER && waiter.role !== UserRole.SUPERVISOR) {
+    if (
+      waiter.role !== UserRole.WAITER &&
+      waiter.role !== UserRole.SUPERVISOR
+    ) {
       throw new Error('Target user is not a waiter');
     }
 
@@ -254,12 +280,16 @@ export class WaiterCallService {
     call.status = WaiterCallStatus.PENDING;
     call.accepted_at = null;
     const saved = await this.waiterCallRepository.save(call);
-    this.realtimeService.emitWaiterCall(call.branch_id, 'waiter.request.assigned', {
-      id: saved.id,
-      tableId: saved.table_id,
-      status: saved.status,
-      assignedWaiterId: saved.assigned_waiter_id,
-    });
+    this.realtimeService.emitWaiterCall(
+      call.branch_id,
+      'waiter.request.assigned',
+      {
+        id: saved.id,
+        tableId: saved.table_id,
+        status: saved.status,
+        assignedWaiterId: saved.assigned_waiter_id,
+      },
+    );
     return saved;
   }
 
@@ -271,21 +301,33 @@ export class WaiterCallService {
     call.status = WaiterCallStatus.CANCELLED;
     call.cancelled_at = new Date();
     const saved = await this.waiterCallRepository.save(call);
-    this.realtimeService.emitWaiterCall(call.branch_id, 'waiter.request.cancelled', {
-      id: saved.id,
-      tableId: saved.table_id,
-      status: saved.status,
-      assignedWaiterId: saved.assigned_waiter_id,
-    });
+    this.realtimeService.emitWaiterCall(
+      call.branch_id,
+      'waiter.request.cancelled',
+      {
+        id: saved.id,
+        tableId: saved.table_id,
+        status: saved.status,
+        assignedWaiterId: saved.assigned_waiter_id,
+      },
+    );
     await this.processQueueWhenAvailable(call.branch_id);
     return saved;
   }
 
   /** Public cancel: cancel the active (non-resolved) waiter call for a table. */
-  async cancelWaiterCallByTable(tableId: string): Promise<WaiterCall | null> {
+  async cancelWaiterCallByTable(
+    tableId: string,
+    customerSessionId: string,
+  ): Promise<WaiterCall | null> {
+    // Anonymous cancellation must prove it comes from the device that
+    // created the call: table ids are discoverable via the public menu, so
+    // the customer_session_id issued at creation is the credential here.
+    if (!customerSessionId) return null;
     const call = await this.waiterCallRepository.findOne({
       where: {
         table_id: tableId,
+        customer_session_id: customerSessionId,
         status: In([
           WaiterCallStatus.PENDING,
           WaiterCallStatus.QUEUED,
@@ -300,12 +342,16 @@ export class WaiterCallService {
     call.status = WaiterCallStatus.CANCELLED;
     call.cancelled_at = new Date();
     const saved = await this.waiterCallRepository.save(call);
-    this.realtimeService.emitWaiterCall(call.branch_id, 'waiter.request.cancelled', {
-      id: saved.id,
-      tableId: saved.table_id,
-      status: saved.status,
-      assignedWaiterId: saved.assigned_waiter_id,
-    });
+    this.realtimeService.emitWaiterCall(
+      call.branch_id,
+      'waiter.request.cancelled',
+      {
+        id: saved.id,
+        tableId: saved.table_id,
+        status: saved.status,
+        assignedWaiterId: saved.assigned_waiter_id,
+      },
+    );
     await this.processQueueWhenAvailable(saved.branch_id);
     return saved;
   }
@@ -313,8 +359,15 @@ export class WaiterCallService {
   async getWaiterWorkload(
     waiterId: string,
     branchId?: string,
-  ): Promise<{ activeTables: number; maxTables: number; isAvailable: boolean }> {
-    const activeTables = await this.countActiveTablesForWaiter(branchId, waiterId);
+  ): Promise<{
+    activeTables: number;
+    maxTables: number;
+    isAvailable: boolean;
+  }> {
+    const activeTables = await this.countActiveTablesForWaiter(
+      branchId,
+      waiterId,
+    );
     const maxTables = await this.getMaxTablesPerWaiter(branchId);
     return {
       activeTables,
@@ -355,9 +408,17 @@ export class WaiterCallService {
     });
   }
 
-  async getCallsByTable(tableId: string): Promise<WaiterCall | null> {
+  async getCallsByTable(
+    tableId: string,
+    customerSessionId: string,
+  ): Promise<WaiterCall | null> {
+    if (!customerSessionId) return null;
     return this.waiterCallRepository.findOne({
-      where: { table_id: tableId, deleted_at: null } as any,
+      where: {
+        table_id: tableId,
+        customer_session_id: customerSessionId,
+        deleted_at: null,
+      } as any,
       order: { created_at: 'DESC' },
     });
   }
@@ -382,7 +443,11 @@ export class WaiterCallService {
         status: In([status]),
       });
     } else {
-      where.push({ ...branch, deleted_at: null, status: WaiterCallStatus.PENDING });
+      where.push({
+        ...branch,
+        deleted_at: null,
+        status: WaiterCallStatus.PENDING,
+      });
       where.push({
         ...branch,
         deleted_at: null,

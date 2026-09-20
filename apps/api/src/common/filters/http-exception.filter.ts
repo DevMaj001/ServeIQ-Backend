@@ -9,6 +9,7 @@ import {
 import { Response } from 'express';
 import { randomUUID } from 'crypto';
 import { OptimisticLockVersionMismatchError } from 'typeorm';
+import * as Sentry from '@sentry/node';
 
 interface ExceptionResponseBody {
   message?: string | string[];
@@ -120,7 +121,9 @@ export class HttpExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
-    const request = ctx.getRequest<Request & { method?: string; url?: string }>();
+    const request = ctx.getRequest<
+      Request & { method?: string; url?: string }
+    >();
 
     const requestId = randomUUID();
     const path = request.url ?? 'unknown';
@@ -140,7 +143,9 @@ export class HttpExceptionFilter implements ExceptionFilter {
     } else if (exception instanceof OptimisticLockVersionMismatchError) {
       status = HttpStatus.CONFLICT;
       code = 'VERSION_CONFLICT';
-      message = ['This record was modified by another request. Please reload and try again.'];
+      message = [
+        'This record was modified by another request. Please reload and try again.',
+      ];
     } else if (exception instanceof HttpException) {
       status = exception.getStatus();
       message = [defaultMessage(status)];
@@ -163,20 +168,40 @@ export class HttpExceptionFilter implements ExceptionFilter {
         ? {
             name: exception.name,
             message: exception.message,
+            // The requestId is returned to the client, so a support ticket
+            // quoting it must be greppable in the logs.
+            requestId,
             ...(isProduction()
               ? {}
               : { stack: this.sanitizeStack(exception.stack) }),
             ...(status >= 500 ? { code, status, path, method } : {}),
           }
-        : { value: exception };
+        : { value: exception, requestId };
 
     if (status >= 500) {
       this.logger.error(
-        `[${code}] ${status} ${method} ${path} - ${isProduction() ? 'see stack' : 'see above'}`,
+        `[${code}] ${status} ${method} ${path} rid=${requestId} - ${isProduction() ? 'see stack' : 'see above'}`,
         errorInfo,
       );
+      // Report 5xx to Sentry from HERE: a separate @Catch() Sentry filter
+      // registered alongside this one would shadow it entirely (Nest picks
+      // the FIRST matching global filter), losing the error envelope and
+      // the Postgres error mapping above.
+      if (process.env.SENTRY_DSN) {
+        try {
+          Sentry.captureException(exception, {
+            tags: { code, path, method },
+            extra: { requestId },
+          });
+        } catch {
+          // Reporting must never affect the response.
+        }
+      }
     } else if (status === 401 || status === 403 || status >= 422) {
-      this.logger.warn(`[${code}] ${status} ${method} ${path}`, errorInfo);
+      this.logger.warn(
+        `[${code}] ${status} ${method} ${path} rid=${requestId}`,
+        errorInfo,
+      );
     }
 
     response.status(status).json({

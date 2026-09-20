@@ -95,11 +95,16 @@ export class RoleController {
   }
 
   @Put(':id/permissions')
+  // Roles are PLATFORM-GLOBAL rows (no business_id column): editing one
+  // changes what that role can do for every tenant. Until roles are
+  // tenanted per business, mutation is superadmin-only — an Owner editing
+  // the shared Waiter/Manager roles would be a platform-wide privilege
+  // escalation.
   @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
-  @Roles(UserRole.OWNER)
+  @Roles(UserRole.SUPERADMIN)
   @RequirePermissions(PERMISSIONS.ASSIGN_ROLES)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Update permissions for a role (Owner only)' })
+  @ApiOperation({ summary: 'Update permissions for a role (superadmin only)' })
   @ApiParam({ name: 'id', description: 'Role UUID' })
   @ApiResponse({ status: 200, description: 'Permissions updated.' })
   @ApiResponse({ status: 404, description: 'Role not found.' })

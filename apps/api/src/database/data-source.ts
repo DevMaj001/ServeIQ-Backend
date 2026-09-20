@@ -1,5 +1,6 @@
 import { DataSource } from 'typeorm';
 import { config } from 'dotenv';
+import { ALL_MIGRATIONS } from './migrations';
 
 config();
 
@@ -17,11 +18,9 @@ export const AppDataSource = new DataSource({
       ? 'dist/modules/**/*.entity.js'
       : 'src/modules/**/*.entity.ts',
   ],
-  migrations: [
-    process.env.NODE_ENV === 'production'
-      ? 'dist/database/migrations/*.js'
-      : 'src/database/migrations/*.ts',
-  ],
+  // Shared with app.module.ts so the CLI and boot-time migrationsRun can
+  // never diverge (they previously did: 23 files were CLI-only).
+  migrations: ALL_MIGRATIONS,
   extra: {
     max: 10,
     min: 0,

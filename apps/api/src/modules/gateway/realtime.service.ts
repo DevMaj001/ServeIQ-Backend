@@ -13,6 +13,15 @@ export class RealtimeService {
     return this.server || live;
   }
 
+  /** Force-disconnect every staff socket of a branch — used when a branch
+   *  or business is suspended or force-logged-out, so live dashboards and
+   *  waiter apps drop immediately instead of at token expiry. */
+  disconnectBranch(branchId: string) {
+    const server = this.io;
+    if (!server) return;
+    server.in(`branch:${branchId}`).disconnectSockets(true);
+  }
+
   private emitTo(rooms: string[], event: string, payload: any) {
     const server = this.io;
     if (!server) return;

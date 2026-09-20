@@ -19,10 +19,14 @@ import { Business } from '../business/entities/business.entity';
 import {
   OrderStatus,
   PaymentMethod,
-  isBillable,
   statusBlocksPayment,
 } from '../../common/shared';
 import { IsNull, Not, In } from 'typeorm';
+import {
+  computeBillTotals,
+  recomputeBillTotal,
+  resolveBillRates,
+} from './bill-totals';
 import { GenerateBillDto } from './dto/generate-bill.dto';
 import { ProcessPaymentDto } from './dto/process-payment.dto';
 import { ApplyDiscountDto } from './dto/apply-discount.dto';
@@ -102,12 +106,6 @@ export class BillService {
     const orders = await this.orderRepository.find({
       where: { tab_id: tabId },
     });
-    // Declined/cancelled items never contribute to the bill.
-    const billableOrders = orders.filter((o) => isBillable(o.order_status));
-    const subtotal = billableOrders.reduce(
-      (sum, order) => sum + (order.subtotal_kobo ?? 0),
-      0,
-    );
 
     const tabBranch = await this.branchRepository.findOne({
       where: { id: tab.branch_id },
@@ -118,36 +116,22 @@ export class BillService {
         })
       : null;
 
-    const serviceChargePercent =
-      generateBillDto?.service_charge_percent ??
-      Number(business?.service_charge_percent ?? 10);
-    const serviceCharge = Math.round(subtotal * (serviceChargePercent / 100));
-    const discount = generateBillDto?.discount_kobo ?? 0;
-    const effectiveTaxRate =
-      generateBillDto?.tax_rate_percent ?? Number(business?.tax_rate ?? 7.5);
-    const tax = Math.round(subtotal * (effectiveTaxRate / 100));
-
-    const deliveryFee =
-      tab.pickup_mode === 'dispatch' ? Number(tab.delivery_fee_kobo || 0) : 0;
-
-    let total = subtotal + serviceCharge + tax + deliveryFee - discount;
-    if (total < 0) total = 0;
+    const totals = computeBillTotals({
+      orders,
+      rates: resolveBillRates(business, generateBillDto),
+      deliveryFeeKobo:
+        tab.pickup_mode === 'dispatch' ? Number(tab.delivery_fee_kobo || 0) : 0,
+      discountKobo: generateBillDto?.discount_kobo ?? 0,
+    });
 
     if (existing) {
       // Running bill: recompute amounts from current billable items so items added
       // after the bill was first viewed stay reflected. Discount is preserved.
-      existing.subtotal_kobo = subtotal;
-      existing.service_charge_kobo = serviceCharge;
-      existing.tax_kobo = tax;
-      existing.delivery_fee_kobo = deliveryFee;
-      existing.total_kobo = Math.max(
-        0,
-        subtotal +
-          serviceCharge +
-          tax +
-          deliveryFee -
-          (existing.discount_kobo ?? 0),
-      );
+      existing.subtotal_kobo = totals.subtotal_kobo;
+      existing.service_charge_kobo = totals.service_charge_kobo;
+      existing.tax_kobo = totals.tax_kobo;
+      existing.delivery_fee_kobo = totals.delivery_fee_kobo;
+      existing.total_kobo = recomputeBillTotal(existing);
       const updated = await this.billRepository.save(existing);
 
       this.realtimeService.emitBillUpdate(tab.branch_id, tabId, {
@@ -159,12 +143,12 @@ export class BillService {
 
     const bill = this.billRepository.create({
       tab_id: tabId,
-      subtotal_kobo: subtotal,
-      service_charge_kobo: serviceCharge,
-      tax_kobo: tax,
-      discount_kobo: discount,
-      delivery_fee_kobo: deliveryFee,
-      total_kobo: total,
+      subtotal_kobo: totals.subtotal_kobo,
+      service_charge_kobo: totals.service_charge_kobo,
+      tax_kobo: totals.tax_kobo,
+      discount_kobo: totals.discount_kobo,
+      delivery_fee_kobo: totals.delivery_fee_kobo,
+      total_kobo: totals.total_kobo,
       issued_by: userId,
     });
 
@@ -228,13 +212,7 @@ export class BillService {
       );
     }
 
-    bill.total_kobo =
-      bill.subtotal_kobo +
-      bill.service_charge_kobo +
-      bill.tax_kobo +
-      (bill.delivery_fee_kobo ?? 0) -
-      bill.discount_kobo;
-    if (bill.total_kobo < 0) bill.total_kobo = 0;
+    bill.total_kobo = recomputeBillTotal(bill);
 
     return this.billRepository.save(bill);
   }
@@ -478,8 +456,7 @@ export class BillService {
         const releaseKdsEnabled =
           (
             releaseBranch?.settings?.feature_flags as
-              | Record<string, boolean>
-              | undefined
+              Record<string, boolean> | undefined
           )?.kds_enabled === true;
         const kdsDefaultDepartment = releaseKdsEnabled
           ? (releaseBranch?.settings?.kds_default_department_id as string) ||
@@ -564,7 +541,7 @@ export class BillService {
       try {
         const receiptData = await this.buildReceiptData({ tabId });
         if (!receiptData) return bill;
-        const pdfBuffer = this.receiptService.generatePdf(receiptData);
+        const pdfBuffer = await this.receiptService.generatePdf(receiptData);
         const uploadResult = await this.cloudinaryService.uploadFile(
           pdfBuffer,
           `receipts/${tabId}`,
@@ -586,7 +563,7 @@ export class BillService {
           trackingCode: bill.tracking_code,
         });
         if (receiptData) {
-          const pdfBuffer = this.receiptService.generatePdf(receiptData);
+          const pdfBuffer = await this.receiptService.generatePdf(receiptData);
           const uploadResult = await this.cloudinaryService.uploadFile(
             pdfBuffer,
             `receipts/${bill.tracking_code}`,
